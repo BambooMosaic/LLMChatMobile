@@ -14,4 +14,6 @@ data class MessageEntity(
     val role: String,
     val content: String,
     val timestamp: Long,
+    /** 推理模型的思考内容，仅助手消息可能有值，用于历史会话回看。 */
+    val reasoning: String? = null,
 )

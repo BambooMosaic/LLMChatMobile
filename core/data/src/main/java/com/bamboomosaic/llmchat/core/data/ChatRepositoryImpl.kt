@@ -26,6 +26,7 @@ class ChatRepositoryImpl @Inject constructor(
         model: String,
         thinkingEnabled: Boolean,
         maxTokens: Int?,
+        onReasoning: (String) -> Unit,
     ): Flow<String> = flow {
         // 每次请求都从 DataStore 读取最新配置，不在代码里写死 Key
         val settings = settingsRepository.observeSettings().first()
@@ -52,8 +53,8 @@ class ChatRepositoryImpl @Inject constructor(
                             ),
                         )
                     }
-                    // 思考内容暂不进入正文流；需要展示思考过程时再单独暴露
-                    is SseEvent.Reasoning -> Unit
+                    // 思考内容通过回调单独送出，不混进正文流
+                    is SseEvent.Reasoning -> onReasoning(event.chunk)
                 }
             },
         )

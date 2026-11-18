@@ -37,6 +37,10 @@ data class UiMessage(
     val isStreaming: Boolean = false,
     val promptTokens: Long? = null,
     val completionTokens: Long? = null,
+    /** 推理模型的思考内容，展示在正文之前。 */
+    val reasoning: String = "",
+    /** 思考内容是否折叠。 */
+    val reasoningCollapsed: Boolean = false,
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -54,6 +58,11 @@ class ChatViewModel @Inject constructor(
 
     val conversations: StateFlow<List<Conversation>> = conversationRepository
         .observeConversations()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /** 已归档会话，供设置里的「恢复对话」使用。 */
+    val archivedConversations: StateFlow<List<Conversation>> = conversationRepository
+        .observeArchivedConversations()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     /** 当前对话标题（与侧边栏联动）。 */
@@ -121,6 +130,10 @@ class ChatViewModel @Inject constructor(
             it + UiMessage(MessageRole.USER, text) + UiMessage(MessageRole.ASSISTANT, "", isStreaming = true)
         }
 
+        // 流式渲染节流：正文很长时每个 chunk 都重建列表 + 重新排版会明显闪烁，
+        // 这里限制到约 16fps，结束时再强制渲染一次完整内容。
+        val reasoningState = MutableStateFlow("")
+
         streamJob?.cancel()
         streamJob = viewModelScope.launch {
             conversationRepository.ensureConversation(conversationId, text.take(MAX_TITLE_LENGTH))
@@ -128,25 +141,52 @@ class ChatViewModel @Inject constructor(
             conversationRepository.appendMessage(conversationId, ChatMessage(MessageRole.USER, text))
 
             var accumulated = ""
+            var lastRenderAt = 0L
+
+            fun render(force: Boolean) {
+                val now = System.currentTimeMillis()
+                if (!force && now - lastRenderAt < RENDER_INTERVAL_MS) return
+                lastRenderAt = now
+                val textSnapshot = accumulated
+                val reasoningSnapshot = reasoningState.value
+                _messages.update { list ->
+                    val collapsed = list.lastOrNull()?.reasoningCollapsed ?: false
+                    list.dropLast(1) + UiMessage(
+                        role = MessageRole.ASSISTANT,
+                        text = textSnapshot,
+                        isStreaming = true,
+                        reasoning = reasoningSnapshot,
+                        reasoningCollapsed = collapsed,
+                    )
+                }
+            }
+
             chatRepository.sendChatStream(
                 sessionId = conversationId,
                 messages = compressed,
                 model = currentSettings.model,
                 thinkingEnabled = currentSettings.thinkingEnabled,
                 maxTokens = currentSettings.maxOutputTokens.takeIf { it > 0 },
+                onReasoning = { chunk ->
+                    // 回调在 OkHttp 线程，StateFlow 的 update 是线程安全的
+                    reasoningState.update { it + chunk }
+                    render(force = false)
+                },
             )
                 .catch { e -> _error.value = e.message ?: "Unknown error" }
                 .collect { chunk ->
                     accumulated += chunk
-                    _messages.update { list ->
-                        list.dropLast(1) + UiMessage(MessageRole.ASSISTANT, accumulated, isStreaming = true)
-                    }
+                    render(force = false)
                 }
 
+            // 流结束，强制渲染一次完整内容（避免节流丢掉最后一段）
+            render(force = true)
+
+            val reasoningText = reasoningState.value
             if (accumulated.isNotEmpty()) {
                 conversationRepository.appendMessage(
                     conversationId,
-                    ChatMessage(MessageRole.ASSISTANT, accumulated),
+                    ChatMessage(MessageRole.ASSISTANT, accumulated, reasoningText.takeIf { it.isNotBlank() }),
                 )
             } else if (_error.value == null) {
                 // 请求成功（可能消耗了 token）但没有任何正文：给出明确原因，而不是留一个空白气泡
@@ -156,12 +196,26 @@ class ChatViewModel @Inject constructor(
             // 本轮消耗：流结束后读取该会话最近一条 usage
             val usage = tokenUsageRepository.getLastUsage(conversationId)
             _messages.update { list ->
+                val last = list.lastOrNull()
                 list.dropLast(1) + UiMessage(
                     role = MessageRole.ASSISTANT,
                     text = accumulated,
                     promptTokens = usage?.promptTokens,
                     completionTokens = usage?.completionTokens,
+                    reasoning = reasoningText,
+                    reasoningCollapsed = last?.reasoningCollapsed ?: false,
                 )
+            }
+        }
+    }
+
+    /** 折叠 / 展开某条消息的思考内容。 */
+    fun toggleReasoning(index: Int) {
+        _messages.update { list ->
+            if (index !in list.indices) return@update list
+            list.toMutableList().also { mutable ->
+                val item = mutable[index]
+                mutable[index] = item.copy(reasoningCollapsed = !item.reasoningCollapsed)
             }
         }
     }
@@ -180,7 +234,7 @@ class ChatViewModel @Inject constructor(
         _currentConversationId.value = conversationId
         viewModelScope.launch {
             val loaded = conversationRepository.getMessages(conversationId)
-                .map { UiMessage(it.role, it.content) }
+                .map { UiMessage(it.role, it.content, reasoning = it.reasoning.orEmpty()) }
             _messages.value = loaded
         }
     }
@@ -188,6 +242,22 @@ class ChatViewModel @Inject constructor(
     fun renameConversation(conversationId: String, title: String) {
         if (title.isBlank()) return
         viewModelScope.launch { conversationRepository.renameConversation(conversationId, title) }
+    }
+
+    /** 归档会话：从侧边栏移到「恢复对话」。 */
+    fun archiveConversation(conversationId: String) {
+        viewModelScope.launch {
+            conversationRepository.setArchived(conversationId, true)
+            // 归档的是当前会话时，切到一个新会话，避免停留在已归档内容上
+            if (conversationId == _currentConversationId.value) {
+                newConversation()
+            }
+        }
+    }
+
+    /** 从「恢复对话」里恢复到侧边栏。 */
+    fun restoreConversation(conversationId: String) {
+        viewModelScope.launch { conversationRepository.setArchived(conversationId, false) }
     }
 
     fun setSystemPrompt(value: String) {
@@ -246,5 +316,6 @@ class ChatViewModel @Inject constructor(
 
     private companion object {
         const val MAX_TITLE_LENGTH = 24
+        const val RENDER_INTERVAL_MS = 60L
     }
 }

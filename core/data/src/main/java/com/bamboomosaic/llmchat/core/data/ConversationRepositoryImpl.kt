@@ -16,9 +16,10 @@ class ConversationRepositoryImpl @Inject constructor(
 ) : ConversationRepository {
 
     override fun observeConversations(): Flow<List<Conversation>> =
-        dao.observeConversations().map { list ->
-            list.map { Conversation(it.id, it.title, it.createdAt, it.updatedAt) }
-        }
+        dao.observeConversations().map { list -> list.map { it.toDomain() } }
+
+    override fun observeArchivedConversations(): Flow<List<Conversation>> =
+        dao.observeArchivedConversations().map { list -> list.map { it.toDomain() } }
 
     override suspend fun ensureConversation(conversationId: String, title: String) {
         val now = System.currentTimeMillis()
@@ -40,6 +41,7 @@ class ConversationRepositoryImpl @Inject constructor(
                 role = message.role.name,
                 content = message.content,
                 timestamp = now,
+                reasoning = message.reasoning?.takeIf { it.isNotBlank() },
             ),
         )
         dao.touch(conversationId, now)
@@ -59,12 +61,25 @@ class ConversationRepositoryImpl @Inject constructor(
         dao.updateTitle(conversationId, title.trim(), System.currentTimeMillis())
     }
 
+    override suspend fun setArchived(conversationId: String, archived: Boolean) {
+        dao.setArchived(conversationId, if (archived) 1 else 0)
+    }
+
     override fun observeMessages(conversationId: String): Flow<List<ChatMessage>> =
         dao.observeMessages(conversationId).map { list -> list.map { it.toDomain() } }
+
+    private fun ConversationEntity.toDomain() = Conversation(
+        id = id,
+        title = title,
+        createdAt = createdAt,
+        updatedAt = updatedAt,
+        archived = archived == 1,
+    )
 
     private fun MessageEntity.toDomain() = ChatMessage(
         role = runCatching { MessageRole.valueOf(role) }.getOrDefault(MessageRole.USER),
         content = content,
+        reasoning = reasoning,
     )
 
     companion object {

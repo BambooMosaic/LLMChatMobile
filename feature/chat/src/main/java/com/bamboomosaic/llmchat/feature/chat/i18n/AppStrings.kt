@@ -48,6 +48,10 @@ data class AppStrings(
     val autoCompress: String,
     val copy: String,
     val copied: String,
+    val archive: String,
+    val archivedConversations: String,
+    val noArchivedConversations: String,
+    val restore: String,
 ) {
     fun thisRound(prompt: Long, completion: Long, total: Long): String =
         String.format(thisRoundFormat, total, prompt, completion)
@@ -99,6 +103,10 @@ private val ZhCN = AppStrings(
     autoCompress = "自动压缩上下文",
     copy = "复制",
     copied = "已复制",
+    archive = "归档",
+    archivedConversations = "恢复对话",
+    noArchivedConversations = "暂无归档对话",
+    restore = "恢复",
 )
 
 private val ZhTW = AppStrings(
@@ -145,6 +153,10 @@ private val ZhTW = AppStrings(
     autoCompress = "自動壓縮上下文",
     copy = "複製",
     copied = "已複製",
+    archive = "歸檔",
+    archivedConversations = "恢復對話",
+    noArchivedConversations = "暫無歸檔對話",
+    restore = "恢復",
 )
 
 private val EnUS = AppStrings(
@@ -191,6 +203,10 @@ private val EnUS = AppStrings(
     autoCompress = "Auto-compress context",
     copy = "Copy",
     copied = "Copied",
+    archive = "Archive",
+    archivedConversations = "Restore chats",
+    noArchivedConversations = "No archived chats",
+    restore = "Restore",
 )
 
 fun stringsFor(language: AppLanguage): AppStrings = when (language) {

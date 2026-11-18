@@ -37,16 +37,18 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.bamboomosaic.llmchat.core.domain.AppLanguage
 import com.bamboomosaic.llmchat.core.domain.AppSettings
+import com.bamboomosaic.llmchat.core.domain.Conversation
 import com.bamboomosaic.llmchat.core.domain.Providers
 import com.bamboomosaic.llmchat.core.domain.ThemeMode
 import com.bamboomosaic.llmchat.feature.chat.i18n.LocalAppStrings
 
-private enum class SettingsPage { HOME, API, APPEARANCE, LANGUAGE, OTHER }
+private enum class SettingsPage { HOME, API, APPEARANCE, LANGUAGE, OTHER, ARCHIVED }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsDialog(
     settings: AppSettings,
+    archivedConversations: List<Conversation>,
     onSetProvider: (String) -> Unit,
     onSetBaseUrl: (String) -> Unit,
     onSetApiKey: (String) -> Unit,
@@ -57,6 +59,7 @@ fun SettingsDialog(
     onSetMaxContextTokens: (Int) -> Unit,
     onSetMaxOutputTokens: (Int) -> Unit,
     onSetAutoCompressEnabled: (Boolean) -> Unit,
+    onRestoreConversation: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val s = LocalAppStrings.current
@@ -68,6 +71,7 @@ fun SettingsDialog(
         SettingsPage.APPEARANCE -> s.appearance
         SettingsPage.LANGUAGE -> s.languageSetting
         SettingsPage.OTHER -> s.otherSettings
+        SettingsPage.ARCHIVED -> s.archivedConversations
     }
 
     Dialog(onDismissRequest = onDismiss) {
@@ -111,6 +115,7 @@ fun SettingsDialog(
                             onAppearance = { page = SettingsPage.APPEARANCE },
                             onLanguage = { page = SettingsPage.LANGUAGE },
                             onOther = { page = SettingsPage.OTHER },
+                            onArchived = { page = SettingsPage.ARCHIVED },
                         )
 
                         SettingsPage.API -> ApiPage(
@@ -138,6 +143,11 @@ fun SettingsDialog(
                             onSetMaxOutputTokens = onSetMaxOutputTokens,
                             onSetAutoCompressEnabled = onSetAutoCompressEnabled,
                         )
+
+                        SettingsPage.ARCHIVED -> ArchivedPage(
+                            conversations = archivedConversations,
+                            onRestore = onRestoreConversation,
+                        )
                     }
                 }
             }
@@ -152,11 +162,49 @@ private fun HomePage(
     onAppearance: () -> Unit,
     onLanguage: () -> Unit,
     onOther: () -> Unit,
+    onArchived: () -> Unit,
 ) {
     MenuRow(s.apiConfig, onApi)
     MenuRow(s.appearance, onAppearance)
     MenuRow(s.languageSetting, onLanguage)
     MenuRow(s.otherSettings, onOther)
+    MenuRow(s.archivedConversations, onArchived)
+}
+
+/** 已归档会话：点右侧「恢复」放回侧边栏。 */
+@Composable
+private fun ArchivedPage(
+    conversations: List<Conversation>,
+    onRestore: (String) -> Unit,
+) {
+    val s = LocalAppStrings.current
+    if (conversations.isEmpty()) {
+        Text(
+            text = s.noArchivedConversations,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(vertical = 8.dp),
+        )
+        return
+    }
+    conversations.forEach { conversation ->
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = conversation.title,
+                style = MaterialTheme.typography.bodyLarge,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = { onRestore(conversation.id) }) { Text(s.restore) }
+        }
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+    }
 }
 
 @Composable

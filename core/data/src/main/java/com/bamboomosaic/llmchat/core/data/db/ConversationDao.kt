@@ -9,8 +9,13 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface ConversationDao {
 
-    @Query("SELECT * FROM conversations ORDER BY updatedAt DESC")
+    /** 侧边栏主列表：只看未归档。 */
+    @Query("SELECT * FROM conversations WHERE archived = 0 ORDER BY updatedAt DESC")
     fun observeConversations(): Flow<List<ConversationEntity>>
+
+    /** 「恢复对话」列表：只看已归档。 */
+    @Query("SELECT * FROM conversations WHERE archived = 1 ORDER BY updatedAt DESC")
+    fun observeArchivedConversations(): Flow<List<ConversationEntity>>
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertConversation(entity: ConversationEntity)
@@ -23,6 +28,9 @@ interface ConversationDao {
 
     @Query("UPDATE conversations SET updatedAt = :updatedAt WHERE id = :conversationId")
     suspend fun touch(conversationId: String, updatedAt: Long)
+
+    @Query("UPDATE conversations SET archived = :archived WHERE id = :conversationId")
+    suspend fun setArchived(conversationId: String, archived: Int)
 
     @Query("SELECT * FROM messages WHERE conversationId = :conversationId ORDER BY timestamp ASC, id ASC")
     fun observeMessages(conversationId: String): Flow<List<MessageEntity>>

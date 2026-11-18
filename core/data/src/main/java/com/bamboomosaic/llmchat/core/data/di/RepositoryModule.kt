@@ -57,7 +57,8 @@ abstract class RepositoryModule {
         @Singleton
         fun provideAppDatabase(@ApplicationContext context: Context): AppDatabase =
             Room.databaseBuilder(context, AppDatabase::class.java, "llmchat.db")
-                // 尚未上线，schema 变更直接重建库；正式发布前应改为显式 Migration
+                // 显式迁移保留用户已有对话；未覆盖到的版本变更才走重建兜底
+                .addMigrations(AppDatabase.MIGRATION_2_3)
                 .fallbackToDestructiveMigration(dropAllTables = true)
                 .build()
 

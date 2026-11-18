@@ -8,13 +8,18 @@ data class Conversation(
     val title: String,
     val createdAt: Long,
     val updatedAt: Long,
+    /** 已归档的会话不出现在侧边栏主列表，只能在「恢复对话」里找回。 */
+    val archived: Boolean = false,
 )
 
 /** 会话与消息的持久化仓储，ViewModel 只注入此接口。 */
 interface ConversationRepository {
 
-    /** 会话列表，按最近更新时间倒序。 */
+    /** 未归档的会话列表，按最近更新时间倒序。 */
     fun observeConversations(): Flow<List<Conversation>>
+
+    /** 已归档的会话列表，按最近更新时间倒序。 */
+    fun observeArchivedConversations(): Flow<List<Conversation>>
 
     /** 会话不存在则创建，返回会话 id。标题默认取首条用户消息。 */
     suspend fun ensureConversation(conversationId: String, title: String)
@@ -30,6 +35,9 @@ interface ConversationRepository {
 
     /** 手动重命名会话标题。 */
     suspend fun renameConversation(conversationId: String, title: String)
+
+    /** 归档 / 取消归档。 */
+    suspend fun setArchived(conversationId: String, archived: Boolean)
 
     fun observeMessages(conversationId: String): Flow<List<ChatMessage>>
 }

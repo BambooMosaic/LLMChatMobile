@@ -110,7 +110,8 @@ class OpenAiSseClient(
         maxTokens: Int? = null,
     ): Flow<SseEvent> = callbackFlow {
         // 各厂商"深度思考"参数不同：DeepSeek 用 thinking.type，OpenAI 系用 reasoning_effort。
-        // 关闭时不发送任何相关字段，避免不认该参数的厂商直接报错、或误入推理通道。
+        // 注意：DeepSeek 默认就会思考（不传也会返回 reasoning_content），
+        // 因此必须显式发 disabled 才能真正关闭；其他厂商不发该字段，避免不认参数报 400。
         val isDeepSeek = baseUrl.contains("deepseek", ignoreCase = true)
         val payload = ChatRequestDto(
             model = model,
@@ -119,8 +120,8 @@ class OpenAiSseClient(
             stream = true,
             streamOptions = StreamOptionsDto(includeUsage = true),
             maxTokens = maxTokens,
-            thinking = if (isDeepSeek && thinkingEnabled) {
-                ThinkingDto("enabled")
+            thinking = if (isDeepSeek) {
+                ThinkingDto(if (thinkingEnabled) "enabled" else "disabled")
             } else {
                 null
             },

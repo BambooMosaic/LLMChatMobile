@@ -3,6 +3,7 @@ package com.bamboomosaic.llmchat.feature.chat
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -50,6 +51,7 @@ fun ConversationDrawer(
     onNewConversation: () -> Unit,
     onSelect: (String) -> Unit,
     onRename: (String, String) -> Unit,
+    onArchive: (String) -> Unit,
     onOpenSettings: () -> Unit,
 ) {
     val s = LocalAppStrings.current
@@ -57,6 +59,7 @@ fun ConversationDrawer(
     val drawerWidth = (screenWidthDp * 2f / 3f).dp
 
     var renameTarget by remember { mutableStateOf<Conversation?>(null) }
+    var menuTarget by remember { mutableStateOf<Conversation?>(null) }
     var tokenMenuExpanded by remember { mutableStateOf(false) }
 
     ModalDrawerSheet(
@@ -92,33 +95,55 @@ fun ConversationDrawer(
             LazyColumn(modifier = Modifier.weight(1f).padding(horizontal = 8.dp)) {
                 items(conversations, key = { it.id }) { conversation ->
                     val selected = conversation.id == currentId
-                    Surface(
-                        color = if (selected) {
-                            MaterialTheme.colorScheme.primaryContainer
-                        } else {
-                            Color.Transparent
-                        },
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 2.dp)
-                            .combinedClickable(
-                                onClick = { onSelect(conversation.id) },
-                                onLongClick = { renameTarget = conversation },
-                            ),
-                    ) {
-                        Text(
-                            text = conversation.title,
-                            style = MaterialTheme.typography.bodyLarge,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
+                    Box {
+                        Surface(
                             color = if (selected) {
-                                MaterialTheme.colorScheme.onPrimaryContainer
+                                MaterialTheme.colorScheme.primaryContainer
                             } else {
-                                MaterialTheme.colorScheme.onSurface
+                                Color.Transparent
                             },
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
-                        )
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 2.dp)
+                                .combinedClickable(
+                                    onClick = { onSelect(conversation.id) },
+                                    // 长按弹出操作菜单：重命名 / 归档
+                                    onLongClick = { menuTarget = conversation },
+                                ),
+                        ) {
+                            Text(
+                                text = conversation.title,
+                                style = MaterialTheme.typography.bodyLarge,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                color = if (selected) {
+                                    MaterialTheme.colorScheme.onPrimaryContainer
+                                } else {
+                                    MaterialTheme.colorScheme.onSurface
+                                },
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = menuTarget?.id == conversation.id,
+                            onDismissRequest = { menuTarget = null },
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text(s.rename) },
+                                onClick = {
+                                    renameTarget = conversation
+                                    menuTarget = null
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text(s.archive) },
+                                onClick = {
+                                    onArchive(conversation.id)
+                                    menuTarget = null
+                                },
+                            )
+                        }
                     }
                 }
             }
@@ -133,7 +158,7 @@ fun ConversationDrawer(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                androidx.compose.foundation.layout.Box {
+                Box {
                     TextButton(onClick = { tokenMenuExpanded = true }) {
                         Text("📊 ${s.tokenSummary}")
                     }
