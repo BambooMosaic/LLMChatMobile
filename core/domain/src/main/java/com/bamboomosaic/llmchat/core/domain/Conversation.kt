@@ -10,6 +10,8 @@ data class Conversation(
     val updatedAt: Long,
     /** 已归档的会话不出现在侧边栏主列表，只能在「恢复对话」里找回。 */
     val archived: Boolean = false,
+    /** 会话独立系统提示词；null 表示使用全局默认。 */
+    val systemPrompt: String? = null,
 )
 
 /** 会话与消息的持久化仓储，ViewModel 只注入此接口。 */
@@ -41,6 +43,9 @@ interface ConversationRepository {
 
     /** 永久删除会话及其全部消息（不可恢复）。 */
     suspend fun deleteConversation(conversationId: String)
+
+    /** 设置/清除会话独立系统提示词（传 null 或空串回退全局默认）。 */
+    suspend fun setSystemPrompt(conversationId: String, prompt: String?)
 
     fun observeMessages(conversationId: String): Flow<List<ChatMessage>>
 }

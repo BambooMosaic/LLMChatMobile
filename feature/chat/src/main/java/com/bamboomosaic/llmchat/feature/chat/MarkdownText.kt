@@ -1,10 +1,12 @@
 package com.bamboomosaic.llmchat.feature.chat
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -44,6 +46,8 @@ fun MarkdownText(
         codeFence = { model -> CodeBlockWithCopy(model, fence = true) },
         codeBlock = { model -> CodeBlockWithCopy(model, fence = false) },
     )
+    // 长表格会横向溢出气泡，加 horizontalScroll 让表格可左右滑动查看完整内容。
+    // 普通文字因 fillMaxWidth 正常换行，不会产生横向滚动，无副作用。
     Markdown(
         content = content,
         colors = markdownColor(),
@@ -60,7 +64,9 @@ fun MarkdownText(
             inlineCode = MaterialTheme.typography.bodyMedium,
         ),
         components = components,
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
     )
 }
 

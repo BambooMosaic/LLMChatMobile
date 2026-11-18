@@ -32,6 +32,9 @@ interface ConversationDao {
     @Query("UPDATE conversations SET archived = :archived WHERE id = :conversationId")
     suspend fun setArchived(conversationId: String, archived: Int)
 
+    @Query("UPDATE conversations SET systemPrompt = :prompt WHERE id = :conversationId")
+    suspend fun setSystemPrompt(conversationId: String, prompt: String?)
+
     @Query("DELETE FROM messages WHERE conversationId = :conversationId")
     suspend fun deleteMessages(conversationId: String)
 

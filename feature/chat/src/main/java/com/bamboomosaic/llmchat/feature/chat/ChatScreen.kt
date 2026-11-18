@@ -83,9 +83,12 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
     val apiConfigs by viewModel.apiConfigs.collectAsState()
     val currentConfig by viewModel.currentConfig.collectAsState()
     val isFirstLaunch by viewModel.isFirstLaunch.collectAsState()
+    val isGenerating by viewModel.isGenerating.collectAsState()
 
     var input by remember { mutableStateOf("") }
     var showSettings by remember { mutableStateOf(false) }
+    var promptEditTarget by remember { mutableStateOf<String?>(null) }
+    var exportTarget by remember { mutableStateOf<String?>(null) }
 
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -130,6 +133,14 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
                 },
                 onRename = { id, title -> viewModel.renameConversation(id, title) },
                 onArchive = { id -> viewModel.archiveConversation(id) },
+                onEditPrompt = { id ->
+                    promptEditTarget = id
+                    scope.launch { drawerState.close() }
+                },
+                onExport = { id ->
+                    exportTarget = id
+                    scope.launch { drawerState.close() }
+                },
                 onOpenSettings = {
                     scope.launch { drawerState.close() }
                     showSettings = true
@@ -186,6 +197,12 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
                     MessageBubble(
                         message = msg,
                         onToggleReasoning = { viewModel.toggleReasoning(index) },
+                        // 最后一条助手消息且非流式中：显示「重新生成」
+                        showRegenerate = msg.role == MessageRole.ASSISTANT &&
+                            !msg.isStreaming &&
+                            index == messages.lastIndex &&
+                            messages.lastOrNull()?.role == MessageRole.ASSISTANT,
+                        onRegenerate = viewModel::regenerateLast,
                     )
                 }
                 // 底部锚点：scrollToItem 只能把某项"顶部"对齐视口，而单条消息可能很长
@@ -221,6 +238,8 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
                 currentModel = currentConfig?.model?.ifBlank { currentConfig?.name } ?: "—",
                 modelConfigs = apiConfigs,
                 onSelectModel = viewModel::selectConfig,
+                isGenerating = isGenerating,
+                onStop = viewModel::stopGeneration,
                 onSend = {
                     viewModel.sendUserMessage(input)
                     input = ""
@@ -257,6 +276,114 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
     if (isFirstLaunch) {
         FirstLaunchDialog(onConfirm = viewModel::setFirstLaunchDone)
     }
+
+    // 会话独立提示词编辑弹窗
+    promptEditTarget?.let { conversationId ->
+        val currentPrompt = conversations.firstOrNull { it.id == conversationId }?.systemPrompt ?: ""
+        PromptEditDialog(
+            initial = currentPrompt,
+            onConfirm = { newPrompt ->
+                viewModel.setConversationSystemPrompt(conversationId, newPrompt)
+                promptEditTarget = null
+            },
+            onDismiss = { promptEditTarget = null },
+        )
+    }
+
+    // 导出格式选择弹窗
+    exportTarget?.let { conversationId ->
+        if (conversationId == currentId) {
+            ExportFormatDialog(
+                onSelect = { markdown ->
+                    viewModel.exportConversation(markdown)
+                    exportTarget = null
+                },
+                onDismiss = { exportTarget = null },
+            )
+        } else {
+            // 导出非当前会话：先切换到该会话再导出
+            viewModel.selectConversation(conversationId)
+            exportTarget = null
+            // 等切换完成后导出（简化：直接导出，因为 getMessages 按 id 读库，不依赖 UI 状态）
+            viewModel.exportConversationBy(conversationId, markdown = true)
+        }
+    }
+
+    // 导出结果提示
+    val exportMsg by viewModel.exportMessage.collectAsState()
+    val exportContext = LocalContext.current
+    LaunchedEffect(exportMsg) {
+        val msg = exportMsg ?: return@LaunchedEffect
+        android.widget.Toast.makeText(
+            exportContext,
+            msg,
+            android.widget.Toast.LENGTH_LONG,
+        ).show()
+        viewModel.clearExportMessage()
+    }
+}
+
+/** 会话独立提示词编辑弹窗。 */
+@Composable
+private fun PromptEditDialog(
+    initial: String,
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val s = LocalAppStrings.current
+    var draft by remember(initial) { mutableStateOf(initial) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(s.editPrompt) },
+        text = {
+            androidx.compose.material3.OutlinedTextField(
+                value = draft,
+                onValueChange = { draft = it },
+                placeholder = { Text(s.editPromptHint) },
+                minLines = 3,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(draft) }) { Text(s.save) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(s.cancel) }
+        },
+    )
+}
+
+/** 导出格式选择弹窗。 */
+@Composable
+private fun ExportFormatDialog(
+    onSelect: (Boolean) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val s = LocalAppStrings.current
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(s.export) },
+        text = {
+            Column {
+                androidx.compose.material3.TextButton(
+                    onClick = { onSelect(true) },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(s.exportMarkdown)
+                }
+                androidx.compose.material3.TextButton(
+                    onClick = { onSelect(false) },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(s.exportPlainText)
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(s.cancel) }
+        },
+    )
 }
 
 /** 首次启动欢迎弹窗：不可点空白/返回键关闭，只能点「我已知晓」。 */
@@ -314,7 +441,12 @@ private fun FirstLaunchDialog(onConfirm: () -> Unit) {
 
 /** 输入栏上方的模型快速切换：显示当前模型，点击弹出配置列表。 */
 @Composable
-private fun MessageBubble(message: UiMessage, onToggleReasoning: () -> Unit) {
+private fun MessageBubble(
+    message: UiMessage,
+    onToggleReasoning: () -> Unit,
+    showRegenerate: Boolean = false,
+    onRegenerate: () -> Unit = {},
+) {
     val s = LocalAppStrings.current
     val isUser = message.role == MessageRole.USER
     val containerColor = if (isUser) {
@@ -382,6 +514,15 @@ private fun MessageBubble(message: UiMessage, onToggleReasoning: () -> Unit) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 4.dp, start = 4.dp, end = 4.dp),
                 )
+            }
+            // 重新生成入口（仅最后一条已完成助手消息显示）
+            if (showRegenerate) {
+                TextButton(
+                    onClick = onRegenerate,
+                    modifier = Modifier.padding(top = 2.dp),
+                ) {
+                    Text(s.regenerate, style = MaterialTheme.typography.labelMedium)
+                }
             }
         }
     }

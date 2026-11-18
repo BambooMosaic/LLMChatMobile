@@ -1,5 +1,6 @@
 package com.bamboomosaic.llmchat.feature.chat
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.bamboomosaic.llmchat.core.domain.ApiConfig
@@ -18,6 +19,8 @@ import com.bamboomosaic.llmchat.core.domain.ThemeMode
 import com.bamboomosaic.llmchat.core.domain.TokenTotals
 import com.bamboomosaic.llmchat.core.domain.TokenUsageRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -54,6 +57,7 @@ class ChatViewModel @Inject constructor(
     private val conversationRepository: ConversationRepository,
     private val tokenUsageRepository: TokenUsageRepository,
     private val configRepository: ConfigRepository,
+    @ApplicationContext private val appContext: Context,
 ) : ViewModel() {
 
     private val _currentConversationId = MutableStateFlow(UUID.randomUUID().toString())
@@ -126,9 +130,38 @@ class ChatViewModel @Inject constructor(
 
     private var streamJob: Job? = null
 
+    /** 是否正在生成（控制发送按钮变「停止」）。 */
+    private val _isGenerating = MutableStateFlow(false)
+    val isGenerating: StateFlow<Boolean> = _isGenerating.asStateFlow()
+
     init {
         // 首次启动时把升级前的单条 DataStore 配置迁移成第一条默认 API 配置
         viewModelScope.launch { configRepository.ensureSeeded() }
+    }
+
+    /** 中断当前流式生成：取消协程，把已生成内容固化到消息里。 */
+    fun stopGeneration() {
+        val job = streamJob ?: return
+        job.cancel()
+        streamJob = null
+        _isGenerating.value = false
+        // 把当前"流式中"的助手消息转为已完成（保留已生成的部分）
+        _messages.update { list ->
+            val last = list.lastOrNull() ?: return@update list
+            if (!last.isStreaming) return@update list
+            list.dropLast(1) + last.copy(isStreaming = false, text = last.text)
+        }
+        // 已生成的部分也要入库
+        val conversationId = _currentConversationId.value
+        val lastMsg = _messages.value.lastOrNull()
+        if (lastMsg != null && lastMsg.role == MessageRole.ASSISTANT && lastMsg.text.isNotEmpty()) {
+            viewModelScope.launch {
+                conversationRepository.appendMessage(
+                    conversationId,
+                    ChatMessage(MessageRole.ASSISTANT, lastMsg.text, lastMsg.reasoning.takeIf { it.isNotBlank() }),
+                )
+            }
+        }
     }
 
     fun sendUserMessage(text: String) {
@@ -143,8 +176,69 @@ class ChatViewModel @Inject constructor(
             .map { ChatMessage(it.role, it.text) }
         val outgoing = history + ChatMessage(MessageRole.USER, text)
 
-        val withSystem = listOf(ChatMessage(MessageRole.SYSTEM, currentSettings.systemPrompt)) + outgoing
-        val compressed = if (currentSettings.autoCompressEnabled) {
+        _messages.update {
+            it + UiMessage(MessageRole.USER, text) + UiMessage(MessageRole.ASSISTANT, "", isStreaming = true)
+        }
+        _isGenerating.value = true
+
+        launchStream(
+            conversationId = conversationId,
+            compressed = buildRequestMessages(currentSettings, outgoing),
+            currentSettings = currentSettings,
+            userTextForTitle = text,
+            persistUserMessage = true,
+        )
+    }
+
+    /** 重新生成最后一条助手回复：复用上一条用户消息重新请求。 */
+    fun regenerateLast() {
+        if (_isGenerating.value) return
+        _error.value = null
+        val conversationId = _currentConversationId.value
+        val currentSettings = settings.value
+
+        val msgs = _messages.value
+        // 找到最后一条用户消息（去掉最后的助手消息）
+        val lastUser = msgs.filter { it.role == MessageRole.USER }.lastOrNull() ?: return
+        // 去掉最后一条助手消息（将被覆盖）
+        val withoutLastAssistant = if (msgs.lastOrNull()?.role == MessageRole.ASSISTANT) {
+            msgs.dropLast(1)
+        } else {
+            msgs
+        }
+
+        _messages.update {
+            withoutLastAssistant + UiMessage(MessageRole.ASSISTANT, "", isStreaming = true)
+        }
+        _isGenerating.value = true
+
+        // 历史消息（不含被覆盖的助手消息），用于拼请求
+        val history = withoutLastAssistant
+            .filter { !it.isStreaming }
+            .map { ChatMessage(it.role, it.text) }
+
+        launchStream(
+            conversationId = conversationId,
+            compressed = buildRequestMessages(currentSettings, history),
+            currentSettings = currentSettings,
+            userTextForTitle = lastUser.text,
+            persistUserMessage = false,
+        )
+    }
+
+    /** 组装请求消息：system + 历史，可选压缩。 */
+    private fun buildRequestMessages(
+        currentSettings: AppSettings,
+        history: List<ChatMessage>,
+    ): List<ChatMessage> {
+        // 会话独立提示词优先，否则用全局默认
+        val conversationId = _currentConversationId.value
+        val customPrompt = conversations.value
+            .firstOrNull { it.id == conversationId }
+            ?.systemPrompt
+        val systemPrompt = customPrompt ?: currentSettings.systemPrompt
+        val withSystem = listOf(ChatMessage(MessageRole.SYSTEM, systemPrompt)) + history
+        return if (currentSettings.autoCompressEnabled) {
             contextWindowRepository.compress(
                 withSystem,
                 ContextWindow(maxTokens = currentSettings.maxContextTokens),
@@ -152,20 +246,27 @@ class ChatViewModel @Inject constructor(
         } else {
             withSystem
         }
+    }
 
-        _messages.update {
-            it + UiMessage(MessageRole.USER, text) + UiMessage(MessageRole.ASSISTANT, "", isStreaming = true)
-        }
-
+    /** 发起流式请求的核心逻辑（普通发送与重新生成共用）。 */
+    private fun launchStream(
+        conversationId: String,
+        compressed: List<ChatMessage>,
+        currentSettings: AppSettings,
+        userTextForTitle: String,
+        persistUserMessage: Boolean,
+    ) {
         // 流式渲染节流：正文很长时每个 chunk 都重建列表 + 重新排版会明显闪烁，
         // 这里限制到约 16fps，结束时再强制渲染一次完整内容。
         val reasoningState = MutableStateFlow("")
 
         streamJob?.cancel()
         streamJob = viewModelScope.launch {
-            conversationRepository.ensureConversation(conversationId, text.take(MAX_TITLE_LENGTH))
-            conversationRepository.updateTitleIfPlaceholder(conversationId, text.take(MAX_TITLE_LENGTH))
-            conversationRepository.appendMessage(conversationId, ChatMessage(MessageRole.USER, text))
+            conversationRepository.ensureConversation(conversationId, userTextForTitle.take(MAX_TITLE_LENGTH))
+            conversationRepository.updateTitleIfPlaceholder(conversationId, userTextForTitle.take(MAX_TITLE_LENGTH))
+            if (persistUserMessage) {
+                conversationRepository.appendMessage(conversationId, ChatMessage(MessageRole.USER, userTextForTitle))
+            }
 
             var accumulated = ""
             var lastRenderAt = 0L
@@ -233,6 +334,7 @@ class ChatViewModel @Inject constructor(
                     reasoningCollapsed = last?.reasoningCollapsed ?: false,
                 )
             }
+            _isGenerating.value = false
         }
     }
 
@@ -269,6 +371,89 @@ class ChatViewModel @Inject constructor(
     fun renameConversation(conversationId: String, title: String) {
         if (title.isBlank()) return
         viewModelScope.launch { conversationRepository.renameConversation(conversationId, title) }
+    }
+
+    /** 设置会话独立系统提示词（空串回退全局默认）。 */
+    fun setConversationSystemPrompt(conversationId: String, prompt: String) {
+        viewModelScope.launch {
+            conversationRepository.setSystemPrompt(conversationId, prompt)
+        }
+    }
+
+    /** 导出会话（markdown=true 为 Markdown，否则纯文本）。成功后在 exportMessage 回传路径。 */
+    private val _exportMessage = MutableStateFlow<String?>(null)
+    val exportMessage: StateFlow<String?> = _exportMessage.asStateFlow()
+
+    fun exportConversation(markdown: Boolean) {
+        exportConversationBy(_currentConversationId.value, markdown)
+    }
+
+    fun exportConversationBy(conversationId: String, markdown: Boolean) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val conversation = conversations.value.firstOrNull { it.id == conversationId }
+            val title = conversation?.title?.ifBlank { "conversation" } ?: "conversation"
+            val messages = conversationRepository.getMessages(conversationId)
+            val content = buildExportContent(title, messages, markdown)
+            val ext = if (markdown) "md" else "txt"
+            val fileName = "${sanitizeFileName(title)}_${System.currentTimeMillis()}.$ext"
+            val dir = android.os.Environment.getExternalStoragePublicDirectory(
+                android.os.Environment.DIRECTORY_DOWNLOADS,
+            )
+            val file = java.io.File(dir, fileName)
+            runCatching {
+                file.writeText(content)
+            }.onSuccess {
+                _exportMessage.value = "$exportSuccessLabel: ${file.absolutePath}"
+            }.onFailure { e ->
+                _exportMessage.value = e.message ?: "export failed"
+            }
+        }
+    }
+
+    fun clearExportMessage() {
+        _exportMessage.value = null
+    }
+
+    private val exportSuccessLabel: String
+        get() = when (settings.value.language) {
+            AppLanguage.SIMPLIFIED_CHINESE -> "已导出到"
+            AppLanguage.TRADITIONAL_CHINESE -> "已匯出到"
+            AppLanguage.ENGLISH -> "Exported to"
+        }
+
+    private fun sanitizeFileName(name: String): String =
+        name.replace(Regex("[\\\\/:*?\"<>|]"), "_").take(50)
+
+    private fun buildExportContent(title: String, messages: List<ChatMessage>, markdown: Boolean): String {
+        val sb = StringBuilder()
+        if (markdown) {
+            sb.appendLine("# $title")
+            sb.appendLine()
+        } else {
+            sb.appendLine(title)
+            sb.appendLine()
+        }
+        messages.forEach { msg ->
+            when (msg.role) {
+                MessageRole.SYSTEM -> {
+                    sb.appendLine(if (markdown) "### System" else "[System]")
+                    sb.appendLine(msg.content)
+                }
+                MessageRole.USER -> {
+                    sb.appendLine(if (markdown) "### User" else "[User]")
+                    sb.appendLine(msg.content)
+                }
+                MessageRole.ASSISTANT -> {
+                    sb.appendLine(if (markdown) "### Assistant" else "[Assistant]")
+                    if (!msg.reasoning.isNullOrBlank()) {
+                        sb.appendLine(if (markdown) "> 思考：${msg.reasoning}" else "思考：${msg.reasoning}")
+                    }
+                    sb.appendLine(msg.content)
+                }
+            }
+            sb.appendLine()
+        }
+        return sb.toString()
     }
 
     /** 归档会话：从侧边栏移到「恢复对话」。 */

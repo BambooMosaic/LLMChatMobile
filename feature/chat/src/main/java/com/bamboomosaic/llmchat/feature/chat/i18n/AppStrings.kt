@@ -68,6 +68,14 @@ data class AppStrings(
     val githubRepo: String,
     val iKnow: String,
     val testNotice: String,
+    val regenerate: String,
+    val editPrompt: String,
+    val editPromptHint: String,
+    val export: String,
+    val exportMarkdown: String,
+    val exportPlainText: String,
+    val exportSuccess: String,
+    val followSystem: String,
 ) {
     fun thisRound(prompt: Long, completion: Long, total: Long): String =
         String.format(thisRoundFormat, total, prompt, completion)
@@ -139,6 +147,14 @@ private val ZhCN = AppStrings(
     githubRepo = "GitHub 仓库",
     iKnow = "我已知晓",
     testNotice = "这是 LLMChatMobile 的 alpha 测试版本。\n测试版不代表本产品的最终质量，感谢您的理解和支持，祝您好运！",
+    regenerate = "重新生成",
+    editPrompt = "编辑提示词",
+    editPromptHint = "留空则使用全局默认提示词",
+    export = "导出对话",
+    exportMarkdown = "Markdown 格式",
+    exportPlainText = "纯文本格式",
+    exportSuccess = "已导出到",
+    followSystem = "跟随系统",
 )
 
 private val ZhTW = AppStrings(
@@ -205,6 +221,14 @@ private val ZhTW = AppStrings(
     githubRepo = "GitHub 倉庫",
     iKnow = "我已知曉",
     testNotice = "這是 LLMChatMobile 的 alpha 測試版本。\n測試版不代表本產品的最終品質，感謝您的理解與支持，祝您好運！",
+    regenerate = "重新生成",
+    editPrompt = "編輯提示詞",
+    editPromptHint = "留空則使用全域預設提示詞",
+    export = "匯出對話",
+    exportMarkdown = "Markdown 格式",
+    exportPlainText = "純文字格式",
+    exportSuccess = "已匯出到",
+    followSystem = "跟隨系統",
 )
 
 private val EnUS = AppStrings(
@@ -271,6 +295,14 @@ private val EnUS = AppStrings(
     githubRepo = "GitHub Repository",
     iKnow = "Got it",
     testNotice = "This is an alpha test version of LLMChatMobile.\nThe test version does not represent the final quality of this product. Thank you for your understanding and support. Good luck!",
+    regenerate = "Regenerate",
+    editPrompt = "Edit prompt",
+    editPromptHint = "Leave blank to use the global default prompt",
+    export = "Export",
+    exportMarkdown = "Markdown",
+    exportPlainText = "Plain text",
+    exportSuccess = "Exported to",
+    followSystem = "Follow system",
 )
 
 fun stringsFor(language: AppLanguage): AppStrings = when (language) {

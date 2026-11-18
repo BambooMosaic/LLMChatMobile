@@ -637,21 +637,23 @@ private fun AppearancePage(
     onSetThemeMode: (ThemeMode) -> Unit,
 ) {
     val s = LocalAppStrings.current
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Text(
-            text = if (themeMode == ThemeMode.DARK) s.darkMode else s.lightMode,
-            style = MaterialTheme.typography.bodyLarge,
-        )
-        Switch(
-            checked = themeMode == ThemeMode.DARK,
-            onCheckedChange = { onSetThemeMode(if (it) ThemeMode.DARK else ThemeMode.LIGHT) },
-        )
+    val options = listOf(
+        ThemeMode.SYSTEM to s.followSystem,
+        ThemeMode.LIGHT to s.lightMode,
+        ThemeMode.DARK to s.darkMode,
+    )
+    options.forEach { (mode, label) ->
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onSetThemeMode(mode) }
+                .padding(vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            RadioButton(selected = themeMode == mode, onClick = { onSetThemeMode(mode) })
+            Spacer(Modifier.width(8.dp))
+            Text(label, style = MaterialTheme.typography.bodyLarge)
+        }
     }
 }
 

@@ -71,6 +71,10 @@ class ConversationRepositoryImpl @Inject constructor(
         dao.deleteConversation(conversationId)
     }
 
+    override suspend fun setSystemPrompt(conversationId: String, prompt: String?) {
+        dao.setSystemPrompt(conversationId, prompt?.takeIf { it.isNotBlank() })
+    }
+
     override fun observeMessages(conversationId: String): Flow<List<ChatMessage>> =
         dao.observeMessages(conversationId).map { list -> list.map { it.toDomain() } }
 
@@ -80,6 +84,7 @@ class ConversationRepositoryImpl @Inject constructor(
         createdAt = createdAt,
         updatedAt = updatedAt,
         archived = archived == 1,
+        systemPrompt = systemPrompt,
     )
 
     private fun MessageEntity.toDomain() = ChatMessage(

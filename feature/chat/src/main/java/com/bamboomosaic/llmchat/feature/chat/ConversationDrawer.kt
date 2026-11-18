@@ -52,6 +52,8 @@ fun ConversationDrawer(
     onSelect: (String) -> Unit,
     onRename: (String, String) -> Unit,
     onArchive: (String) -> Unit,
+    onEditPrompt: (String) -> Unit,
+    onExport: (String) -> Unit,
     onOpenSettings: () -> Unit,
 ) {
     val s = LocalAppStrings.current
@@ -133,6 +135,20 @@ fun ConversationDrawer(
                                 text = { Text(s.rename) },
                                 onClick = {
                                     renameTarget = conversation
+                                    menuTarget = null
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text(s.editPrompt) },
+                                onClick = {
+                                    onEditPrompt(conversation.id)
+                                    menuTarget = null
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text(s.export) },
+                                onClick = {
+                                    onExport(conversation.id)
                                     menuTarget = null
                                 },
                             )

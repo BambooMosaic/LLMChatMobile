@@ -55,6 +55,8 @@ fun ChatInputBar(
     currentModel: String,
     modelConfigs: List<ApiConfig>,
     onSelectModel: (Long) -> Unit,
+    isGenerating: Boolean,
+    onStop: () -> Unit,
     onSend: () -> Unit,
 ) {
     val s = LocalAppStrings.current
@@ -173,11 +175,23 @@ fun ChatInputBar(
                             Text("📎", style = MaterialTheme.typography.titleMedium)
                         }
                         FilledIconButton(
-                            onClick = onSend,
+                            onClick = if (isGenerating) onStop else onSend,
                             shape = CircleShape,
                             modifier = Modifier.size(40.dp),
+                            colors = if (isGenerating) {
+                                androidx.compose.material3.IconButtonDefaults.filledIconButtonColors(
+                                    containerColor = MaterialTheme.colorScheme.error,
+                                    contentColor = MaterialTheme.colorScheme.onError,
+                                )
+                            } else {
+                                androidx.compose.material3.IconButtonDefaults.filledIconButtonColors()
+                            },
                         ) {
-                            Text("↑", style = MaterialTheme.typography.titleMedium)
+                            // 生成中显示「停止」方块，否则显示发送箭头
+                            Text(
+                                text = if (isGenerating) "■" else "↑",
+                                style = MaterialTheme.typography.titleMedium,
+                            )
                         }
                     }
                 }

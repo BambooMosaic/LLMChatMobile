@@ -2,8 +2,8 @@ package com.bamboomosaic.llmchat.core.domain
 
 import kotlinx.coroutines.flow.Flow
 
-/** 应用主题模式。首次启动默认深色。 */
-enum class ThemeMode { DARK, LIGHT }
+/** 应用主题模式。首次启动默认深色。SYSTEM = 跟随系统。 */
+enum class ThemeMode { DARK, LIGHT, SYSTEM }
 
 /** 应用语言，切换后界面文案与 AI 回复语言同步。 */
 enum class AppLanguage(val tag: String) {
