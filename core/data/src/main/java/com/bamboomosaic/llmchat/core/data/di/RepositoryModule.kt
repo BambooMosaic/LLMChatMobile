@@ -3,14 +3,17 @@ package com.bamboomosaic.llmchat.core.data.di
 import android.content.Context
 import androidx.room.Room
 import com.bamboomosaic.llmchat.core.data.ChatRepositoryImpl
+import com.bamboomosaic.llmchat.core.data.ConfigRepositoryImpl
 import com.bamboomosaic.llmchat.core.data.ConversationRepositoryImpl
 import com.bamboomosaic.llmchat.core.data.TokenUsageRepositoryImpl
 import com.bamboomosaic.llmchat.core.data.context.SlidingWindowManager
 import com.bamboomosaic.llmchat.core.data.settings.SettingsStore
+import com.bamboomosaic.llmchat.core.data.db.ApiConfigDao
 import com.bamboomosaic.llmchat.core.data.db.AppDatabase
 import com.bamboomosaic.llmchat.core.data.db.ConversationDao
 import com.bamboomosaic.llmchat.core.data.db.TokenUsageDao
 import com.bamboomosaic.llmchat.core.domain.ChatRepository
+import com.bamboomosaic.llmchat.core.domain.ConfigRepository
 import com.bamboomosaic.llmchat.core.domain.ContextWindowRepository
 import com.bamboomosaic.llmchat.core.domain.ConversationRepository
 import com.bamboomosaic.llmchat.core.domain.SettingsRepository
@@ -48,6 +51,10 @@ abstract class RepositoryModule {
     @Singleton
     abstract fun bindConversationRepository(impl: ConversationRepositoryImpl): ConversationRepository
 
+    @Binds
+    @Singleton
+    abstract fun bindConfigRepository(impl: ConfigRepositoryImpl): ConfigRepository
+
     companion object {
         @Provides
         @Singleton
@@ -58,7 +65,7 @@ abstract class RepositoryModule {
         fun provideAppDatabase(@ApplicationContext context: Context): AppDatabase =
             Room.databaseBuilder(context, AppDatabase::class.java, "llmchat.db")
                 // 显式迁移保留用户已有对话；未覆盖到的版本变更才走重建兜底
-                .addMigrations(AppDatabase.MIGRATION_2_3)
+                .addMigrations(AppDatabase.MIGRATION_2_3, AppDatabase.MIGRATION_3_4)
                 .fallbackToDestructiveMigration(dropAllTables = true)
                 .build()
 
@@ -71,5 +78,10 @@ abstract class RepositoryModule {
         @Singleton
         fun provideConversationDao(database: AppDatabase): ConversationDao =
             database.conversationDao()
+
+        @Provides
+        @Singleton
+        fun provideApiConfigDao(database: AppDatabase): ApiConfigDao =
+            database.apiConfigDao()
     }
 }

@@ -39,5 +39,8 @@ interface ConversationRepository {
     /** 归档 / 取消归档。 */
     suspend fun setArchived(conversationId: String, archived: Boolean)
 
+    /** 永久删除会话及其全部消息（不可恢复）。 */
+    suspend fun deleteConversation(conversationId: String)
+
     fun observeMessages(conversationId: String): Flow<List<ChatMessage>>
 }

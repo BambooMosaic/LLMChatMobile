@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.bamboomosaic.llmchat.core.domain.AppLanguage
@@ -38,6 +39,7 @@ class SettingsStore @Inject constructor(
     private val maxContextKey = intPreferencesKey("max_context_tokens")
     private val maxOutputKey = intPreferencesKey("max_output_tokens")
     private val autoCompressKey = booleanPreferencesKey("auto_compress_enabled")
+    private val currentConfigIdKey = longPreferencesKey("current_config_id")
 
     override fun observeSettings(): Flow<AppSettings> = context.settingsDataStore.data.map { prefs ->
         val language = AppLanguage.fromTag(prefs[languageKey])
@@ -104,5 +106,13 @@ class SettingsStore @Inject constructor(
 
     override suspend fun setAutoCompressEnabled(enabled: Boolean) {
         context.settingsDataStore.edit { it[autoCompressKey] = enabled }
+    }
+
+    override fun observeCurrentConfigId(): Flow<Long> = context.settingsDataStore.data.map { prefs ->
+        prefs[currentConfigIdKey] ?: 0L
+    }
+
+    override suspend fun setCurrentConfigId(id: Long) {
+        context.settingsDataStore.edit { it[currentConfigIdKey] = id }
     }
 }

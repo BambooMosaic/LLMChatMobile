@@ -52,6 +52,16 @@ data class AppStrings(
     val archivedConversations: String,
     val noArchivedConversations: String,
     val restore: String,
+    val delete: String,
+    val deleteConfirmTitle: String,
+    val addConfig: String,
+    val edit: String,
+    val setDefault: String,
+    val defaultLabel: String,
+    val noConfig: String,
+    val editConfig: String,
+    val configName: String,
+    val supportReasoning: String,
 ) {
     fun thisRound(prompt: Long, completion: Long, total: Long): String =
         String.format(thisRoundFormat, total, prompt, completion)
@@ -107,6 +117,16 @@ private val ZhCN = AppStrings(
     archivedConversations = "恢复对话",
     noArchivedConversations = "暂无归档对话",
     restore = "恢复",
+    delete = "删除",
+    deleteConfirmTitle = "确认永久删除？",
+    addConfig = "新增配置",
+    edit = "编辑",
+    setDefault = "设为默认",
+    defaultLabel = "默认",
+    noConfig = "暂无配置",
+    editConfig = "编辑配置",
+    configName = "配置名称",
+    supportReasoning = "支持深度思考",
 )
 
 private val ZhTW = AppStrings(
@@ -157,6 +177,16 @@ private val ZhTW = AppStrings(
     archivedConversations = "恢復對話",
     noArchivedConversations = "暫無歸檔對話",
     restore = "恢復",
+    delete = "刪除",
+    deleteConfirmTitle = "確認永久刪除？",
+    addConfig = "新增配置",
+    edit = "編輯",
+    setDefault = "設為預設",
+    defaultLabel = "預設",
+    noConfig = "暫無配置",
+    editConfig = "編輯配置",
+    configName = "配置名稱",
+    supportReasoning = "支援深度思考",
 )
 
 private val EnUS = AppStrings(
@@ -207,6 +237,16 @@ private val EnUS = AppStrings(
     archivedConversations = "Restore chats",
     noArchivedConversations = "No archived chats",
     restore = "Restore",
+    delete = "Delete",
+    deleteConfirmTitle = "Delete permanently?",
+    addConfig = "Add config",
+    edit = "Edit",
+    setDefault = "Set default",
+    defaultLabel = "Default",
+    noConfig = "No configs",
+    editConfig = "Edit config",
+    configName = "Config name",
+    supportReasoning = "Supports reasoning",
 )
 
 fun stringsFor(language: AppLanguage): AppStrings = when (language) {

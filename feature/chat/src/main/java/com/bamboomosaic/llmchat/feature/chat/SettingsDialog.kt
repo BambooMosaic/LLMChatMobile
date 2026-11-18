@@ -2,6 +2,7 @@ package com.bamboomosaic.llmchat.feature.chat
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -13,6 +14,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -33,8 +37,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import com.bamboomosaic.llmchat.core.domain.ApiConfig
 import com.bamboomosaic.llmchat.core.domain.AppLanguage
 import com.bamboomosaic.llmchat.core.domain.AppSettings
 import com.bamboomosaic.llmchat.core.domain.Conversation
@@ -49,6 +55,10 @@ private enum class SettingsPage { HOME, API, APPEARANCE, LANGUAGE, OTHER, ARCHIV
 fun SettingsDialog(
     settings: AppSettings,
     archivedConversations: List<Conversation>,
+    apiConfigs: List<ApiConfig>,
+    onSaveConfig: (ApiConfig) -> Unit,
+    onDeleteConfig: (Long) -> Unit,
+    onSetDefaultConfig: (Long) -> Unit,
     onSetProvider: (String) -> Unit,
     onSetBaseUrl: (String) -> Unit,
     onSetApiKey: (String) -> Unit,
@@ -60,6 +70,7 @@ fun SettingsDialog(
     onSetMaxOutputTokens: (Int) -> Unit,
     onSetAutoCompressEnabled: (Boolean) -> Unit,
     onRestoreConversation: (String) -> Unit,
+    onDeleteConversation: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val s = LocalAppStrings.current
@@ -118,12 +129,11 @@ fun SettingsDialog(
                             onArchived = { page = SettingsPage.ARCHIVED },
                         )
 
-                        SettingsPage.API -> ApiPage(
-                            settings = settings,
-                            onSetProvider = onSetProvider,
-                            onSetBaseUrl = onSetBaseUrl,
-                            onSetApiKey = onSetApiKey,
-                            onSetModel = onSetModel,
+                        SettingsPage.API -> ApiConfigListPage(
+                            configs = apiConfigs,
+                            onSave = onSaveConfig,
+                            onDelete = onDeleteConfig,
+                            onSetDefault = onSetDefaultConfig,
                         )
 
                         SettingsPage.APPEARANCE -> AppearancePage(
@@ -147,6 +157,7 @@ fun SettingsDialog(
                         SettingsPage.ARCHIVED -> ArchivedPage(
                             conversations = archivedConversations,
                             onRestore = onRestoreConversation,
+                            onDelete = onDeleteConversation,
                         )
                     }
                 }
@@ -171,13 +182,16 @@ private fun HomePage(
     MenuRow(s.archivedConversations, onArchived)
 }
 
-/** 已归档会话：点右侧「恢复」放回侧边栏。 */
+/** 已归档会话：点右侧「恢复」放回侧边栏，或「删除」永久删除（二次确认）。 */
 @Composable
 private fun ArchivedPage(
     conversations: List<Conversation>,
     onRestore: (String) -> Unit,
+    onDelete: (String) -> Unit,
 ) {
     val s = LocalAppStrings.current
+    var deleteTarget by remember { mutableStateOf<Conversation?>(null) }
+
     if (conversations.isEmpty()) {
         Text(
             text = s.noArchivedConversations,
@@ -198,12 +212,32 @@ private fun ArchivedPage(
                 text = conversation.title,
                 style = MaterialTheme.typography.bodyLarge,
                 maxLines = 1,
-                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
             )
             TextButton(onClick = { onRestore(conversation.id) }) { Text(s.restore) }
+            TextButton(onClick = { deleteTarget = conversation }) {
+                Text(s.delete, color = MaterialTheme.colorScheme.error)
+            }
         }
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+    }
+
+    deleteTarget?.let { target ->
+        AlertDialog(
+            onDismissRequest = { deleteTarget = null },
+            title = { Text(s.deleteConfirmTitle) },
+            text = { Text(target.title, maxLines = 2, overflow = TextOverflow.Ellipsis) },
+            confirmButton = {
+                TextButton(onClick = {
+                    onDelete(target.id)
+                    deleteTarget = null
+                }) { Text(s.delete, color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { deleteTarget = null }) { Text(s.cancel) }
+            },
+        )
     }
 }
 
@@ -221,121 +255,302 @@ private fun MenuRow(label: String, onClick: () -> Unit) {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+/** API 配置列表页：新增 / 编辑 / 删除 / 设为默认。 */
 @Composable
-private fun ApiPage(
-    settings: AppSettings,
-    onSetProvider: (String) -> Unit,
-    onSetBaseUrl: (String) -> Unit,
-    onSetApiKey: (String) -> Unit,
-    onSetModel: (String) -> Unit,
+private fun ApiConfigListPage(
+    configs: List<ApiConfig>,
+    onSave: (ApiConfig) -> Unit,
+    onDelete: (Long) -> Unit,
+    onSetDefault: (Long) -> Unit,
 ) {
     val s = LocalAppStrings.current
-    var providerExpanded by remember { mutableStateOf(false) }
-    var modelExpanded by remember { mutableStateOf(false) }
-    val preset = Providers.find(settings.providerId)
-    val providerLabel = if (preset.id == Providers.CUSTOM) s.custom else preset.displayName
+    var editing by remember { mutableStateOf<ApiConfig?>(null) }
+    var adding by remember { mutableStateOf(false) }
+    var menuTarget by remember { mutableStateOf<ApiConfig?>(null) }
+    var deleteTarget by remember { mutableStateOf<ApiConfig?>(null) }
 
-    // 供应商下拉
-    ExposedDropdownMenuBox(
-        expanded = providerExpanded,
-        onExpandedChange = { providerExpanded = it },
-    ) {
-        OutlinedTextField(
-            value = providerLabel,
-            onValueChange = {},
-            readOnly = true,
-            label = { Text(s.provider) },
-            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = providerExpanded) },
-            modifier = Modifier
-                .fillMaxWidth()
-                .menuAnchor(),
-        )
-        ExposedDropdownMenu(
-            expanded = providerExpanded,
-            onDismissRequest = { providerExpanded = false },
-        ) {
-            Providers.all.forEach { p ->
-                DropdownMenuItem(
-                    text = { Text(if (p.id == Providers.CUSTOM) s.custom else p.displayName) },
-                    onClick = {
-                        onSetProvider(p.id)
-                        if (p.baseUrl.isNotEmpty()) onSetBaseUrl(p.baseUrl)
-                        if (p.models.isNotEmpty()) onSetModel(p.models.first())
-                        providerExpanded = false
-                    },
-                )
-            }
-        }
+    Button(onClick = { adding = true }, modifier = Modifier.fillMaxWidth()) {
+        Text(s.addConfig)
     }
 
     Spacer(Modifier.height(12.dp))
-    var baseUrl by remember(settings.baseUrl) { mutableStateOf(settings.baseUrl) }
-    OutlinedTextField(
-        value = baseUrl,
-        onValueChange = { baseUrl = it; onSetBaseUrl(it) },
-        label = { Text(s.baseUrl) },
-        singleLine = true,
-        modifier = Modifier.fillMaxWidth(),
-    )
 
-    Spacer(Modifier.height(12.dp))
-    var apiKey by remember(settings.apiKey) { mutableStateOf(settings.apiKey) }
-    OutlinedTextField(
-        value = apiKey,
-        onValueChange = { apiKey = it; onSetApiKey(it) },
-        label = { Text(s.apiKey) },
-        singleLine = true,
-        visualTransformation = PasswordVisualTransformation(),
-        modifier = Modifier.fillMaxWidth(),
-    )
-
-    Spacer(Modifier.height(12.dp))
-    // 预设供应商：模型下拉；自定义/Ollama：手动输入
-    if (preset.models.isNotEmpty()) {
-        var model by remember(settings.model) { mutableStateOf(settings.model) }
-        ExposedDropdownMenuBox(
-            expanded = modelExpanded,
-            onExpandedChange = { modelExpanded = it },
+    configs.forEach { config ->
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            OutlinedTextField(
-                value = model,
-                onValueChange = {},
-                readOnly = true,
-                label = { Text(s.model) },
-                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = modelExpanded) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .menuAnchor(),
-            )
-            ExposedDropdownMenu(
-                expanded = modelExpanded,
-                onDismissRequest = { modelExpanded = false },
-            ) {
-                preset.models.forEach { m ->
-                    DropdownMenuItem(
-                        text = { Text(m) },
-                        onClick = {
-                            model = m
-                            onSetModel(m)
-                            modelExpanded = false
-                        },
+            Column(modifier = Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = config.name,
+                        style = MaterialTheme.typography.bodyLarge,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
+                    if (config.isDefault) {
+                        Spacer(Modifier.width(6.dp))
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                        ) {
+                            Text(
+                                text = s.defaultLabel,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            )
+                        }
+                    }
+                }
+                Text(
+                    text = config.model,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            TextButton(onClick = { menuTarget = config }) { Text("⋯") }
+        }
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+    }
+
+    if (configs.isEmpty()) {
+        Text(
+            text = s.noConfig,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(vertical = 12.dp),
+        )
+    }
+
+    // 每项的操作菜单
+    menuTarget?.let { config ->
+        DropdownMenu(
+            expanded = true,
+            onDismissRequest = { menuTarget = null },
+        ) {
+            DropdownMenuItem(
+                text = { Text(s.edit) },
+                onClick = { editing = config; menuTarget = null },
+            )
+            if (!config.isDefault) {
+                DropdownMenuItem(
+                    text = { Text(s.setDefault) },
+                    onClick = { onSetDefault(config.id); menuTarget = null },
+                )
+            }
+            DropdownMenuItem(
+                text = { Text(s.delete, color = MaterialTheme.colorScheme.error) },
+                onClick = { deleteTarget = config; menuTarget = null },
+            )
+        }
+    }
+
+    // 新增 / 编辑弹窗
+    if (adding || editing != null) {
+        ConfigEditDialog(
+            initial = editing,
+            onSave = { draft ->
+                onSave(draft)
+                adding = false
+                editing = null
+            },
+            onDismiss = {
+                adding = false
+                editing = null
+            },
+        )
+    }
+
+    // 删除确认
+    deleteTarget?.let { config ->
+        AlertDialog(
+            onDismissRequest = { deleteTarget = null },
+            title = { Text(s.deleteConfirmTitle) },
+            text = { Text(config.name) },
+            confirmButton = {
+                TextButton(onClick = {
+                    onDelete(config.id)
+                    deleteTarget = null
+                }) { Text(s.delete, color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { deleteTarget = null }) { Text(s.cancel) }
+            },
+        )
+    }
+}
+
+/** 配置编辑弹窗：保留供应商联动逻辑。 */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ConfigEditDialog(
+    initial: ApiConfig?,
+    onSave: (ApiConfig) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val s = LocalAppStrings.current
+    var name by remember { mutableStateOf(initial?.name ?: "") }
+    var provider by remember { mutableStateOf(initial?.provider ?: Providers.CUSTOM) }
+    var baseUrl by remember { mutableStateOf(initial?.baseUrl ?: "") }
+    var apiKey by remember { mutableStateOf(initial?.apiKey ?: "") }
+    var model by remember { mutableStateOf(initial?.model ?: "") }
+    var supportReasoning by remember { mutableStateOf(initial?.supportReasoning ?: false) }
+
+    var providerExpanded by remember { mutableStateOf(false) }
+    var modelExpanded by remember { mutableStateOf(false) }
+    val preset = Providers.find(provider)
+
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(24.dp),
+            color = MaterialTheme.colorScheme.surface,
+            modifier = Modifier
+                .fillMaxWidth(0.94f)
+                .heightIn(max = 560.dp),
+        ) {
+            Column(
+                modifier = Modifier
+                    .verticalScroll(rememberScrollState())
+                    .padding(16.dp),
+            ) {
+                Text(s.editConfig, style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.height(12.dp))
+
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text(s.configName) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+
+                Spacer(Modifier.height(12.dp))
+                ExposedDropdownMenuBox(
+                    expanded = providerExpanded,
+                    onExpandedChange = { providerExpanded = it },
+                ) {
+                    OutlinedTextField(
+                        value = if (preset.id == Providers.CUSTOM) s.custom else preset.displayName,
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text(s.provider) },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = providerExpanded) },
+                        modifier = Modifier.fillMaxWidth().menuAnchor(),
+                    )
+                    ExposedDropdownMenu(
+                        expanded = providerExpanded,
+                        onDismissRequest = { providerExpanded = false },
+                    ) {
+                        Providers.all.forEach { p ->
+                            DropdownMenuItem(
+                                text = { Text(if (p.id == Providers.CUSTOM) s.custom else p.displayName) },
+                                onClick = {
+                                    provider = p.id
+                                    if (p.baseUrl.isNotEmpty()) baseUrl = p.baseUrl
+                                    if (p.models.isNotEmpty()) model = p.models.first()
+                                    supportReasoning = p.supportReasoning
+                                    providerExpanded = false
+                                },
+                            )
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = baseUrl,
+                    onValueChange = { baseUrl = it },
+                    label = { Text(s.baseUrl) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+
+                Spacer(Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = apiKey,
+                    onValueChange = { apiKey = it },
+                    label = { Text(s.apiKey) },
+                    singleLine = true,
+                    visualTransformation = PasswordVisualTransformation(),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+
+                Spacer(Modifier.height(12.dp))
+                if (preset.models.isNotEmpty()) {
+                    ExposedDropdownMenuBox(
+                        expanded = modelExpanded,
+                        onExpandedChange = { modelExpanded = it },
+                    ) {
+                        OutlinedTextField(
+                            value = model,
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text(s.model) },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = modelExpanded) },
+                            modifier = Modifier.fillMaxWidth().menuAnchor(),
+                        )
+                        ExposedDropdownMenu(
+                            expanded = modelExpanded,
+                            onDismissRequest = { modelExpanded = false },
+                        ) {
+                            preset.models.forEach { m ->
+                                DropdownMenuItem(
+                                    text = { Text(m) },
+                                    onClick = { model = m; modelExpanded = false },
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    OutlinedTextField(
+                        value = model,
+                        onValueChange = { model = it },
+                        label = { Text(s.modelHint) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(s.supportReasoning, style = MaterialTheme.typography.bodyLarge)
+                    Switch(checked = supportReasoning, onCheckedChange = { supportReasoning = it })
+                }
+
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                ) {
+                    TextButton(onClick = onDismiss) { Text(s.cancel) }
+                    Spacer(Modifier.width(8.dp))
+                    Button(onClick = {
+                        onSave(
+                            ApiConfig(
+                                id = initial?.id ?: 0L,
+                                name = name.ifBlank { model.ifBlank { "未命名" } },
+                                provider = provider,
+                                baseUrl = baseUrl,
+                                apiKey = apiKey,
+                                model = model,
+                                supportReasoning = supportReasoning,
+                                isDefault = initial?.isDefault ?: false,
+                            ),
+                        )
+                    }) { Text(s.save) }
                 }
             }
         }
-    } else {
-        var model by remember(settings.model) { mutableStateOf(settings.model) }
-        OutlinedTextField(
-            value = model,
-            onValueChange = { model = it; onSetModel(it) },
-            label = { Text(s.modelHint) },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
-        )
     }
-
-    Spacer(Modifier.height(12.dp))
 }
 
 /** 其他设置：系统提示词、最大上下文、最大输出、自动压缩上下文。 */

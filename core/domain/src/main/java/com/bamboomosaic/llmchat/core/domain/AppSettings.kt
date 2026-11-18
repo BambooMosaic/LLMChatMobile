@@ -23,6 +23,8 @@ data class ProviderPreset(
     val displayName: String,
     val baseUrl: String,
     val models: List<String>,
+    /** 该供应商的预设模型是否默认支持"深度思考"。 */
+    val supportReasoning: Boolean = false,
 )
 
 object Providers {
@@ -40,18 +42,21 @@ object Providers {
             displayName = "DeepSeek",
             baseUrl = "https://api.deepseek.com",
             models = listOf("deepseek-flash", "deepseek-v4-pro"),
+            supportReasoning = true,
         ),
         ProviderPreset(
             id = "openai",
             displayName = "OpenAI ChatGPT",
             baseUrl = "https://api.openai.com/v1",
             models = listOf("gpt-6-astra", "gpt-6.1-sol", "gpt-6-luna"),
+            supportReasoning = true,
         ),
         ProviderPreset(
             id = "glm",
             displayName = "智谱 GLM",
             baseUrl = "https://open.bigmodel.cn/api/paas/v4",
             models = listOf("glm-5.3", "glm-5.3-flash"),
+            supportReasoning = true,
         ),
         ProviderPreset(
             id = "ollama",
@@ -64,6 +69,13 @@ object Providers {
             displayName = "通义千问",
             baseUrl = "https://dashscope.aliyuncs.com/compatible-mode/v1",
             models = listOf("qwen3.8-max", "qwen-plus", "qwen-turbo"),
+        ),
+        ProviderPreset(
+            id = "moonshot",
+            displayName = "Moonshot Kimi",
+            baseUrl = "https://api.moonshot.cn/v1",
+            models = listOf("kimi-k2-turbo", "moonshot-v1-128k"),
+            supportReasoning = true,
         ),
     )
 
@@ -103,6 +115,11 @@ data class AppSettings(
 /** 设置仓储，ViewModel 只注入此接口。 */
 interface SettingsRepository {
     fun observeSettings(): Flow<AppSettings>
+
+    /** 当前选中的 API 配置 id；0 表示尚未选择（用默认配置兜底）。 */
+    fun observeCurrentConfigId(): Flow<Long>
+
+    suspend fun setCurrentConfigId(id: Long)
     suspend fun setSystemPrompt(value: String)
     suspend fun setModel(value: String)
     suspend fun setBaseUrl(value: String)

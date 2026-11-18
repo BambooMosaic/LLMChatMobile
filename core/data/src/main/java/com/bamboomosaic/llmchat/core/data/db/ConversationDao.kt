@@ -32,6 +32,12 @@ interface ConversationDao {
     @Query("UPDATE conversations SET archived = :archived WHERE id = :conversationId")
     suspend fun setArchived(conversationId: String, archived: Int)
 
+    @Query("DELETE FROM messages WHERE conversationId = :conversationId")
+    suspend fun deleteMessages(conversationId: String)
+
+    @Query("DELETE FROM conversations WHERE id = :conversationId")
+    suspend fun deleteConversation(conversationId: String)
+
     @Query("SELECT * FROM messages WHERE conversationId = :conversationId ORDER BY timestamp ASC, id ASC")
     fun observeMessages(conversationId: String): Flow<List<MessageEntity>>
 

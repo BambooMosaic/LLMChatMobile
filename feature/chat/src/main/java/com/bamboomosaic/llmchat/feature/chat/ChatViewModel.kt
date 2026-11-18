@@ -2,10 +2,12 @@ package com.bamboomosaic.llmchat.feature.chat
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.bamboomosaic.llmchat.core.domain.ApiConfig
 import com.bamboomosaic.llmchat.core.domain.AppLanguage
 import com.bamboomosaic.llmchat.core.domain.AppSettings
 import com.bamboomosaic.llmchat.core.domain.ChatMessage
 import com.bamboomosaic.llmchat.core.domain.ChatRepository
+import com.bamboomosaic.llmchat.core.domain.ConfigRepository
 import com.bamboomosaic.llmchat.core.domain.ContextWindow
 import com.bamboomosaic.llmchat.core.domain.ContextWindowRepository
 import com.bamboomosaic.llmchat.core.domain.Conversation
@@ -51,10 +53,21 @@ class ChatViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val conversationRepository: ConversationRepository,
     private val tokenUsageRepository: TokenUsageRepository,
+    private val configRepository: ConfigRepository,
 ) : ViewModel() {
 
     private val _currentConversationId = MutableStateFlow(UUID.randomUUID().toString())
     val currentConversationId: StateFlow<String> = _currentConversationId.asStateFlow()
+
+    /** 已保存的全部 API 配置。 */
+    val apiConfigs: StateFlow<List<ApiConfig>> = configRepository
+        .observeConfigs()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /** 当前选中的配置（聊天页左下角按钮显示其模型名）。 */
+    val currentConfig: StateFlow<ApiConfig?> = configRepository
+        .observeCurrentConfig()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     val conversations: StateFlow<List<Conversation>> = conversationRepository
         .observeConversations()
@@ -103,6 +116,11 @@ class ChatViewModel @Inject constructor(
         )
 
     private var streamJob: Job? = null
+
+    init {
+        // 首次启动时把升级前的单条 DataStore 配置迁移成第一条默认 API 配置
+        viewModelScope.launch { configRepository.ensureSeeded() }
+    }
 
     fun sendUserMessage(text: String) {
         if (text.isBlank()) return
@@ -164,7 +182,7 @@ class ChatViewModel @Inject constructor(
             chatRepository.sendChatStream(
                 sessionId = conversationId,
                 messages = compressed,
-                model = currentSettings.model,
+                model = currentConfig.value?.model ?: currentSettings.model,
                 thinkingEnabled = currentSettings.thinkingEnabled,
                 maxTokens = currentSettings.maxOutputTokens.takeIf { it > 0 },
                 onReasoning = { chunk ->
@@ -258,6 +276,39 @@ class ChatViewModel @Inject constructor(
     /** 从「恢复对话」里恢复到侧边栏。 */
     fun restoreConversation(conversationId: String) {
         viewModelScope.launch { conversationRepository.setArchived(conversationId, false) }
+    }
+
+    /** 永久删除会话及其消息（不可恢复）。 */
+    fun deleteConversationPermanently(conversationId: String) {
+        viewModelScope.launch {
+            conversationRepository.deleteConversation(conversationId)
+            if (conversationId == _currentConversationId.value) {
+                newConversation()
+            }
+        }
+    }
+
+    // ---- 多套 API 配置管理 ----
+
+    /** 聊天页切换当前配置（仅影响后续请求）。 */
+    fun selectConfig(id: Long) {
+        viewModelScope.launch { configRepository.select(id) }
+    }
+
+    fun saveConfig(config: ApiConfig) {
+        viewModelScope.launch { configRepository.save(config) }
+    }
+
+    fun deleteConfig(id: Long) {
+        viewModelScope.launch { configRepository.delete(id) }
+    }
+
+    fun setDefaultConfig(id: Long) {
+        viewModelScope.launch { configRepository.setDefault(id) }
+    }
+
+    fun seedConfigs() {
+        viewModelScope.launch { configRepository.ensureSeeded() }
     }
 
     fun setSystemPrompt(value: String) {

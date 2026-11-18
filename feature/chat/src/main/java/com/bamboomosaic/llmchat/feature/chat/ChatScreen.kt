@@ -27,6 +27,8 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -52,6 +54,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.bamboomosaic.llmchat.core.domain.ApiConfig
 import com.bamboomosaic.llmchat.core.domain.MessageRole
 import com.bamboomosaic.llmchat.feature.chat.i18n.LocalAppStrings
 import kotlinx.coroutines.launch
@@ -75,6 +78,8 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
     val sessionTotals by viewModel.sessionTotals.collectAsState()
     val globalTotals by viewModel.globalTotals.collectAsState()
     val archivedConversations by viewModel.archivedConversations.collectAsState()
+    val apiConfigs by viewModel.apiConfigs.collectAsState()
+    val currentConfig by viewModel.currentConfig.collectAsState()
 
     var input by remember { mutableStateOf("") }
     var showSettings by remember { mutableStateOf(false) }
@@ -203,11 +208,16 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
                 }
             }
 
+            // 模型切换 + 深度思考已整合进输入栏底栏
             ChatInputBar(
                 input = input,
                 onInputChange = { input = it },
                 thinkingEnabled = settings.thinkingEnabled,
+                thinkingSupported = currentConfig?.supportReasoning ?: false,
                 onToggleThinking = viewModel::setThinkingEnabled,
+                currentModel = currentConfig?.model?.ifBlank { currentConfig?.name } ?: "—",
+                modelConfigs = apiConfigs,
+                onSelectModel = viewModel::selectConfig,
                 onSend = {
                     viewModel.sendUserMessage(input)
                     input = ""
@@ -220,6 +230,10 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
         SettingsDialog(
             settings = settings,
             archivedConversations = archivedConversations,
+            apiConfigs = apiConfigs,
+            onSaveConfig = viewModel::saveConfig,
+            onDeleteConfig = viewModel::deleteConfig,
+            onSetDefaultConfig = viewModel::setDefaultConfig,
             onSetProvider = viewModel::setProvider,
             onSetBaseUrl = viewModel::setBaseUrl,
             onSetApiKey = viewModel::setApiKey,
@@ -231,11 +245,13 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
             onSetMaxOutputTokens = viewModel::setMaxOutputTokens,
             onSetAutoCompressEnabled = viewModel::setAutoCompressEnabled,
             onRestoreConversation = viewModel::restoreConversation,
+            onDeleteConversation = viewModel::deleteConversationPermanently,
             onDismiss = { showSettings = false },
         )
     }
 }
 
+/** 输入栏上方的模型快速切换：显示当前模型，点击弹出配置列表。 */
 @Composable
 private fun MessageBubble(message: UiMessage, onToggleReasoning: () -> Unit) {
     val s = LocalAppStrings.current

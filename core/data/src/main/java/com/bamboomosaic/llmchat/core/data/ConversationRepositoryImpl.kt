@@ -65,6 +65,12 @@ class ConversationRepositoryImpl @Inject constructor(
         dao.setArchived(conversationId, if (archived) 1 else 0)
     }
 
+    override suspend fun deleteConversation(conversationId: String) {
+        // 先删消息再删会话，避免残留孤儿消息
+        dao.deleteMessages(conversationId)
+        dao.deleteConversation(conversationId)
+    }
+
     override fun observeMessages(conversationId: String): Flow<List<ChatMessage>> =
         dao.observeMessages(conversationId).map { list -> list.map { it.toDomain() } }
 
