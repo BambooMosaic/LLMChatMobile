@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 仅 debug 构建允许明文 HTTP，用于连接本地 Mock SSE 服务器验证链路。
+         正式 release 构建不包含此文件，仍强制 HTTPS。 -->
+    <application android:usesCleartextTraffic="true" />
+</manifest>

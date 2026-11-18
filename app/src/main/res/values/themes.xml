@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.LLMChatMobile" parent="android:Theme.Material.Light.NoActionBar" />
+    <style name="Theme.LLMChatMobile" parent="android:Theme.Material.Light.NoActionBar">
+        <!-- Android 15 强制 edge-to-edge：让状态栏图标在浅色 TopAppBar 上显示为深色 -->
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
 </resources>
