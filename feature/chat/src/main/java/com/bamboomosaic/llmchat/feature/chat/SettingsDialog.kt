@@ -112,7 +112,12 @@ fun SettingsDialog(
                         style = MaterialTheme.typography.titleMedium,
                         modifier = Modifier.weight(1f),
                     )
-                    TextButton(onClick = onDismiss) { Text(s.cancel) }
+                    // 二级页面只保留左上角「←」返回，不再显示「取消」，避免出现两个返回入口
+                    if (page == SettingsPage.HOME) {
+                        TextButton(onClick = onDismiss) { Text(s.cancel) }
+                    } else {
+                        Spacer(Modifier.width(8.dp))
+                    }
                 }
                 HorizontalDivider()
 
@@ -676,14 +681,18 @@ private fun LanguagePage(
     }
 }
 
-/** 从 PackageInfo 读取 versionName，禁止硬编码。 */
+/** 从 PackageInfo 读取 versionName，禁止硬编码；去掉 alpha 后面的序号（如 0.1.0-alpha01 → 0.1.0-alpha）。 */
 @Composable
 private fun rememberVersionName(): String {
     val context = LocalContext.current
     return remember {
-        runCatching {
+        val raw = runCatching {
             context.packageManager.getPackageInfo(context.packageName, 0).versionName
         }.getOrNull() ?: "0.1.0"
+        // 形如 "0.1.0-alpha01" / "0.1.0-beta02" 时去掉 alpha/beta 后的数字
+        raw.replace(Regex("(alpha|beta|rc)(\\d+)$", RegexOption.IGNORE_CASE)) { m ->
+            m.groupValues[1]
+        }
     }
 }
 

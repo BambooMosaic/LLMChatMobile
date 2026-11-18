@@ -265,9 +265,13 @@ private fun FirstLaunchDialog(onConfirm: () -> Unit) {
     val s = LocalAppStrings.current
     val context = LocalContext.current
     val versionName = remember {
-        runCatching {
+        val raw = runCatching {
             context.packageManager.getPackageInfo(context.packageName, 0).versionName
         }.getOrNull() ?: "0.1.0"
+        // 去掉 alpha/beta/rc 后面的序号（0.1.0-alpha01 → 0.1.0-alpha）
+        raw.replace(Regex("(alpha|beta|rc)(\\d+)$", RegexOption.IGNORE_CASE)) { m ->
+            m.groupValues[1]
+        }
     }
 
     AlertDialog(
