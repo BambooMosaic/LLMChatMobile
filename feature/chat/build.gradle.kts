@@ -9,7 +9,7 @@ plugins {
 }
 
 android {
-    namespace = "com.escape.ui.feature.chat"
+    namespace = "com.bamboomosaic.llmchat.feature.chat"
     compileSdk = 35
 
     defaultConfig {

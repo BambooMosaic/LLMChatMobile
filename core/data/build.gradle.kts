@@ -8,7 +8,7 @@ plugins {
 }
 
 android {
-    namespace = "com.escape.ui.core.data"
+    namespace = "com.bamboomosaic.llmchat.core.data"
     compileSdk = 35
 
     defaultConfig {

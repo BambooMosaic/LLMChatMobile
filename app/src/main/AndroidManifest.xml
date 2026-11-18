@@ -4,14 +4,14 @@
     <application
         android:name=".MyApplication"
         android:allowBackup="true"
-        android:label="LLMChat01"
-        android:theme="@style/Theme.LLMChat01"
+        android:label="LLMChatMobile"
+        android:theme="@style/Theme.LLMChatMobile"
         android:supportsRtl="true">
 
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:theme="@style/Theme.LLMChat01">
+            android:theme="@style/Theme.LLMChatMobile">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

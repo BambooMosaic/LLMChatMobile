@@ -9,11 +9,11 @@ plugins {
 }
 
 android {
-    namespace = "com.escape.ui"
+    namespace = "com.bamboomosaic.llmchat"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.escape.ui"
+        applicationId = "com.bamboomosaic.llmchat"
         minSdk = 24
         targetSdk = 35
         versionCode = 1

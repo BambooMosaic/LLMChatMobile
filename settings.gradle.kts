@@ -20,7 +20,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "LLMChat01"
+rootProject.name = "LLMChatMobile"
 
 include(":app")
 include(":core:domain")
