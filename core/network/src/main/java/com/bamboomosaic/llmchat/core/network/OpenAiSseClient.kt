@@ -20,6 +20,9 @@ import java.io.IOException
 /** network 层内部事件；data 层把 Text 发射给 UI、把 Usage 写入 Room。 */
 sealed interface SseEvent {
     data class Text(val chunk: String) : SseEvent
+
+    /** 推理模型的思考内容（reasoning_content）；当前只用于兜底，不直接展示。 */
+    data class Reasoning(val chunk: String) : SseEvent
     data class Usage(val promptTokens: Long, val completionTokens: Long) : SseEvent
 }
 
@@ -29,7 +32,9 @@ private data class ChatRequestDto(
     val messages: List<MessageDto>,
     val stream: Boolean = true,
     @SerialName("stream_options") val streamOptions: StreamOptionsDto = StreamOptionsDto(),
-    // DeepSeek 系：thinking.type = enabled/disabled
+    @SerialName("max_tokens") val maxTokens: Int? = null,
+    // DeepSeek 系：thinking.type = enabled/disabled。只在开启时才发送，
+    // 关闭时不带该字段——部分厂商不认识它会报 400，另一些会因此切进推理通道。
     @SerialName("thinking") val thinking: ThinkingDto? = null,
     // OpenAI 系：reasoning_effort
     @SerialName("reasoning_effort") val reasoningEffort: String? = null,
@@ -56,7 +61,10 @@ private data class StreamChunkDto(
 private data class ChoiceDto(val delta: DeltaDto = DeltaDto())
 
 @Serializable
-private data class DeltaDto(@SerialName("content") val content: String? = null)
+private data class DeltaDto(
+    @SerialName("content") val content: String? = null,
+    @SerialName("reasoning_content") val reasoningContent: String? = null,
+)
 
 @Serializable
 private data class UsageDto(
@@ -64,13 +72,34 @@ private data class UsageDto(
     @SerialName("completion_tokens") val completionTokens: Long = 0,
 )
 
+/** 非流式响应（服务端忽略 stream 参数时的兜底格式）。 */
+@Serializable
+private data class NonStreamResponseDto(
+    val choices: List<NonStreamChoiceDto> = emptyList(),
+)
+
+@Serializable
+private data class NonStreamChoiceDto(
+    val message: NonStreamMessageDto = NonStreamMessageDto(),
+)
+
+@Serializable
+private data class NonStreamMessageDto(val content: String? = null)
+
 /**
  * 手写 OkHttp SSE 客户端，调用 OpenAI 兼容的 /v1/chat/completions。
  * 无状态：所有配置通过参数传入；以 SseEvent 流发射文本片段与最终 usage。
  */
 class OpenAiSseClient(
     private val okHttpClient: OkHttpClient = OkHttpClient(),
-    private val json: Json = Json { ignoreUnknownKeys = true },
+    // encodeDefaults 必须为 true：否则 stream / stream_options 这类"带默认值的字段"会被
+    // 序列化时省略，服务端收到普通请求并返回整段 JSON（无 data: 行），流式解析拿不到任何内容。
+    // explicitNulls = false：避免把 thinking/max_tokens 的 null 也发给服务端（部分厂商会报 400）。
+    private val json: Json = Json {
+        ignoreUnknownKeys = true
+        encodeDefaults = true
+        explicitNulls = false
+    },
 ) {
     fun stream(
         baseUrl: String,
@@ -78,14 +107,20 @@ class OpenAiSseClient(
         model: String,
         messages: List<ChatMessage>,
         thinkingEnabled: Boolean = false,
+        maxTokens: Int? = null,
     ): Flow<SseEvent> = callbackFlow {
-        // 各厂商"深度思考"参数不同：DeepSeek 用 thinking.type，OpenAI 系用 reasoning_effort
+        // 各厂商"深度思考"参数不同：DeepSeek 用 thinking.type，OpenAI 系用 reasoning_effort。
+        // 关闭时不发送任何相关字段，避免不认该参数的厂商直接报错、或误入推理通道。
         val isDeepSeek = baseUrl.contains("deepseek", ignoreCase = true)
         val payload = ChatRequestDto(
             model = model,
             messages = messages.map { MessageDto(it.role.wireValue(), it.content) },
-            thinking = if (isDeepSeek) {
-                ThinkingDto(if (thinkingEnabled) "enabled" else "disabled")
+            // 显式传，不依赖默认值（默认值在 encodeDefaults=false 时会被省略）
+            stream = true,
+            streamOptions = StreamOptionsDto(includeUsage = true),
+            maxTokens = maxTokens,
+            thinking = if (isDeepSeek && thinkingEnabled) {
+                ThinkingDto("enabled")
             } else {
                 null
             },
@@ -110,7 +145,10 @@ class OpenAiSseClient(
 
             override fun onResponse(call: Call, response: Response) {
                 response.use { resp ->
+                    println("[SSE] ${resp.code} $endpoint model=$model thinking=$thinkingEnabled maxTokens=$maxTokens")
                     if (!resp.isSuccessful) {
+                        val errBody = runCatching { resp.body?.string() }.getOrNull()
+                        println("[SSE] error body=${errBody?.take(500)}")
                         close(IOException("HTTP ${resp.code}: ${resp.message}"))
                         return
                     }
@@ -121,13 +159,31 @@ class OpenAiSseClient(
                     }
                     try {
                         // 用 trySend 的返回值判断下游是否已关闭，避免使用 DelicateCoroutinesApi 的 isClosedForSend
+                        var sawDataLine = false
+                        var emittedText = false
+                        // 兜底：若服务端忽略了 stream 参数、直接返回整段 JSON，则缓存原文用于解析
+                        val rawFallback = StringBuilder()
+
                         loop@ while (true) {
                             val line = source.readUtf8Line() ?: break@loop
-                            if (!line.startsWith(DATA_PREFIX)) continue@loop
+                            if (!line.startsWith(DATA_PREFIX)) {
+                                if (!sawDataLine && rawFallback.length < 64_000) {
+                                    rawFallback.append(line).append('\n')
+                                }
+                                continue@loop
+                            }
+                            sawDataLine = true
                             val data = line.removePrefix(DATA_PREFIX).trim()
                             if (data == DONE_TOKEN) break@loop
                             if (data.isEmpty()) continue@loop
-                            val chunk = json.decodeFromString<StreamChunkDto>(data)
+
+                            // 单条 chunk 解析失败不应中断整条流（不同厂商会追加自有字段）
+                            val chunk = try {
+                                json.decodeFromString<StreamChunkDto>(data)
+                            } catch (e: Exception) {
+                                println("[SSE] decode failed: ${e.message} | data=${data.take(300)}")
+                                continue@loop
+                            }
 
                             // usage chunk：choices 为空、usage 非空
                             chunk.usage?.let { usage ->
@@ -139,10 +195,27 @@ class OpenAiSseClient(
                                 ).isSuccess
                                 if (!sent) break@loop
                             }
-                            chunk.choices.firstOrNull()?.delta?.content?.let { content ->
-                                if (content.isNotEmpty()) {
-                                    if (!trySend(SseEvent.Text(content)).isSuccess) break@loop
-                                }
+                            val delta = chunk.choices.firstOrNull()?.delta ?: continue@loop
+                            delta.content?.takeIf { it.isNotEmpty() }?.let { content ->
+                                emittedText = true
+                                if (!trySend(SseEvent.Text(content)).isSuccess) break@loop
+                            }
+                            // 推理内容单独走 Reasoning 事件，供上层决定是否展示
+                            delta.reasoningContent?.takeIf { it.isNotEmpty() }?.let { reasoning ->
+                                if (!trySend(SseEvent.Reasoning(reasoning)).isSuccess) break@loop
+                            }
+                        }
+
+                        // 完全没收到 SSE 数据行时，尝试按非流式响应解析
+                        if (!sawDataLine && !emittedText && rawFallback.isNotBlank()) {
+                            val fallbackText = runCatching {
+                                json.decodeFromString<NonStreamResponseDto>(rawFallback.toString())
+                                    .choices.firstOrNull()?.message?.content
+                            }.getOrNull()
+                            if (!fallbackText.isNullOrEmpty()) {
+                                trySend(SseEvent.Text(fallbackText))
+                            } else {
+                                println("[SSE] non-stream fallback failed, raw=${rawFallback.take(400)}")
                             }
                         }
                         close()

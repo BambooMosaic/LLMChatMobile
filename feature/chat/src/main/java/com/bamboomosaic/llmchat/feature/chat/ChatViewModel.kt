@@ -133,6 +133,7 @@ class ChatViewModel @Inject constructor(
                 messages = compressed,
                 model = currentSettings.model,
                 thinkingEnabled = currentSettings.thinkingEnabled,
+                maxTokens = currentSettings.maxOutputTokens.takeIf { it > 0 },
             )
                 .catch { e -> _error.value = e.message ?: "Unknown error" }
                 .collect { chunk ->
@@ -147,6 +148,9 @@ class ChatViewModel @Inject constructor(
                     conversationId,
                     ChatMessage(MessageRole.ASSISTANT, accumulated),
                 )
+            } else if (_error.value == null) {
+                // 请求成功（可能消耗了 token）但没有任何正文：给出明确原因，而不是留一个空白气泡
+                _error.value = emptyResponseHint(currentSettings)
             }
 
             // 本轮消耗：流结束后读取该会话最近一条 usage
@@ -228,6 +232,16 @@ class ChatViewModel @Inject constructor(
 
     fun setAutoCompressEnabled(enabled: Boolean) {
         viewModelScope.launch { settingsRepository.setAutoCompressEnabled(enabled) }
+    }
+
+    /** 请求成功但没有任何正文时的提示（避免只留一个空白气泡）。 */
+    private fun emptyResponseHint(settings: AppSettings): String = when (settings.language) {
+        AppLanguage.SIMPLIFIED_CHINESE ->
+            "模型没有返回正文内容（token 已消耗）。请确认模型名支持对话，或检查「最大输出」是否过小。"
+        AppLanguage.TRADITIONAL_CHINESE ->
+            "模型沒有回傳正文內容（token 已消耗）。請確認模型名稱支援對話，或檢查「最大輸出」是否過小。"
+        AppLanguage.ENGLISH ->
+            "The model returned no content (tokens were consumed). Check the model name supports chat, or whether Max output tokens is too small."
     }
 
     private companion object {

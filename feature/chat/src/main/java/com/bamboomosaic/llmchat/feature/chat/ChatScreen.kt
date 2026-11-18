@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
@@ -95,10 +96,12 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
         },
     ) {
         // 必须自己绘制背景：否则 ModalNavigationDrawer 内容区透明，会露出窗口背景（浅色主题下是白色）
+        // imePadding：Android 15 强制 edge-to-edge 后窗口不再 resize，不加会被键盘挡住输入栏/发送按钮
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background),
+                .background(MaterialTheme.colorScheme.background)
+                .imePadding(),
         ) {
             TopAppBar(
                 colors = androidx.compose.material3.TopAppBarDefaults.topAppBarColors(

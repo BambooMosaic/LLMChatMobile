@@ -25,6 +25,7 @@ class ChatRepositoryImpl @Inject constructor(
         messages: List<ChatMessage>,
         model: String,
         thinkingEnabled: Boolean,
+        maxTokens: Int?,
     ): Flow<String> = flow {
         // 每次请求都从 DataStore 读取最新配置，不在代码里写死 Key
         val settings = settingsRepository.observeSettings().first()
@@ -35,6 +36,7 @@ class ChatRepositoryImpl @Inject constructor(
                 model = model,
                 messages = messages,
                 thinkingEnabled = thinkingEnabled,
+                maxTokens = maxTokens,
             ).transform { event ->
                 when (event) {
                     is SseEvent.Text -> emit(event.chunk)
@@ -50,6 +52,8 @@ class ChatRepositoryImpl @Inject constructor(
                             ),
                         )
                     }
+                    // 思考内容暂不进入正文流；需要展示思考过程时再单独暴露
+                    is SseEvent.Reasoning -> Unit
                 }
             },
         )

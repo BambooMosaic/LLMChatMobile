@@ -13,5 +13,6 @@ interface ChatRepository {
         messages: List<ChatMessage>,
         model: String,
         thinkingEnabled: Boolean = false,
+        maxTokens: Int? = null,
     ): Flow<String>
 }
