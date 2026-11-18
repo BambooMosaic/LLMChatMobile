@@ -20,5 +20,9 @@ captures/
 # Tooling data
 .workbuddy/
 
+# Personal instruction docs (never publish)
+指令文件/
+文件/
+
 # Logs
 *.log
