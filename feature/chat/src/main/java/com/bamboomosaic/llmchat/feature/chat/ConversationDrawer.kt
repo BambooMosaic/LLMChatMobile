@@ -59,7 +59,10 @@ fun ConversationDrawer(
     var renameTarget by remember { mutableStateOf<Conversation?>(null) }
     var tokenMenuExpanded by remember { mutableStateOf(false) }
 
-    ModalDrawerSheet(modifier = Modifier.width(drawerWidth)) {
+    ModalDrawerSheet(
+        modifier = Modifier.width(drawerWidth),
+        drawerContainerColor = MaterialTheme.colorScheme.surface,
+    ) {
         Column(modifier = Modifier.fillMaxSize()) {
             Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp)) {
                 Text(

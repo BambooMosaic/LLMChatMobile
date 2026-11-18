@@ -1,12 +1,10 @@
 package com.bamboomosaic.llmchat.feature.chat
 
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -110,7 +108,8 @@ private fun CodeBlockWithCopy(model: MarkdownComponentModel, fence: Boolean) {
                 }
             }
             Surface(
-                color = MaterialTheme.colorScheme.background,
+                shape = RoundedCornerShape(6.dp),
+                color = MaterialTheme.colorScheme.surface,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(start = 8.dp, end = 8.dp, bottom = 8.dp),

@@ -1,7 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.LLMChatMobile" parent="android:Theme.Material.Light.NoActionBar">
-        <!-- Android 15 强制 edge-to-edge：让状态栏图标在浅色 TopAppBar 上显示为深色 -->
-        <item name="android:windowLightStatusBar">true</item>
+    <!--
+      parent 用深色系统主题：默认主题是深色，若用 Light parent，窗口背景是白色，
+      Compose 未铺满的瞬间（冷启动、Dialog 圆角外、切换主题）会闪白。
+      windowBackground 显式给深灰，和 Compose 的深色 background 保持一致。
+    -->
+    <style name="Theme.LLMChatMobile" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/window_background</item>
+        <!-- 状态栏图标默认按深色模式给浅色图标；切浅色时由 MainActivity 动态改 -->
+        <item name="android:windowLightStatusBar">false</item>
     </style>
 </resources>

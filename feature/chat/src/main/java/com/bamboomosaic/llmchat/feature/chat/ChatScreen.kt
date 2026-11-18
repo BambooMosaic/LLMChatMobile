@@ -94,8 +94,16 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
             )
         },
     ) {
-        Column(modifier = Modifier.fillMaxSize()) {
+        // 必须自己绘制背景：否则 ModalNavigationDrawer 内容区透明，会露出窗口背景（浅色主题下是白色）
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background),
+        ) {
             TopAppBar(
+                colors = androidx.compose.material3.TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                ),
                 navigationIcon = {
                     TextButton(onClick = { scope.launch { drawerState.open() } }) { Text("☰") }
                 },
