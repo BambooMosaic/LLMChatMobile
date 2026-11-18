@@ -28,6 +28,17 @@ android {
     buildFeatures {
         compose = true
     }
+
+    buildTypes {
+        release {
+            // 试运行阶段：用 debug keystore 给 release 包签名，装到真机即可直接跑。
+            // 正式发布时替换成自己的 keystore（换签名后需卸载旧包才能覆盖安装）。
+            signingConfig = signingConfigs.getByName("debug")
+            // 暂不开混淆：Hilt / Room / kotlinx-serialization 需要配套 keep 规则，alpha 阶段先保稳
+            isMinifyEnabled = false
+            isShrinkResources = false
+        }
+    }
 }
 
 kotlin {
