@@ -29,7 +29,14 @@ private data class ChatRequestDto(
     val messages: List<MessageDto>,
     val stream: Boolean = true,
     @SerialName("stream_options") val streamOptions: StreamOptionsDto = StreamOptionsDto(),
+    // DeepSeek 系：thinking.type = enabled/disabled
+    @SerialName("thinking") val thinking: ThinkingDto? = null,
+    // OpenAI 系：reasoning_effort
+    @SerialName("reasoning_effort") val reasoningEffort: String? = null,
 )
+
+@Serializable
+private data class ThinkingDto(val type: String)
 
 @Serializable
 private data class StreamOptionsDto(
@@ -70,10 +77,19 @@ class OpenAiSseClient(
         apiKey: String,
         model: String,
         messages: List<ChatMessage>,
+        thinkingEnabled: Boolean = false,
     ): Flow<SseEvent> = callbackFlow {
+        // 各厂商"深度思考"参数不同：DeepSeek 用 thinking.type，OpenAI 系用 reasoning_effort
+        val isDeepSeek = baseUrl.contains("deepseek", ignoreCase = true)
         val payload = ChatRequestDto(
             model = model,
             messages = messages.map { MessageDto(it.role.wireValue(), it.content) },
+            thinking = if (isDeepSeek) {
+                ThinkingDto(if (thinkingEnabled) "enabled" else "disabled")
+            } else {
+                null
+            },
+            reasoningEffort = if (thinkingEnabled && !isDeepSeek) "high" else null,
         )
         val body = json.encodeToString(payload).toRequestBody(JSON_MEDIA_TYPE)
         // baseUrl 约定已包含版本段（如 https://api.openai.com/v1），这里只拼 /chat/completions，

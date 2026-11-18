@@ -24,6 +24,7 @@ class ChatRepositoryImpl @Inject constructor(
         sessionId: String,
         messages: List<ChatMessage>,
         model: String,
+        thinkingEnabled: Boolean,
     ): Flow<String> = flow {
         // 每次请求都从 DataStore 读取最新配置，不在代码里写死 Key
         val settings = settingsRepository.observeSettings().first()
@@ -33,6 +34,7 @@ class ChatRepositoryImpl @Inject constructor(
                 apiKey = settings.apiKey,
                 model = model,
                 messages = messages,
+                thinkingEnabled = thinkingEnabled,
             ).transform { event ->
                 when (event) {
                     is SseEvent.Text -> emit(event.chunk)

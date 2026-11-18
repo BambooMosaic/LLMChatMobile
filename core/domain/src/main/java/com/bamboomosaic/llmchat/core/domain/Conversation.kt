@@ -28,5 +28,8 @@ interface ConversationRepository {
     /** 如果标题仍是占位标题，用首条消息更新。 */
     suspend fun updateTitleIfPlaceholder(conversationId: String, title: String)
 
+    /** 手动重命名会话标题。 */
+    suspend fun renameConversation(conversationId: String, title: String)
+
     fun observeMessages(conversationId: String): Flow<List<ChatMessage>>
 }

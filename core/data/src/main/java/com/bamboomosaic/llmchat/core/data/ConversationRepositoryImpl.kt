@@ -55,6 +55,10 @@ class ConversationRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun renameConversation(conversationId: String, title: String) {
+        dao.updateTitle(conversationId, title.trim(), System.currentTimeMillis())
+    }
+
     override fun observeMessages(conversationId: String): Flow<List<ChatMessage>> =
         dao.observeMessages(conversationId).map { list -> list.map { it.toDomain() } }
 

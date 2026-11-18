@@ -3,11 +3,15 @@ package com.bamboomosaic.llmchat.core.data.settings
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.bamboomosaic.llmchat.core.domain.AppLanguage
 import com.bamboomosaic.llmchat.core.domain.AppSettings
+import com.bamboomosaic.llmchat.core.domain.Providers
 import com.bamboomosaic.llmchat.core.domain.SettingsRepository
+import com.bamboomosaic.llmchat.core.domain.ThemeMode
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -17,7 +21,7 @@ private val Context.settingsDataStore: DataStore<Preferences> by preferencesData
     name = "app_settings",
 )
 
-/** 用 DataStore Preferences 保存 systemPrompt / model / baseUrl / apiKey。 */
+/** 用 DataStore Preferences 保存全部配置项。 */
 class SettingsStore @Inject constructor(
     @ApplicationContext private val context: Context,
 ) : SettingsRepository {
@@ -26,29 +30,60 @@ class SettingsStore @Inject constructor(
     private val modelKey = stringPreferencesKey("model")
     private val baseUrlKey = stringPreferencesKey("base_url")
     private val apiKeyKey = stringPreferencesKey("api_key")
+    private val providerKey = stringPreferencesKey("provider_id")
+    private val themeModeKey = stringPreferencesKey("theme_mode")
+    private val languageKey = stringPreferencesKey("language")
+    private val thinkingKey = booleanPreferencesKey("thinking_enabled")
 
     override fun observeSettings(): Flow<AppSettings> = context.settingsDataStore.data.map { prefs ->
+        val language = AppLanguage.fromTag(prefs[languageKey])
         AppSettings(
-            systemPrompt = prefs[systemPromptKey] ?: AppSettings.DEFAULT_SYSTEM_PROMPT,
+            // 未显式设置过提示词时，按当前语言给默认值，实现"AI 语言跟随界面语言"
+            systemPrompt = prefs[systemPromptKey] ?: AppSettings.defaultSystemPrompt(language),
             model = prefs[modelKey] ?: AppSettings.DEFAULT_MODEL,
             baseUrl = prefs[baseUrlKey] ?: AppSettings.DEFAULT_BASE_URL,
             apiKey = prefs[apiKeyKey] ?: AppSettings.DEFAULT_API_KEY,
+            providerId = prefs[providerKey] ?: Providers.CUSTOM,
+            themeMode = runCatching { ThemeMode.valueOf(prefs[themeModeKey] ?: "") }
+                .getOrDefault(ThemeMode.DARK),
+            language = language,
+            thinkingEnabled = prefs[thinkingKey] ?: false,
         )
     }
 
     override suspend fun setSystemPrompt(value: String) {
-        context.settingsDataStore.edit { prefs -> prefs[systemPromptKey] = value }
+        context.settingsDataStore.edit { it[systemPromptKey] = value }
     }
 
     override suspend fun setModel(value: String) {
-        context.settingsDataStore.edit { prefs -> prefs[modelKey] = value }
+        context.settingsDataStore.edit { it[modelKey] = value }
     }
 
     override suspend fun setBaseUrl(value: String) {
-        context.settingsDataStore.edit { prefs -> prefs[baseUrlKey] = value }
+        context.settingsDataStore.edit { it[baseUrlKey] = value }
     }
 
     override suspend fun setApiKey(value: String) {
-        context.settingsDataStore.edit { prefs -> prefs[apiKeyKey] = value }
+        context.settingsDataStore.edit { it[apiKeyKey] = value }
+    }
+
+    override suspend fun setProvider(providerId: String) {
+        context.settingsDataStore.edit { it[providerKey] = providerId }
+    }
+
+    override suspend fun setThemeMode(mode: ThemeMode) {
+        context.settingsDataStore.edit { it[themeModeKey] = mode.name }
+    }
+
+    override suspend fun setLanguage(language: AppLanguage) {
+        context.settingsDataStore.edit { prefs ->
+            prefs[languageKey] = language.tag
+            // 语言切换时同步重置提示词默认值（用户自定义过的会被覆盖，可在设置里再改）
+            prefs[systemPromptKey] = AppSettings.defaultSystemPrompt(language)
+        }
+    }
+
+    override suspend fun setThinkingEnabled(enabled: Boolean) {
+        context.settingsDataStore.edit { it[thinkingKey] = enabled }
     }
 }

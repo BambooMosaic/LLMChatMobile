@@ -2,6 +2,7 @@ package com.bamboomosaic.llmchat.feature.chat
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.bamboomosaic.llmchat.core.domain.AppLanguage
 import com.bamboomosaic.llmchat.core.domain.AppSettings
 import com.bamboomosaic.llmchat.core.domain.ChatMessage
 import com.bamboomosaic.llmchat.core.domain.ChatRepository
@@ -11,6 +12,8 @@ import com.bamboomosaic.llmchat.core.domain.Conversation
 import com.bamboomosaic.llmchat.core.domain.ConversationRepository
 import com.bamboomosaic.llmchat.core.domain.MessageRole
 import com.bamboomosaic.llmchat.core.domain.SettingsRepository
+import com.bamboomosaic.llmchat.core.domain.ThemeMode
+import com.bamboomosaic.llmchat.core.domain.TokenTotals
 import com.bamboomosaic.llmchat.core.domain.TokenUsageRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -20,6 +23,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -27,7 +31,13 @@ import kotlinx.coroutines.launch
 import java.util.UUID
 import javax.inject.Inject
 
-data class UiMessage(val role: MessageRole, val text: String, val isStreaming: Boolean = false)
+data class UiMessage(
+    val role: MessageRole,
+    val text: String,
+    val isStreaming: Boolean = false,
+    val promptTokens: Long? = null,
+    val completionTokens: Long? = null,
+)
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
@@ -36,22 +46,33 @@ class ChatViewModel @Inject constructor(
     private val contextWindowRepository: ContextWindowRepository,
     private val settingsRepository: SettingsRepository,
     private val conversationRepository: ConversationRepository,
-    tokenUsageRepository: TokenUsageRepository,
+    private val tokenUsageRepository: TokenUsageRepository,
 ) : ViewModel() {
 
-    /** 当前会话 ID；新建会话时是一个尚未入库的 UUID，首次发送时写入。 */
     private val _currentConversationId = MutableStateFlow(UUID.randomUUID().toString())
     val currentConversationId: StateFlow<String> = _currentConversationId.asStateFlow()
 
-    /** 侧边栏会话列表（按最近更新倒序）。 */
     val conversations: StateFlow<List<Conversation>> = conversationRepository
         .observeConversations()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    /** 当前会话累计 token，随 currentConversationId 切换。 */
-    val sessionTotalTokens: StateFlow<Long> = _currentConversationId
-        .flatMapLatest { tokenUsageRepository.observeSessionTotal(it) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0L)
+    /** 当前对话标题（与侧边栏联动）。 */
+    val currentTitle: StateFlow<String> = combine(
+        conversations,
+        _currentConversationId,
+    ) { list, id ->
+        list.firstOrNull { it.id == id }?.title.orEmpty()
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
+
+    /** 当前会话 token 明细。 */
+    val sessionTotals: StateFlow<TokenTotals> = _currentConversationId
+        .flatMapLatest { tokenUsageRepository.observeSessionTotals(it) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), TokenTotals())
+
+    /** 全应用 token 明细。 */
+    val globalTotals: StateFlow<TokenTotals> = tokenUsageRepository
+        .observeGlobalTotals()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), TokenTotals())
 
     private val _messages = MutableStateFlow<List<UiMessage>>(emptyList())
     val messages: StateFlow<List<UiMessage>> = _messages.asStateFlow()
@@ -68,10 +89,14 @@ class ChatViewModel @Inject constructor(
         .stateIn(
             viewModelScope,
             SharingStarted.WhileSubscribed(5000),
-            AppSettings("", AppSettings.DEFAULT_MODEL, AppSettings.DEFAULT_BASE_URL, AppSettings.DEFAULT_API_KEY),
+            AppSettings(
+                systemPrompt = AppSettings.defaultSystemPrompt(AppLanguage.SIMPLIFIED_CHINESE),
+                model = AppSettings.DEFAULT_MODEL,
+                baseUrl = AppSettings.DEFAULT_BASE_URL,
+                apiKey = AppSettings.DEFAULT_API_KEY,
+            ),
         )
 
-    /** 正在进行的流式任务，切换会话时取消。 */
     private var streamJob: Job? = null
 
     fun sendUserMessage(text: String) {
@@ -81,7 +106,6 @@ class ChatViewModel @Inject constructor(
         val conversationId = _currentConversationId.value
         val currentSettings = settings.value
 
-        // 发送前基于已完成的展示消息推导上下文（不含正在流式的占位）
         val history = _messages.value
             .filter { !it.isStreaming }
             .map { ChatMessage(it.role, it.text) }
@@ -96,13 +120,17 @@ class ChatViewModel @Inject constructor(
 
         streamJob?.cancel()
         streamJob = viewModelScope.launch {
-            // 首条消息时确保会话入库，并用首条消息生成标题
             conversationRepository.ensureConversation(conversationId, text.take(MAX_TITLE_LENGTH))
             conversationRepository.updateTitleIfPlaceholder(conversationId, text.take(MAX_TITLE_LENGTH))
             conversationRepository.appendMessage(conversationId, ChatMessage(MessageRole.USER, text))
 
             var accumulated = ""
-            chatRepository.sendChatStream(conversationId, compressed, currentSettings.model)
+            chatRepository.sendChatStream(
+                sessionId = conversationId,
+                messages = compressed,
+                model = currentSettings.model,
+                thinkingEnabled = currentSettings.thinkingEnabled,
+            )
                 .catch { e -> _error.value = e.message ?: "Unknown error" }
                 .collect { chunk ->
                     accumulated += chunk
@@ -117,13 +145,20 @@ class ChatViewModel @Inject constructor(
                     ChatMessage(MessageRole.ASSISTANT, accumulated),
                 )
             }
+
+            // 本轮消耗：流结束后读取该会话最近一条 usage
+            val usage = tokenUsageRepository.getLastUsage(conversationId)
             _messages.update { list ->
-                list.dropLast(1) + UiMessage(MessageRole.ASSISTANT, accumulated)
+                list.dropLast(1) + UiMessage(
+                    role = MessageRole.ASSISTANT,
+                    text = accumulated,
+                    promptTokens = usage?.promptTokens,
+                    completionTokens = usage?.completionTokens,
+                )
             }
         }
     }
 
-    /** 新建会话：切换到新的 UUID，清空当前展示。 */
     fun newConversation() {
         streamJob?.cancel()
         _error.value = null
@@ -131,7 +166,6 @@ class ChatViewModel @Inject constructor(
         _messages.value = emptyList()
     }
 
-    /** 切换到某个历史会话，从 Room 加载消息。 */
     fun selectConversation(conversationId: String) {
         if (conversationId == _currentConversationId.value) return
         streamJob?.cancel()
@@ -142,6 +176,11 @@ class ChatViewModel @Inject constructor(
                 .map { UiMessage(it.role, it.content) }
             _messages.value = loaded
         }
+    }
+
+    fun renameConversation(conversationId: String, title: String) {
+        if (title.isBlank()) return
+        viewModelScope.launch { conversationRepository.renameConversation(conversationId, title) }
     }
 
     fun setSystemPrompt(value: String) {
@@ -158,6 +197,22 @@ class ChatViewModel @Inject constructor(
 
     fun setApiKey(value: String) {
         viewModelScope.launch { settingsRepository.setApiKey(value) }
+    }
+
+    fun setProvider(providerId: String) {
+        viewModelScope.launch { settingsRepository.setProvider(providerId) }
+    }
+
+    fun setThemeMode(mode: ThemeMode) {
+        viewModelScope.launch { settingsRepository.setThemeMode(mode) }
+    }
+
+    fun setLanguage(language: AppLanguage) {
+        viewModelScope.launch { settingsRepository.setLanguage(language) }
+    }
+
+    fun setThinkingEnabled(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setThinkingEnabled(enabled) }
     }
 
     private companion object {

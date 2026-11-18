@@ -12,5 +12,6 @@ interface ChatRepository {
         sessionId: String,
         messages: List<ChatMessage>,
         model: String,
+        thinkingEnabled: Boolean = false,
     ): Flow<String>
 }
