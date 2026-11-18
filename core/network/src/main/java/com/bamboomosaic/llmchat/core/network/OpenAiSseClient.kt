@@ -8,6 +8,13 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.MediaType.Companion.toMediaType
@@ -49,7 +56,7 @@ private data class StreamOptionsDto(
 )
 
 @Serializable
-private data class MessageDto(val role: String, val content: String)
+private data class MessageDto(val role: String, val content: JsonElement)
 
 @Serializable
 private data class StreamChunkDto(
@@ -115,7 +122,7 @@ class OpenAiSseClient(
         val isDeepSeek = baseUrl.contains("deepseek", ignoreCase = true)
         val payload = ChatRequestDto(
             model = model,
-            messages = messages.map { MessageDto(it.role.wireValue(), it.content) },
+            messages = messages.map { it.toWireDto() },
             // 显式传，不依赖默认值（默认值在 encodeDefaults=false 时会被省略）
             stream = true,
             streamOptions = StreamOptionsDto(includeUsage = true),
@@ -234,6 +241,41 @@ class OpenAiSseClient(
         MessageRole.SYSTEM -> "system"
         MessageRole.USER -> "user"
         MessageRole.ASSISTANT -> "assistant"
+    }
+
+    /**
+     * 把领域消息转成 wire 格式。纯文本用字符串 content；
+     * 带图片（多模态）时用数组 content：[{type:text,text:...},{type:image_url,image_url:{url:data:image/...;base64,...}}]。
+     */
+    private fun ChatMessage.toWireDto(): MessageDto {
+        val role = role.wireValue()
+        if (images.isEmpty()) {
+            return MessageDto(role, JsonPrimitive(content))
+        }
+        val parts = buildJsonArray {
+            if (content.isNotBlank()) {
+                add(
+                    buildJsonObject {
+                        put("type", "text")
+                        put("text", content)
+                    },
+                )
+            }
+            images.forEach { base64 ->
+                add(
+                    buildJsonObject {
+                        put("type", "image_url")
+                        put(
+                            "image_url",
+                            buildJsonObject {
+                                put("url", "data:image/jpeg;base64,$base64")
+                            },
+                        )
+                    },
+                )
+            }
+        }
+        return MessageDto(role, parts)
     }
 
     private companion object {

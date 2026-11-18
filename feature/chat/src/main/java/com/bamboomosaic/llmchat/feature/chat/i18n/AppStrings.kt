@@ -76,6 +76,7 @@ data class AppStrings(
     val exportPlainText: String,
     val exportSuccess: String,
     val followSystem: String,
+    val visionUnsupported: String,
 ) {
     fun thisRound(prompt: Long, completion: Long, total: Long): String =
         String.format(thisRoundFormat, total, prompt, completion)
@@ -155,6 +156,7 @@ private val ZhCN = AppStrings(
     exportPlainText = "纯文本格式",
     exportSuccess = "已导出到",
     followSystem = "跟随系统",
+    visionUnsupported = "当前模型不支持图片输入",
 )
 
 private val ZhTW = AppStrings(
@@ -229,6 +231,7 @@ private val ZhTW = AppStrings(
     exportPlainText = "純文字格式",
     exportSuccess = "已匯出到",
     followSystem = "跟隨系統",
+    visionUnsupported = "目前模型不支援圖片輸入",
 )
 
 private val EnUS = AppStrings(
@@ -303,6 +306,7 @@ private val EnUS = AppStrings(
     exportPlainText = "Plain text",
     exportSuccess = "Exported to",
     followSystem = "Follow system",
+    visionUnsupported = "Current model does not support image input",
 )
 
 fun stringsFor(language: AppLanguage): AppStrings = when (language) {

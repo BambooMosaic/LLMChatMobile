@@ -46,6 +46,8 @@ data class UiMessage(
     val reasoning: String = "",
     /** 思考内容是否折叠。 */
     val reasoningCollapsed: Boolean = false,
+    /** 多模态图片 base64（仅用户消息）。 */
+    val images: List<String> = emptyList(),
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -164,8 +166,21 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+    /** 待发送的图片（base64），发送后清空。 */
+    private val _pendingImages = MutableStateFlow<List<String>>(emptyList())
+    val pendingImages: StateFlow<List<String>> = _pendingImages.asStateFlow()
+
+    fun setPendingImages(images: List<String>) {
+        _pendingImages.value = images
+    }
+
+    fun clearPendingImages() {
+        _pendingImages.value = emptyList()
+    }
+
     fun sendUserMessage(text: String) {
-        if (text.isBlank()) return
+        val images = _pendingImages.value
+        if (text.isBlank() && images.isEmpty()) return
         _error.value = null
 
         val conversationId = _currentConversationId.value
@@ -173,19 +188,22 @@ class ChatViewModel @Inject constructor(
 
         val history = _messages.value
             .filter { !it.isStreaming }
-            .map { ChatMessage(it.role, it.text) }
-        val outgoing = history + ChatMessage(MessageRole.USER, text)
+            .map { ChatMessage(it.role, it.text, images = it.images) }
+        val outgoing = history + ChatMessage(MessageRole.USER, text, images = images)
 
         _messages.update {
-            it + UiMessage(MessageRole.USER, text) + UiMessage(MessageRole.ASSISTANT, "", isStreaming = true)
+            it + UiMessage(MessageRole.USER, text, images = images) +
+                UiMessage(MessageRole.ASSISTANT, "", isStreaming = true)
         }
         _isGenerating.value = true
+        _pendingImages.value = emptyList()
 
         launchStream(
             conversationId = conversationId,
             compressed = buildRequestMessages(currentSettings, outgoing),
             currentSettings = currentSettings,
             userTextForTitle = text,
+            userImages = images,
             persistUserMessage = true,
         )
     }
@@ -215,7 +233,7 @@ class ChatViewModel @Inject constructor(
         // 历史消息（不含被覆盖的助手消息），用于拼请求
         val history = withoutLastAssistant
             .filter { !it.isStreaming }
-            .map { ChatMessage(it.role, it.text) }
+            .map { ChatMessage(it.role, it.text, images = it.images) }
 
         launchStream(
             conversationId = conversationId,
@@ -254,6 +272,7 @@ class ChatViewModel @Inject constructor(
         compressed: List<ChatMessage>,
         currentSettings: AppSettings,
         userTextForTitle: String,
+        userImages: List<String> = emptyList(),
         persistUserMessage: Boolean,
     ) {
         // 流式渲染节流：正文很长时每个 chunk 都重建列表 + 重新排版会明显闪烁，
@@ -265,7 +284,10 @@ class ChatViewModel @Inject constructor(
             conversationRepository.ensureConversation(conversationId, userTextForTitle.take(MAX_TITLE_LENGTH))
             conversationRepository.updateTitleIfPlaceholder(conversationId, userTextForTitle.take(MAX_TITLE_LENGTH))
             if (persistUserMessage) {
-                conversationRepository.appendMessage(conversationId, ChatMessage(MessageRole.USER, userTextForTitle))
+                conversationRepository.appendMessage(
+                    conversationId,
+                    ChatMessage(MessageRole.USER, userTextForTitle, images = userImages),
+                )
             }
 
             var accumulated = ""
@@ -363,7 +385,7 @@ class ChatViewModel @Inject constructor(
         _currentConversationId.value = conversationId
         viewModelScope.launch {
             val loaded = conversationRepository.getMessages(conversationId)
-                .map { UiMessage(it.role, it.content, reasoning = it.reasoning.orEmpty()) }
+                .map { UiMessage(it.role, it.content, reasoning = it.reasoning.orEmpty(), images = it.images) }
             _messages.value = loaded
         }
     }
@@ -441,6 +463,10 @@ class ChatViewModel @Inject constructor(
                 }
                 MessageRole.USER -> {
                     sb.appendLine(if (markdown) "### User" else "[User]")
+                    // 图片以占位符标注，不导出二进制内容
+                    if (msg.images.isNotEmpty()) {
+                        msg.images.forEach { sb.appendLine(if (markdown) "![图片]" else "[图片]") }
+                    }
                     sb.appendLine(msg.content)
                 }
                 MessageRole.ASSISTANT -> {

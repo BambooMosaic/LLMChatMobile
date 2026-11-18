@@ -6,6 +6,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -20,6 +21,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
@@ -52,12 +54,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.bamboomosaic.llmchat.core.domain.ApiConfig
 import com.bamboomosaic.llmchat.core.domain.MessageRole
+import com.bamboomosaic.llmchat.core.domain.Providers
 import com.bamboomosaic.llmchat.feature.chat.i18n.LocalAppStrings
 import kotlinx.coroutines.launch
 
@@ -84,6 +89,7 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
     val currentConfig by viewModel.currentConfig.collectAsState()
     val isFirstLaunch by viewModel.isFirstLaunch.collectAsState()
     val isGenerating by viewModel.isGenerating.collectAsState()
+    val pendingImages by viewModel.pendingImages.collectAsState()
 
     var input by remember { mutableStateOf("") }
     var showSettings by remember { mutableStateOf(false) }
@@ -239,6 +245,9 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
                 modelConfigs = apiConfigs,
                 onSelectModel = viewModel::selectConfig,
                 isGenerating = isGenerating,
+                visionSupported = Providers.supportsVision(currentConfig?.model ?: ""),
+                pendingImages = pendingImages,
+                onImagesChange = viewModel::setPendingImages,
                 onStop = viewModel::stopGeneration,
                 onSend = {
                     viewModel.sendUserMessage(input)
@@ -489,10 +498,17 @@ private fun MessageBubble(
                     if (message.isStreaming && message.text.isEmpty()) {
                         SkeletonBubble()
                     } else if (isUser) {
-                        Text(
-                            text = message.text,
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
+                        // 用户消息：先展示图片（可点击放大），再展示文字
+                        message.images.forEach { base64 ->
+                            ImageMessageContent(base64 = base64)
+                            Spacer(Modifier.height(8.dp))
+                        }
+                        if (message.text.isNotBlank()) {
+                            Text(
+                                text = message.text,
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                        }
                     } else if (message.isStreaming) {
                         // 流式期间用纯文本：Markdown 每帧重新解析全文是长文闪烁的主因
                         Text(
@@ -608,6 +624,44 @@ private fun SkeletonBubble() {
                 .height(12.dp)
                 .alpha(alpha)
                 .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.2f), RoundedCornerShape(4.dp)),
+        )
+    }
+}
+
+/** 聊天历史中的图片：展示缩略图，点击放大查看。 */
+@Composable
+private fun ImageMessageContent(base64: String) {
+    var showFull by remember { mutableStateOf(false) }
+    val bitmap = remember(base64) {
+        runCatching {
+            val bytes = android.util.Base64.decode(base64, android.util.Base64.DEFAULT)
+            android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+        }.getOrNull()
+    }
+    if (bitmap == null) return
+
+    Image(
+        bitmap = bitmap.asImageBitmap(),
+        contentDescription = null,
+        contentScale = ContentScale.Crop,
+        modifier = Modifier
+            .size(160.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .clickable { showFull = true },
+    )
+
+    if (showFull) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showFull = false },
+            confirmButton = {},
+            text = {
+                Image(
+                    bitmap = bitmap.asImageBitmap(),
+                    contentDescription = null,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            },
         )
     }
 }

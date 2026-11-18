@@ -16,4 +16,6 @@ data class MessageEntity(
     val timestamp: Long,
     /** 推理模型的思考内容，仅助手消息可能有值，用于历史会话回看。 */
     val reasoning: String? = null,
+    /** 多模态图片 base64，用 \u0001 分隔多张；仅用户消息可能有值。 */
+    val images: String? = null,
 )

@@ -65,7 +65,12 @@ abstract class RepositoryModule {
         fun provideAppDatabase(@ApplicationContext context: Context): AppDatabase =
             Room.databaseBuilder(context, AppDatabase::class.java, "llmchat.db")
                 // 显式迁移保留用户已有对话；未覆盖到的版本变更才走重建兜底
-                .addMigrations(AppDatabase.MIGRATION_2_3, AppDatabase.MIGRATION_3_4, AppDatabase.MIGRATION_4_5)
+                .addMigrations(
+                    AppDatabase.MIGRATION_2_3,
+                    AppDatabase.MIGRATION_3_4,
+                    AppDatabase.MIGRATION_4_5,
+                    AppDatabase.MIGRATION_5_6,
+                )
                 .fallbackToDestructiveMigration(dropAllTables = true)
                 .build()
 

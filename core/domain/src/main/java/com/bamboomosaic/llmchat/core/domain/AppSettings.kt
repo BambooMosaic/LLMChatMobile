@@ -80,6 +80,11 @@ object Providers {
     )
 
     fun find(id: String): ProviderPreset = all.firstOrNull { it.id == id } ?: all.first()
+
+    /** 支持视觉（多模态）的模型集合。DeepSeek 实际可用模型中仅 deepseek-flash 支持 image 输入。 */
+    val visionModels: Set<String> = setOf("deepseek-flash")
+
+    fun supportsVision(model: String): Boolean = model in visionModels
 }
 
 /** 应用设置：提示词、模型、API 端点、主题、语言、思考模式。 */

@@ -2,6 +2,9 @@ package com.bamboomosaic.llmchat.feature.chat
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,6 +29,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -33,7 +37,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
@@ -44,7 +51,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/** DeepSeek 风格底部输入栏：大圆角容器、多行自适应、文件上传、深度思考、模型切换、圆形发送。 */
+/** DeepSeek 风格底部输入栏：大圆角容器、多行自适应、文件上传、图片输入、深度思考、模型切换、圆形发送。 */
 @Composable
 fun ChatInputBar(
     input: String,
@@ -56,6 +63,9 @@ fun ChatInputBar(
     modelConfigs: List<ApiConfig>,
     onSelectModel: (Long) -> Unit,
     isGenerating: Boolean,
+    visionSupported: Boolean,
+    pendingImages: List<String>,
+    onImagesChange: (List<String>) -> Unit,
     onStop: () -> Unit,
     onSend: () -> Unit,
 ) {
@@ -64,6 +74,7 @@ fun ChatInputBar(
     val scope = rememberCoroutineScope()
     var readError by remember { mutableStateOf<String?>(null) }
     var modelMenuExpanded by remember { mutableStateOf(false) }
+    var visionHint by remember { mutableStateOf(false) }
 
     val filePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument(),
@@ -80,6 +91,29 @@ fun ChatInputBar(
             } else {
                 readError = null
                 onInputChange(if (input.isBlank()) text else "$input\n$text")
+            }
+        }
+    }
+
+    // 图片选择：单选一张图片，读成 base64
+    val imagePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent(),
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            val base64 = withContext(Dispatchers.IO) {
+                runCatching {
+                    context.contentResolver.openInputStream(uri)?.use { input ->
+                        val bytes = input.readBytes()
+                        android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+                    }
+                }.getOrNull()
+            }
+            if (base64.isNullOrBlank()) {
+                readError = s.requestFailed
+            } else {
+                readError = null
+                onImagesChange(listOf(base64))
             }
         }
     }
@@ -116,12 +150,51 @@ fun ChatInputBar(
                         .heightIn(min = 56.dp),
                 )
 
+                // 已选图片缩略图（带删除）
+                if (pendingImages.isNotEmpty()) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        pendingImages.forEachIndexed { index, base64 ->
+                            Box {
+                                DecodedImage(
+                                    base64 = base64,
+                                    modifier = Modifier
+                                        .size(72.dp)
+                                        .clip(RoundedCornerShape(8.dp)),
+                                )
+                                // 右上角删除按钮
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.TopEnd)
+                                        .size(20.dp)
+                                        .clip(CircleShape)
+                                        .background(Color.Black.copy(alpha = 0.6f))
+                                        .clickable {
+                                            onImagesChange(pendingImages.filterIndexed { i, _ -> i != index })
+                                        },
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Text(
+                                        text = "×",
+                                        color = Color.White,
+                                        style = MaterialTheme.typography.labelSmall,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
-                    // 左侧：模型切换 + 深度思考（模型在深度思考左边）
+                    // 左侧：模型切换 + 深度思考
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box {
                             // 模型名按钮，点击展开配置列表
@@ -167,8 +240,21 @@ fun ChatInputBar(
                             label = { Text(s.thinking) },
                         )
                     }
-                    // 右侧：上传文件 + 发送（上传按钮紧贴发送左边，参考 DeepSeek 布局）
+                    // 右侧：图片按钮 + 上传文件 + 发送
                     Row(verticalAlignment = Alignment.CenterVertically) {
+                        // 图片选择按钮（上传文件左边），不支持视觉模型时置灰
+                        TextButton(
+                            onClick = {
+                                if (visionSupported) {
+                                    imagePicker.launch("image/*")
+                                } else {
+                                    visionHint = true
+                                }
+                            },
+                            enabled = visionSupported,
+                        ) {
+                            Text("🖼", style = MaterialTheme.typography.titleMedium)
+                        }
                         TextButton(
                             onClick = { filePicker.launch(arrayOf("text/*", "application/json")) },
                         ) {
@@ -205,5 +291,32 @@ fun ChatInputBar(
                 modifier = Modifier.padding(start = 8.dp, top = 4.dp),
             )
         }
+        if (visionHint) {
+            LaunchedEffect(Unit) {
+                android.widget.Toast.makeText(context, s.visionUnsupported, android.widget.Toast.LENGTH_SHORT).show()
+                visionHint = false
+            }
+        }
+    }
+}
+
+/** 把 base64 图片解码并展示为缩略图。 */
+@Composable
+private fun DecodedImage(base64: String, modifier: Modifier = Modifier) {
+    val bitmap = remember(base64) {
+        runCatching {
+            val bytes = android.util.Base64.decode(base64, android.util.Base64.DEFAULT)
+            android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+        }.getOrNull()
+    }
+    if (bitmap != null) {
+        Image(
+            bitmap = bitmap.asImageBitmap(),
+            contentDescription = null,
+            modifier = modifier,
+            contentScale = ContentScale.Crop,
+        )
+    } else {
+        Box(modifier = modifier.background(MaterialTheme.colorScheme.surfaceVariant))
     }
 }

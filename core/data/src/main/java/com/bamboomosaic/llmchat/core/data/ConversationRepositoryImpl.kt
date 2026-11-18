@@ -42,6 +42,7 @@ class ConversationRepositoryImpl @Inject constructor(
                 content = message.content,
                 timestamp = now,
                 reasoning = message.reasoning?.takeIf { it.isNotBlank() },
+                images = message.images.takeIf { it.isNotEmpty() }?.joinToString(IMAGE_SEPARATOR),
             ),
         )
         dao.touch(conversationId, now)
@@ -91,9 +92,11 @@ class ConversationRepositoryImpl @Inject constructor(
         role = runCatching { MessageRole.valueOf(role) }.getOrDefault(MessageRole.USER),
         content = content,
         reasoning = reasoning,
+        images = images?.split(IMAGE_SEPARATOR)?.filter { it.isNotBlank() } ?: emptyList(),
     )
 
     companion object {
         const val PLACEHOLDER_TITLE = "新对话"
+        const val IMAGE_SEPARATOR = "\u0001"
     }
 }
