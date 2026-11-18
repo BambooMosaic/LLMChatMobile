@@ -42,6 +42,12 @@ data class AppStrings(
     val requestFailed: String,
     val loading: String,
     val expandMenu: String,
+    val otherSettings: String,
+    val maxContext: String,
+    val maxOutput: String,
+    val autoCompress: String,
+    val copy: String,
+    val copied: String,
 ) {
     fun thisRound(prompt: Long, completion: Long, total: Long): String =
         String.format(thisRoundFormat, total, prompt, completion)
@@ -87,6 +93,12 @@ private val ZhCN = AppStrings(
     requestFailed = "请求失败",
     loading = "加载中",
     expandMenu = "打开菜单",
+    otherSettings = "其他设置",
+    maxContext = "最大上下文 Token",
+    maxOutput = "最大输出 Token",
+    autoCompress = "自动压缩上下文",
+    copy = "复制",
+    copied = "已复制",
 )
 
 private val ZhTW = AppStrings(
@@ -127,6 +139,12 @@ private val ZhTW = AppStrings(
     requestFailed = "請求失敗",
     loading = "載入中",
     expandMenu = "開啟選單",
+    otherSettings = "其他設定",
+    maxContext = "最大上下文 Token",
+    maxOutput = "最大輸出 Token",
+    autoCompress = "自動壓縮上下文",
+    copy = "複製",
+    copied = "已複製",
 )
 
 private val EnUS = AppStrings(
@@ -167,6 +185,12 @@ private val EnUS = AppStrings(
     requestFailed = "Request failed",
     loading = "Loading",
     expandMenu = "Open menu",
+    otherSettings = "Other settings",
+    maxContext = "Max context tokens",
+    maxOutput = "Max output tokens",
+    autoCompress = "Auto-compress context",
+    copy = "Copy",
+    copied = "Copied",
 )
 
 fun stringsFor(language: AppLanguage): AppStrings = when (language) {

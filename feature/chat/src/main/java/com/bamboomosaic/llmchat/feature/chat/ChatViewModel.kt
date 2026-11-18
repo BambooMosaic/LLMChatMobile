@@ -80,10 +80,6 @@ class ChatViewModel @Inject constructor(
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
 
-    private val contextWindow: StateFlow<ContextWindow> = contextWindowRepository
-        .observeWindow()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ContextWindow())
-
     val settings: StateFlow<AppSettings> = settingsRepository
         .observeSettings()
         .stateIn(
@@ -112,7 +108,14 @@ class ChatViewModel @Inject constructor(
         val outgoing = history + ChatMessage(MessageRole.USER, text)
 
         val withSystem = listOf(ChatMessage(MessageRole.SYSTEM, currentSettings.systemPrompt)) + outgoing
-        val compressed = contextWindowRepository.compress(withSystem, contextWindow.value)
+        val compressed = if (currentSettings.autoCompressEnabled) {
+            contextWindowRepository.compress(
+                withSystem,
+                ContextWindow(maxTokens = currentSettings.maxContextTokens),
+            )
+        } else {
+            withSystem
+        }
 
         _messages.update {
             it + UiMessage(MessageRole.USER, text) + UiMessage(MessageRole.ASSISTANT, "", isStreaming = true)
@@ -213,6 +216,18 @@ class ChatViewModel @Inject constructor(
 
     fun setThinkingEnabled(enabled: Boolean) {
         viewModelScope.launch { settingsRepository.setThinkingEnabled(enabled) }
+    }
+
+    fun setMaxContextTokens(value: Int) {
+        viewModelScope.launch { settingsRepository.setMaxContextTokens(value) }
+    }
+
+    fun setMaxOutputTokens(value: Int) {
+        viewModelScope.launch { settingsRepository.setMaxOutputTokens(value) }
+    }
+
+    fun setAutoCompressEnabled(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setAutoCompressEnabled(enabled) }
     }
 
     private companion object {

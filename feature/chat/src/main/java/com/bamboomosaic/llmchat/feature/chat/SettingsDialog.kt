@@ -41,7 +41,7 @@ import com.bamboomosaic.llmchat.core.domain.Providers
 import com.bamboomosaic.llmchat.core.domain.ThemeMode
 import com.bamboomosaic.llmchat.feature.chat.i18n.LocalAppStrings
 
-private enum class SettingsPage { HOME, API, APPEARANCE, LANGUAGE }
+private enum class SettingsPage { HOME, API, APPEARANCE, LANGUAGE, OTHER }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -54,6 +54,9 @@ fun SettingsDialog(
     onSetSystemPrompt: (String) -> Unit,
     onSetThemeMode: (ThemeMode) -> Unit,
     onSetLanguage: (AppLanguage) -> Unit,
+    onSetMaxContextTokens: (Int) -> Unit,
+    onSetMaxOutputTokens: (Int) -> Unit,
+    onSetAutoCompressEnabled: (Boolean) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val s = LocalAppStrings.current
@@ -64,6 +67,7 @@ fun SettingsDialog(
         SettingsPage.API -> s.apiConfig
         SettingsPage.APPEARANCE -> s.appearance
         SettingsPage.LANGUAGE -> s.languageSetting
+        SettingsPage.OTHER -> s.otherSettings
     }
 
     Dialog(onDismissRequest = onDismiss) {
@@ -106,6 +110,7 @@ fun SettingsDialog(
                             onApi = { page = SettingsPage.API },
                             onAppearance = { page = SettingsPage.APPEARANCE },
                             onLanguage = { page = SettingsPage.LANGUAGE },
+                            onOther = { page = SettingsPage.OTHER },
                         )
 
                         SettingsPage.API -> ApiPage(
@@ -114,7 +119,6 @@ fun SettingsDialog(
                             onSetBaseUrl = onSetBaseUrl,
                             onSetApiKey = onSetApiKey,
                             onSetModel = onSetModel,
-                            onSetSystemPrompt = onSetSystemPrompt,
                         )
 
                         SettingsPage.APPEARANCE -> AppearancePage(
@@ -125,6 +129,14 @@ fun SettingsDialog(
                         SettingsPage.LANGUAGE -> LanguagePage(
                             language = settings.language,
                             onSetLanguage = onSetLanguage,
+                        )
+
+                        SettingsPage.OTHER -> OtherPage(
+                            settings = settings,
+                            onSetSystemPrompt = onSetSystemPrompt,
+                            onSetMaxContextTokens = onSetMaxContextTokens,
+                            onSetMaxOutputTokens = onSetMaxOutputTokens,
+                            onSetAutoCompressEnabled = onSetAutoCompressEnabled,
                         )
                     }
                 }
@@ -139,10 +151,12 @@ private fun HomePage(
     onApi: () -> Unit,
     onAppearance: () -> Unit,
     onLanguage: () -> Unit,
+    onOther: () -> Unit,
 ) {
     MenuRow(s.apiConfig, onApi)
     MenuRow(s.appearance, onAppearance)
     MenuRow(s.languageSetting, onLanguage)
+    MenuRow(s.otherSettings, onOther)
 }
 
 @Composable
@@ -167,7 +181,6 @@ private fun ApiPage(
     onSetBaseUrl: (String) -> Unit,
     onSetApiKey: (String) -> Unit,
     onSetModel: (String) -> Unit,
-    onSetSystemPrompt: (String) -> Unit,
 ) {
     val s = LocalAppStrings.current
     var providerExpanded by remember { mutableStateOf(false) }
@@ -275,6 +288,19 @@ private fun ApiPage(
     }
 
     Spacer(Modifier.height(12.dp))
+}
+
+/** 其他设置：系统提示词、最大上下文、最大输出、自动压缩上下文。 */
+@Composable
+private fun OtherPage(
+    settings: AppSettings,
+    onSetSystemPrompt: (String) -> Unit,
+    onSetMaxContextTokens: (Int) -> Unit,
+    onSetMaxOutputTokens: (Int) -> Unit,
+    onSetAutoCompressEnabled: (Boolean) -> Unit,
+) {
+    val s = LocalAppStrings.current
+
     var prompt by remember(settings.systemPrompt) { mutableStateOf(settings.systemPrompt) }
     OutlinedTextField(
         value = prompt,
@@ -283,6 +309,51 @@ private fun ApiPage(
         minLines = 3,
         modifier = Modifier.fillMaxWidth(),
     )
+
+    Spacer(Modifier.height(12.dp))
+    var maxContext by remember(settings.maxContextTokens) {
+        mutableStateOf(settings.maxContextTokens.toString())
+    }
+    OutlinedTextField(
+        value = maxContext,
+        onValueChange = {
+            maxContext = it.filter { c -> c.isDigit() }
+            maxContext.toIntOrNull()?.let(onSetMaxContextTokens)
+        },
+        label = { Text(s.maxContext) },
+        singleLine = true,
+        modifier = Modifier.fillMaxWidth(),
+    )
+
+    Spacer(Modifier.height(12.dp))
+    var maxOutput by remember(settings.maxOutputTokens) {
+        mutableStateOf(settings.maxOutputTokens.toString())
+    }
+    OutlinedTextField(
+        value = maxOutput,
+        onValueChange = {
+            maxOutput = it.filter { c -> c.isDigit() }
+            maxOutput.toIntOrNull()?.let(onSetMaxOutputTokens)
+        },
+        label = { Text(s.maxOutput) },
+        singleLine = true,
+        modifier = Modifier.fillMaxWidth(),
+    )
+
+    Spacer(Modifier.height(8.dp))
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(s.autoCompress, style = MaterialTheme.typography.bodyLarge)
+        Switch(
+            checked = settings.autoCompressEnabled,
+            onCheckedChange = onSetAutoCompressEnabled,
+        )
+    }
 }
 
 @Composable

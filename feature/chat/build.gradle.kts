@@ -46,5 +46,7 @@ dependencies {
     implementation(libs.hilt.android)
     ksp(libs.hilt.android.compiler)
     implementation(libs.androidx.hilt.navigation.compose)
+    implementation(libs.compose.markdown.m3)
+    implementation(libs.compose.markdown.code)
     implementation(libs.kotlinx.coroutines.android)
 }

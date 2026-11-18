@@ -172,6 +172,9 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
             onSetSystemPrompt = viewModel::setSystemPrompt,
             onSetThemeMode = viewModel::setThemeMode,
             onSetLanguage = viewModel::setLanguage,
+            onSetMaxContextTokens = viewModel::setMaxContextTokens,
+            onSetMaxOutputTokens = viewModel::setMaxOutputTokens,
+            onSetAutoCompressEnabled = viewModel::setAutoCompressEnabled,
             onDismiss = { showSettings = false },
         )
     }
@@ -210,10 +213,15 @@ private fun MessageBubble(message: UiMessage) {
                 Box(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
                     if (message.isStreaming && message.text.isEmpty()) {
                         SkeletonBubble()
-                    } else {
+                    } else if (isUser) {
                         Text(
-                            text = message.text + if (message.isStreaming) " ▌" else "",
+                            text = message.text,
                             style = MaterialTheme.typography.bodyMedium,
+                        )
+                    } else {
+                        // 助手回复按 Markdown 渲染（代码块自带语言标签 + 复制按钮）
+                        MarkdownText(
+                            content = message.text + if (message.isStreaming) " ▍" else "",
                         )
                     }
                 }

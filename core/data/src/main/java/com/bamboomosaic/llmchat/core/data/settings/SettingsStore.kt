@@ -5,6 +5,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.bamboomosaic.llmchat.core.domain.AppLanguage
@@ -34,6 +35,9 @@ class SettingsStore @Inject constructor(
     private val themeModeKey = stringPreferencesKey("theme_mode")
     private val languageKey = stringPreferencesKey("language")
     private val thinkingKey = booleanPreferencesKey("thinking_enabled")
+    private val maxContextKey = intPreferencesKey("max_context_tokens")
+    private val maxOutputKey = intPreferencesKey("max_output_tokens")
+    private val autoCompressKey = booleanPreferencesKey("auto_compress_enabled")
 
     override fun observeSettings(): Flow<AppSettings> = context.settingsDataStore.data.map { prefs ->
         val language = AppLanguage.fromTag(prefs[languageKey])
@@ -48,6 +52,9 @@ class SettingsStore @Inject constructor(
                 .getOrDefault(ThemeMode.DARK),
             language = language,
             thinkingEnabled = prefs[thinkingKey] ?: false,
+            maxContextTokens = prefs[maxContextKey] ?: AppSettings.DEFAULT_MAX_CONTEXT_TOKENS,
+            maxOutputTokens = prefs[maxOutputKey] ?: AppSettings.DEFAULT_MAX_OUTPUT_TOKENS,
+            autoCompressEnabled = prefs[autoCompressKey] ?: true,
         )
     }
 
@@ -85,5 +92,17 @@ class SettingsStore @Inject constructor(
 
     override suspend fun setThinkingEnabled(enabled: Boolean) {
         context.settingsDataStore.edit { it[thinkingKey] = enabled }
+    }
+
+    override suspend fun setMaxContextTokens(value: Int) {
+        context.settingsDataStore.edit { it[maxContextKey] = value }
+    }
+
+    override suspend fun setMaxOutputTokens(value: Int) {
+        context.settingsDataStore.edit { it[maxOutputKey] = value }
+    }
+
+    override suspend fun setAutoCompressEnabled(enabled: Boolean) {
+        context.settingsDataStore.edit { it[autoCompressKey] = enabled }
     }
 }

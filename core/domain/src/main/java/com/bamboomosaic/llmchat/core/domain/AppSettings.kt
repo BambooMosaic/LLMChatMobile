@@ -80,11 +80,16 @@ data class AppSettings(
     val themeMode: ThemeMode = ThemeMode.DARK,
     val language: AppLanguage = AppLanguage.SIMPLIFIED_CHINESE,
     val thinkingEnabled: Boolean = false,
+    val maxContextTokens: Int = DEFAULT_MAX_CONTEXT_TOKENS,
+    val maxOutputTokens: Int = DEFAULT_MAX_OUTPUT_TOKENS,
+    val autoCompressEnabled: Boolean = true,
 ) {
     companion object {
         const val DEFAULT_MODEL = "gpt-6-luna"
         const val DEFAULT_BASE_URL = "https://api.openai.com/v1"
         const val DEFAULT_API_KEY = ""
+        const val DEFAULT_MAX_CONTEXT_TOKENS = 80000
+        const val DEFAULT_MAX_OUTPUT_TOKENS = 4096
 
         /** 各语言的默认系统提示词（systemPrompt 为空时使用）。 */
         fun defaultSystemPrompt(language: AppLanguage): String = when (language) {
@@ -106,4 +111,7 @@ interface SettingsRepository {
     suspend fun setThemeMode(mode: ThemeMode)
     suspend fun setLanguage(language: AppLanguage)
     suspend fun setThinkingEnabled(enabled: Boolean)
+    suspend fun setMaxContextTokens(value: Int)
+    suspend fun setMaxOutputTokens(value: Int)
+    suspend fun setAutoCompressEnabled(enabled: Boolean)
 }
