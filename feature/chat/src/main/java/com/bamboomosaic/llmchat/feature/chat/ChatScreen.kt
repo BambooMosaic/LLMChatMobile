@@ -26,6 +26,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -51,6 +52,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -80,6 +82,7 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
     val archivedConversations by viewModel.archivedConversations.collectAsState()
     val apiConfigs by viewModel.apiConfigs.collectAsState()
     val currentConfig by viewModel.currentConfig.collectAsState()
+    val isFirstLaunch by viewModel.isFirstLaunch.collectAsState()
 
     var input by remember { mutableStateOf("") }
     var showSettings by remember { mutableStateOf(false) }
@@ -249,6 +252,60 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
             onDismiss = { showSettings = false },
         )
     }
+
+    // 首次启动欢迎弹窗
+    if (isFirstLaunch) {
+        FirstLaunchDialog(onConfirm = viewModel::setFirstLaunchDone)
+    }
+}
+
+/** 首次启动欢迎弹窗：不可点空白/返回键关闭，只能点「我已知晓」。 */
+@Composable
+private fun FirstLaunchDialog(onConfirm: () -> Unit) {
+    val s = LocalAppStrings.current
+    val context = LocalContext.current
+    val versionName = remember {
+        runCatching {
+            context.packageManager.getPackageInfo(context.packageName, 0).versionName
+        }.getOrNull() ?: "0.1.0"
+    }
+
+    AlertDialog(
+        onDismissRequest = { /* 空实现：不可通过点空白关闭 */ },
+        confirmButton = {
+            TextButton(onClick = onConfirm) { Text(s.iKnow) }
+        },
+        title = { Text(s.appName, textAlign = androidx.compose.ui.text.style.TextAlign.Center) },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(
+                    text = "${s.versionLabel}: $versionName",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    text = s.testNotice,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    text = "${s.developer}: BambooMosaic",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = "https://github.com/BambooMosaic/LLMChatMobile",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+        },
+    )
 }
 
 /** 输入栏上方的模型快速切换：显示当前模型，点击弹出配置列表。 */

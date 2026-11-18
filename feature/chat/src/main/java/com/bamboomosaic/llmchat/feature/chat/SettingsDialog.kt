@@ -36,6 +36,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -48,7 +49,7 @@ import com.bamboomosaic.llmchat.core.domain.Providers
 import com.bamboomosaic.llmchat.core.domain.ThemeMode
 import com.bamboomosaic.llmchat.feature.chat.i18n.LocalAppStrings
 
-private enum class SettingsPage { HOME, API, APPEARANCE, LANGUAGE, OTHER, ARCHIVED }
+private enum class SettingsPage { HOME, API, APPEARANCE, LANGUAGE, OTHER, ARCHIVED, ABOUT }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -83,6 +84,7 @@ fun SettingsDialog(
         SettingsPage.LANGUAGE -> s.languageSetting
         SettingsPage.OTHER -> s.otherSettings
         SettingsPage.ARCHIVED -> s.archivedConversations
+        SettingsPage.ABOUT -> s.about
     }
 
     Dialog(onDismissRequest = onDismiss) {
@@ -127,6 +129,7 @@ fun SettingsDialog(
                             onLanguage = { page = SettingsPage.LANGUAGE },
                             onOther = { page = SettingsPage.OTHER },
                             onArchived = { page = SettingsPage.ARCHIVED },
+                            onAbout = { page = SettingsPage.ABOUT },
                         )
 
                         SettingsPage.API -> ApiConfigListPage(
@@ -159,6 +162,8 @@ fun SettingsDialog(
                             onRestore = onRestoreConversation,
                             onDelete = onDeleteConversation,
                         )
+
+                        SettingsPage.ABOUT -> AboutPage()
                     }
                 }
             }
@@ -174,12 +179,14 @@ private fun HomePage(
     onLanguage: () -> Unit,
     onOther: () -> Unit,
     onArchived: () -> Unit,
+    onAbout: () -> Unit,
 ) {
     MenuRow(s.apiConfig, onApi)
     MenuRow(s.appearance, onAppearance)
     MenuRow(s.languageSetting, onLanguage)
     MenuRow(s.otherSettings, onOther)
     MenuRow(s.archivedConversations, onArchived)
+    MenuRow(s.about, onAbout)
 }
 
 /** 已归档会话：点右侧「恢复」放回侧边栏，或「删除」永久删除（二次确认）。 */
@@ -667,4 +674,71 @@ private fun LanguagePage(
             Text(label, style = MaterialTheme.typography.bodyLarge)
         }
     }
+}
+
+/** 从 PackageInfo 读取 versionName，禁止硬编码。 */
+@Composable
+private fun rememberVersionName(): String {
+    val context = LocalContext.current
+    return remember {
+        runCatching {
+            context.packageManager.getPackageInfo(context.packageName, 0).versionName
+        }.getOrNull() ?: "0.1.0"
+    }
+}
+
+/** 关于内容（关于页与欢迎弹窗共用）。 */
+@Composable
+private fun AboutContent(versionName: String) {
+    val s = LocalAppStrings.current
+    val context = LocalContext.current
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Spacer(Modifier.height(8.dp))
+        Text(s.appName, style = MaterialTheme.typography.titleLarge)
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = "${s.versionLabel}: $versionName",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(16.dp))
+        Text(
+            text = s.testNotice,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Spacer(Modifier.height(16.dp))
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        Spacer(Modifier.height(16.dp))
+        Text(
+            text = "${s.developer}: BambooMosaic",
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = s.githubRepo,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.clickable {
+                val intent = android.content.Intent(
+                    android.content.Intent.ACTION_VIEW,
+                    android.net.Uri.parse("https://github.com/BambooMosaic/LLMChatMobile"),
+                )
+                runCatching { context.startActivity(intent) }
+            },
+        )
+        Spacer(Modifier.height(8.dp))
+    }
+}
+
+/** 关于二级页面。 */
+@Composable
+private fun AboutPage() {
+    val versionName = rememberVersionName()
+    AboutContent(versionName)
 }

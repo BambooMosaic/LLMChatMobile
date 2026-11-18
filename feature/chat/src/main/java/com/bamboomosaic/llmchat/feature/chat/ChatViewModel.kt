@@ -69,6 +69,15 @@ class ChatViewModel @Inject constructor(
         .observeCurrentConfig()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
+    /** 是否首次启动（欢迎弹窗）。 */
+    val isFirstLaunch: StateFlow<Boolean> = settingsRepository
+        .observeFirstLaunch()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    fun setFirstLaunchDone() {
+        viewModelScope.launch { settingsRepository.setFirstLaunchDone() }
+    }
+
     val conversations: StateFlow<List<Conversation>> = conversationRepository
         .observeConversations()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())

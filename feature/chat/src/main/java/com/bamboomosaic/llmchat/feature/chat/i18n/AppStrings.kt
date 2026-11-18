@@ -62,6 +62,12 @@ data class AppStrings(
     val editConfig: String,
     val configName: String,
     val supportReasoning: String,
+    val about: String,
+    val versionLabel: String,
+    val developer: String,
+    val githubRepo: String,
+    val iKnow: String,
+    val testNotice: String,
 ) {
     fun thisRound(prompt: Long, completion: Long, total: Long): String =
         String.format(thisRoundFormat, total, prompt, completion)
@@ -127,6 +133,12 @@ private val ZhCN = AppStrings(
     editConfig = "编辑配置",
     configName = "配置名称",
     supportReasoning = "支持深度思考",
+    about = "关于",
+    versionLabel = "版本",
+    developer = "开发者",
+    githubRepo = "GitHub 仓库",
+    iKnow = "我已知晓",
+    testNotice = "这是 LLMChatMobile 的 alpha 测试版本。\n测试版不代表本产品的最终质量，感谢您的理解和支持，祝您好运！",
 )
 
 private val ZhTW = AppStrings(
@@ -187,6 +199,12 @@ private val ZhTW = AppStrings(
     editConfig = "編輯配置",
     configName = "配置名稱",
     supportReasoning = "支援深度思考",
+    about = "關於",
+    versionLabel = "版本",
+    developer = "開發者",
+    githubRepo = "GitHub 倉庫",
+    iKnow = "我已知曉",
+    testNotice = "這是 LLMChatMobile 的 alpha 測試版本。\n測試版不代表本產品的最終品質，感謝您的理解與支持，祝您好運！",
 )
 
 private val EnUS = AppStrings(
@@ -247,6 +265,12 @@ private val EnUS = AppStrings(
     editConfig = "Edit config",
     configName = "Config name",
     supportReasoning = "Supports reasoning",
+    about = "About",
+    versionLabel = "Version",
+    developer = "Developer",
+    githubRepo = "GitHub Repository",
+    iKnow = "Got it",
+    testNotice = "This is an alpha test version of LLMChatMobile.\nThe test version does not represent the final quality of this product. Thank you for your understanding and support. Good luck!",
 )
 
 fun stringsFor(language: AppLanguage): AppStrings = when (language) {

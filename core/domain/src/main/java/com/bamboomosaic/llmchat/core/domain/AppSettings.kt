@@ -120,6 +120,12 @@ interface SettingsRepository {
     fun observeCurrentConfigId(): Flow<Long>
 
     suspend fun setCurrentConfigId(id: Long)
+
+    /** 是否首次启动（用于欢迎弹窗）。 */
+    fun observeFirstLaunch(): Flow<Boolean>
+
+    suspend fun setFirstLaunchDone()
+
     suspend fun setSystemPrompt(value: String)
     suspend fun setModel(value: String)
     suspend fun setBaseUrl(value: String)

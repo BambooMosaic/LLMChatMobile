@@ -40,6 +40,7 @@ class SettingsStore @Inject constructor(
     private val maxOutputKey = intPreferencesKey("max_output_tokens")
     private val autoCompressKey = booleanPreferencesKey("auto_compress_enabled")
     private val currentConfigIdKey = longPreferencesKey("current_config_id")
+    private val firstLaunchKey = booleanPreferencesKey("is_first_launch")
 
     override fun observeSettings(): Flow<AppSettings> = context.settingsDataStore.data.map { prefs ->
         val language = AppLanguage.fromTag(prefs[languageKey])
@@ -114,5 +115,13 @@ class SettingsStore @Inject constructor(
 
     override suspend fun setCurrentConfigId(id: Long) {
         context.settingsDataStore.edit { it[currentConfigIdKey] = id }
+    }
+
+    override fun observeFirstLaunch(): Flow<Boolean> = context.settingsDataStore.data.map { prefs ->
+        prefs[firstLaunchKey] ?: true
+    }
+
+    override suspend fun setFirstLaunchDone() {
+        context.settingsDataStore.edit { it[firstLaunchKey] = false }
     }
 }
