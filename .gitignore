@@ -29,6 +29,7 @@ captures/
 
 # Release artifacts (APK 走 GitHub Release，不进仓库)
 release/
+安装包/
 
 # Signing keystore (密钥文件绝不入库)
 *.jks
