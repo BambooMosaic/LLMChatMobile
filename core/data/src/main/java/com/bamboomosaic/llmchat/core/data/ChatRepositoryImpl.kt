@@ -2,13 +2,16 @@ package com.bamboomosaic.llmchat.core.data
 
 import com.bamboomosaic.llmchat.core.data.db.TokenUsageDao
 import com.bamboomosaic.llmchat.core.data.db.TokenUsageRecordEntity
+import com.bamboomosaic.llmchat.core.domain.ApiConfig
 import com.bamboomosaic.llmchat.core.domain.ChatMessage
 import com.bamboomosaic.llmchat.core.domain.ChatRepository
 import com.bamboomosaic.llmchat.core.domain.ConfigRepository
+import com.bamboomosaic.llmchat.core.domain.MessageRole
 import com.bamboomosaic.llmchat.core.network.OpenAiSseClient
 import com.bamboomosaic.llmchat.core.network.SseEvent
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.transform
 import javax.inject.Inject
@@ -61,5 +64,18 @@ class ChatRepositoryImpl @Inject constructor(
                 }
             },
         )
+    }
+
+    override suspend fun validateConfig(config: ApiConfig): Result<Unit> = runCatching {
+        // 用表单里的配置直接发 hello，极短输出；只取第一个事件确认连通，不写任何库
+        sseClient.stream(
+            baseUrl = config.baseUrl,
+            apiKey = config.apiKey,
+            model = config.model,
+            messages = listOf(ChatMessage(MessageRole.USER, "hello")),
+            thinkingEnabled = false,
+            maxTokens = 8,
+        ).firstOrNull()
+        Unit
     }
 }

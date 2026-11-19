@@ -41,6 +41,7 @@ import kotlinx.coroutines.delay
 fun MarkdownText(
     content: String,
     modifier: Modifier = Modifier,
+    enableHorizontalScroll: Boolean = true,
 ) {
     val components = markdownComponents(
         codeFence = { model -> CodeBlockWithCopy(model, fence = true) },
@@ -66,7 +67,13 @@ fun MarkdownText(
         components = components,
         modifier = modifier
             .fillMaxWidth()
-            .horizontalScroll(rememberScrollState()),
+            .then(
+                if (enableHorizontalScroll) {
+                    Modifier.horizontalScroll(rememberScrollState())
+                } else {
+                    Modifier
+                },
+            ),
     )
 }
 

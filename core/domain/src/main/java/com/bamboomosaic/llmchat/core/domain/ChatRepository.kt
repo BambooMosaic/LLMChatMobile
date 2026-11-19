@@ -17,4 +17,10 @@ interface ChatRepository {
         maxTokens: Int? = null,
         onReasoning: (String) -> Unit = {},
     ): Flow<String>
+
+    /**
+     * 连通性校验：用给定配置发一条 hello（极短输出），不写会话/token 记录。
+     * 成功返回 Ok，失败返回具体错误（密钥错误/网络异常等由上层转成友好文案）。
+     */
+    suspend fun validateConfig(config: ApiConfig): Result<Unit>
 }

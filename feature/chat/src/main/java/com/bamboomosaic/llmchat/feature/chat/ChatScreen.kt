@@ -301,11 +301,6 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
         }
     }
 
-    // 首次启动欢迎弹窗
-    if (isFirstLaunch) {
-        FirstLaunchDialog(onConfirm = viewModel::setFirstLaunchDone)
-    }
-
     // 会话独立提示词编辑弹窗
     promptEditTarget?.let { conversationId ->
         val currentPrompt = conversations.firstOrNull { it.id == conversationId }?.systemPrompt ?: ""
