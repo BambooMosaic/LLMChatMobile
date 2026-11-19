@@ -11,7 +11,6 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.bamboomosaic.llmchat.core.domain.AppLanguage
 import com.bamboomosaic.llmchat.core.domain.AppSettings
-import com.bamboomosaic.llmchat.core.domain.Providers
 import com.bamboomosaic.llmchat.core.domain.SettingsRepository
 import com.bamboomosaic.llmchat.core.domain.ThemeMode
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -50,7 +49,7 @@ class SettingsStore @Inject constructor(
             model = prefs[modelKey] ?: AppSettings.DEFAULT_MODEL,
             baseUrl = prefs[baseUrlKey] ?: AppSettings.DEFAULT_BASE_URL,
             apiKey = prefs[apiKeyKey] ?: AppSettings.DEFAULT_API_KEY,
-            providerId = prefs[providerKey] ?: Providers.CUSTOM,
+            providerId = prefs[providerKey] ?: "deepseek",
             themeMode = runCatching { ThemeMode.valueOf(prefs[themeModeKey] ?: "") }
                 .getOrDefault(ThemeMode.DARK),
             language = language,

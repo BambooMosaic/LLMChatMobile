@@ -406,12 +406,17 @@ private fun ConfigEditDialog(
     onDismiss: () -> Unit,
 ) {
     val s = LocalAppStrings.current
+    // 新建配置默认 DeepSeek + deepseek-flash（新手友好）；编辑已有配置时用原值
+    val defaultProvider = "deepseek"
+    val defaultPreset = Providers.find(defaultProvider)
     var name by remember { mutableStateOf(initial?.name ?: "") }
-    var provider by remember { mutableStateOf(initial?.provider ?: Providers.CUSTOM) }
-    var baseUrl by remember { mutableStateOf(initial?.baseUrl ?: "") }
+    var provider by remember { mutableStateOf(initial?.provider ?: defaultProvider) }
+    var baseUrl by remember { mutableStateOf(initial?.baseUrl ?: defaultPreset.baseUrl) }
     var apiKey by remember { mutableStateOf(initial?.apiKey ?: "") }
-    var model by remember { mutableStateOf(initial?.model ?: "") }
-    var supportReasoning by remember { mutableStateOf(initial?.supportReasoning ?: false) }
+    var model by remember { mutableStateOf(initial?.model ?: "deepseek-flash") }
+    var supportReasoning by remember {
+        mutableStateOf(initial?.supportReasoning ?: defaultPreset.supportReasoning)
+    }
 
     var providerExpanded by remember { mutableStateOf(false) }
     var modelExpanded by remember { mutableStateOf(false) }

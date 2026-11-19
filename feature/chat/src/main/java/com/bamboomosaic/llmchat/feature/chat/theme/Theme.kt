@@ -18,8 +18,8 @@ private val DarkColors = darkColorScheme(
     secondary = Color(0xFFA9AEFF),
     onSecondary = Color(0xFF1A1440),
 
-    // 页面底色：深灰（不是纯黑，也不是白）
-    background = Color(0xFF1C1C1C),
+    // 页面底色：纯黑（聊天内容区背景，配合中灰输入栏形成层级）
+    background = Color(0xFF000000),
     onBackground = Color(0xFFEDEDED),
 
     // 顶栏 / 侧边栏 / 卡片：中灰

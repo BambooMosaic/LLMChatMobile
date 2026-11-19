@@ -76,7 +76,7 @@ class ConfigRepositoryImpl @Inject constructor(
         if (dao.count() > 0) return
         // 把升级前 DataStore 里的单条配置迁移为第一条默认配置
         val legacy = settingsRepository.observeSettings().first()
-        val providerId = legacy.providerId.ifBlank { Providers.CUSTOM }
+        val providerId = legacy.providerId.ifBlank { "deepseek" }
         val preset = Providers.find(providerId)
         val name = if (providerId == Providers.CUSTOM) {
             legacy.model.ifBlank { "默认配置" }

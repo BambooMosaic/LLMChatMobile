@@ -74,6 +74,7 @@ fun ChatInputBar(
     val scope = rememberCoroutineScope()
     var readError by remember { mutableStateOf<String?>(null) }
     var modelMenuExpanded by remember { mutableStateOf(false) }
+    var uploadMenuExpanded by remember { mutableStateOf(false) }
     var visionHint by remember { mutableStateOf(false) }
 
     val filePicker = rememberLauncherForActivityResult(
@@ -118,152 +119,99 @@ fun ChatInputBar(
         }
     }
 
-    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) {
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp)) {
+        // 外层大圆角容器：包裹上层输入框 + 下层功能栏
         Surface(
             shape = RoundedCornerShape(20.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant,
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
             border = androidx.compose.foundation.BorderStroke(
                 width = 1.dp,
                 color = MaterialTheme.colorScheme.outlineVariant,
             ),
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
-                TextField(
-                    value = input,
-                    onValueChange = onInputChange,
-                    placeholder = {
-                        Text(s.inputPlaceholder, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    },
-                    maxLines = 6,
-                    // 键盘回车/发送键直接发送，不必去点被键盘挡住的圆形按钮
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                    keyboardActions = KeyboardActions(onSend = { onSend() }),
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = Color.Transparent,
-                        unfocusedContainerColor = Color.Transparent,
-                        focusedIndicatorColor = Color.Transparent,
-                        unfocusedIndicatorColor = Color.Transparent,
+            Column(modifier = Modifier.fillMaxWidth()) {
+                // ===== 上层：输入框区域（中灰，比下层浅），顶部大圆角 =====
+                Surface(
+                    shape = RoundedCornerShape(
+                        topStart = 20.dp, topEnd = 20.dp,
+                        bottomStart = 14.dp, bottomEnd = 14.dp,
                     ),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 56.dp),
-                )
-
-                // 已选图片缩略图（带删除）
-                if (pendingImages.isNotEmpty()) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        pendingImages.forEachIndexed { index, base64 ->
-                            Box {
-                                DecodedImage(
-                                    base64 = base64,
-                                    modifier = Modifier
-                                        .size(72.dp)
-                                        .clip(RoundedCornerShape(8.dp)),
-                                )
-                                // 右上角删除按钮
-                                Box(
-                                    modifier = Modifier
-                                        .align(Alignment.TopEnd)
-                                        .size(20.dp)
-                                        .clip(CircleShape)
-                                        .background(Color.Black.copy(alpha = 0.6f))
-                                        .clickable {
-                                            onImagesChange(pendingImages.filterIndexed { i, _ -> i != index })
-                                        },
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    Text(
-                                        text = "×",
-                                        color = Color.White,
-                                        style = MaterialTheme.typography.labelSmall,
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
                 ) {
-                    // 左侧：模型切换 + 深度思考
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box {
-                            // 模型名按钮，点击展开配置列表
-                            TextButton(
-                                onClick = { modelMenuExpanded = true },
-                                contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                                    horizontal = 10.dp,
-                                    vertical = 0.dp,
+                    // 用 Box 让发送按钮浮在输入框内右侧，不挤压文字区宽度
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            TextField(
+                                value = input,
+                                onValueChange = onInputChange,
+                                placeholder = {
+                                    Text(s.inputPlaceholder, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                },
+                                maxLines = 6,
+                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                                keyboardActions = KeyboardActions(onSend = { onSend() }),
+                                colors = TextFieldDefaults.colors(
+                                    focusedContainerColor = Color.Transparent,
+                                    unfocusedContainerColor = Color.Transparent,
+                                    focusedIndicatorColor = Color.Transparent,
+                                    unfocusedIndicatorColor = Color.Transparent,
                                 ),
-                            ) {
-                                Text(
-                                    text = currentModel.ifBlank { "—" },
-                                    style = MaterialTheme.typography.labelMedium,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            }
-                            DropdownMenu(
-                                expanded = modelMenuExpanded,
-                                onDismissRequest = { modelMenuExpanded = false },
-                            ) {
-                                modelConfigs.forEach { config ->
-                                    DropdownMenuItem(
-                                        text = {
-                                            Text(
-                                                text = config.name + "（" + config.model + "）",
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis,
+                                // 右侧用 modifier 预留给悬浮发送按钮
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(min = 56.dp)
+                                    .padding(end = 48.dp),
+                            )
+
+                            // 已选图片缩略图（带删除）
+                            if (pendingImages.isNotEmpty()) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(bottom = 4.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
+                                    pendingImages.forEachIndexed { index, base64 ->
+                                        Box {
+                                            DecodedImage(
+                                                base64 = base64,
+                                                modifier = Modifier
+                                                    .size(64.dp)
+                                                    .clip(RoundedCornerShape(8.dp)),
                                             )
-                                        },
-                                        onClick = {
-                                            onSelectModel(config.id)
-                                            modelMenuExpanded = false
-                                        },
-                                    )
+                                            Box(
+                                                modifier = Modifier
+                                                    .align(Alignment.TopEnd)
+                                                    .size(20.dp)
+                                                    .clip(CircleShape)
+                                                    .background(Color.Black.copy(alpha = 0.6f))
+                                                    .clickable {
+                                                        onImagesChange(pendingImages.filterIndexed { i, _ -> i != index })
+                                                    },
+                                                contentAlignment = Alignment.Center,
+                                            ) {
+                                                Text(
+                                                    text = "×",
+                                                    color = Color.White,
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                )
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
-                        FilterChip(
-                            selected = thinkingEnabled,
-                            onClick = { onToggleThinking(!thinkingEnabled) },
-                            enabled = thinkingSupported,
-                            label = { Text(s.thinking) },
-                        )
-                    }
-                    // 右侧：图片按钮 + 上传文件 + 发送
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        // 图片选择按钮（上传文件左边），不支持视觉模型时置灰
-                        TextButton(
-                            onClick = {
-                                if (visionSupported) {
-                                    imagePicker.launch("image/*")
-                                } else {
-                                    visionHint = true
-                                }
-                            },
-                            enabled = visionSupported,
-                        ) {
-                            Text("🖼", style = MaterialTheme.typography.titleMedium)
-                        }
-                        TextButton(
-                            onClick = { filePicker.launch(arrayOf("text/*", "application/json")) },
-                        ) {
-                            Text("📎", style = MaterialTheme.typography.titleMedium)
-                        }
+
+                        // 发送按钮：内嵌在输入框区域右侧（生成中变红色停止）
                         FilledIconButton(
                             onClick = if (isGenerating) onStop else onSend,
                             shape = CircleShape,
-                            modifier = Modifier.size(40.dp),
+                            modifier = Modifier
+                                .align(Alignment.CenterEnd)
+                                .padding(end = 4.dp)
+                                .size(40.dp),
                             colors = if (isGenerating) {
                                 androidx.compose.material3.IconButtonDefaults.filledIconButtonColors(
                                     containerColor = MaterialTheme.colorScheme.error,
@@ -273,10 +221,91 @@ fun ChatInputBar(
                                 androidx.compose.material3.IconButtonDefaults.filledIconButtonColors()
                             },
                         ) {
-                            // 生成中显示「停止」方块，否则显示发送箭头
                             Text(
                                 text = if (isGenerating) "■" else "↑",
                                 style = MaterialTheme.typography.titleMedium,
+                            )
+                        }
+                    }
+                }
+
+                // ===== 下层：功能操作栏（深灰），三项单行均匀排布 =====
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 0.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                ) {
+                    // 1. 模型按钮
+                    Box {
+                        TextButton(
+                            onClick = { modelMenuExpanded = true },
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                        ) {
+                            Text(
+                                text = currentModel.ifBlank { "—" },
+                                style = MaterialTheme.typography.labelMedium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = modelMenuExpanded,
+                            onDismissRequest = { modelMenuExpanded = false },
+                        ) {
+                            modelConfigs.forEach { config ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            text = config.name + "（" + config.model + "）",
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                    },
+                                    onClick = {
+                                        onSelectModel(config.id)
+                                        modelMenuExpanded = false
+                                    },
+                                )
+                            }
+                        }
+                    }
+
+                    // 2. 深度思考开关（沿用 FilterChip 边框样式）
+                    FilterChip(
+                        selected = thinkingEnabled,
+                        onClick = { onToggleThinking(!thinkingEnabled) },
+                        enabled = thinkingSupported,
+                        label = { Text(s.thinking) },
+                    )
+
+                    // 3. 上传按钮（沿用 📎 emoji，点击弹出菜单选图片/文件）
+                    Box {
+                        TextButton(
+                            onClick = { uploadMenuExpanded = true },
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                        ) {
+                            Text("📎", style = MaterialTheme.typography.titleMedium)
+                        }
+                        DropdownMenu(
+                            expanded = uploadMenuExpanded,
+                            onDismissRequest = { uploadMenuExpanded = false },
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text(s.uploadImage) },
+                                enabled = visionSupported,
+                                onClick = {
+                                    uploadMenuExpanded = false
+                                    imagePicker.launch("image/*")
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text(s.attachFile) },
+                                onClick = {
+                                    uploadMenuExpanded = false
+                                    filePicker.launch(arrayOf("text/*", "application/json"))
+                                },
                             )
                         }
                     }

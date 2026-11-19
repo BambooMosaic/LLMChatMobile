@@ -93,7 +93,7 @@ data class AppSettings(
     val model: String,
     val baseUrl: String,
     val apiKey: String,
-    val providerId: String = Providers.CUSTOM,
+    val providerId: String = "deepseek",
     val themeMode: ThemeMode = ThemeMode.DARK,
     val language: AppLanguage = AppLanguage.SIMPLIFIED_CHINESE,
     val thinkingEnabled: Boolean = false,
@@ -102,8 +102,8 @@ data class AppSettings(
     val autoCompressEnabled: Boolean = true,
 ) {
     companion object {
-        const val DEFAULT_MODEL = "gpt-6-luna"
-        const val DEFAULT_BASE_URL = "https://api.openai.com/v1"
+        const val DEFAULT_MODEL = "deepseek-flash"
+        const val DEFAULT_BASE_URL = "https://api.deepseek.com"
         const val DEFAULT_API_KEY = ""
         const val DEFAULT_MAX_CONTEXT_TOKENS = 80000
         const val DEFAULT_MAX_OUTPUT_TOKENS = 4096

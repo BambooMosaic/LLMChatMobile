@@ -77,6 +77,8 @@ data class AppStrings(
     val exportSuccess: String,
     val followSystem: String,
     val visionUnsupported: String,
+    val upload: String,
+    val uploadImage: String,
 ) {
     fun thisRound(prompt: Long, completion: Long, total: Long): String =
         String.format(thisRoundFormat, total, prompt, completion)
@@ -157,6 +159,8 @@ private val ZhCN = AppStrings(
     exportSuccess = "已导出到",
     followSystem = "跟随系统",
     visionUnsupported = "当前模型不支持图片输入",
+    upload = "上传",
+    uploadImage = "上传图片",
 )
 
 private val ZhTW = AppStrings(
@@ -232,6 +236,8 @@ private val ZhTW = AppStrings(
     exportSuccess = "已匯出到",
     followSystem = "跟隨系統",
     visionUnsupported = "目前模型不支援圖片輸入",
+    upload = "上傳",
+    uploadImage = "上傳圖片",
 )
 
 private val EnUS = AppStrings(
@@ -307,6 +313,8 @@ private val EnUS = AppStrings(
     exportSuccess = "Exported to",
     followSystem = "Follow system",
     visionUnsupported = "Current model does not support image input",
+    upload = "Upload",
+    uploadImage = "Upload image",
 )
 
 fun stringsFor(language: AppLanguage): AppStrings = when (language) {
