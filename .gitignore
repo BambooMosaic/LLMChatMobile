@@ -35,3 +35,6 @@ release/
 *.jks
 *.keystore
 keystore.properties
+
+outputs/
+screenshots/*.tmp
