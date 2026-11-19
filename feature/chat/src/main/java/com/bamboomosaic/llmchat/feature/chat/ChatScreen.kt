@@ -84,6 +84,9 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
     val currentTitle by viewModel.currentTitle.collectAsState()
     val sessionTotals by viewModel.sessionTotals.collectAsState()
     val globalTotals by viewModel.globalTotals.collectAsState()
+    val dailyTokenStats by viewModel.dailyTokenStats.collectAsState()
+    val hourlyTokenStats by viewModel.hourlyTokenStats.collectAsState()
+    val tokenStatsDays by viewModel.tokenStatsDays.collectAsState()
     val archivedConversations by viewModel.archivedConversations.collectAsState()
     val apiConfigs by viewModel.apiConfigs.collectAsState()
     val currentConfig by viewModel.currentConfig.collectAsState()
@@ -93,6 +96,7 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
 
     var input by remember { mutableStateOf("") }
     var showSettings by remember { mutableStateOf(false) }
+    var showTokenStats by remember { mutableStateOf(false) }
     var promptEditTarget by remember { mutableStateOf<String?>(null) }
     var exportTarget by remember { mutableStateOf<String?>(null) }
 
@@ -128,7 +132,6 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
             ConversationDrawer(
                 conversations = conversations,
                 currentId = currentId,
-                globalTotals = globalTotals,
                 onNewConversation = {
                     viewModel.newConversation()
                     scope.launch { drawerState.close() }
@@ -146,6 +149,10 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
                 onExport = { id ->
                     exportTarget = id
                     scope.launch { drawerState.close() }
+                },
+                onOpenTokenStats = {
+                    scope.launch { drawerState.close() }
+                    showTokenStats = true
                 },
                 onOpenSettings = {
                     scope.launch { drawerState.close() }
@@ -279,6 +286,19 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
             onDeleteConversation = viewModel::deleteConversationPermanently,
             onDismiss = { showSettings = false },
         )
+    }
+
+    if (showTokenStats) {
+        androidx.compose.ui.window.Dialog(onDismissRequest = { showTokenStats = false }) {
+            TokenStatsScreen(
+                totals = globalTotals,
+                dailyStats = dailyTokenStats,
+                hourlyStats = hourlyTokenStats,
+                days = tokenStatsDays,
+                onSetDays = viewModel::setTokenStatsDays,
+                onDismiss = { showTokenStats = false },
+            )
+        }
     }
 
     // 首次启动欢迎弹窗

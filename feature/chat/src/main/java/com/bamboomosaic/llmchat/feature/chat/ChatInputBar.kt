@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -143,29 +144,7 @@ fun ChatInputBar(
                     // 用 Box 让发送按钮浮在输入框内右侧，不挤压文字区宽度
                     Box(modifier = Modifier.fillMaxWidth()) {
                         Column(modifier = Modifier.fillMaxWidth()) {
-                            TextField(
-                                value = input,
-                                onValueChange = onInputChange,
-                                placeholder = {
-                                    Text(s.inputPlaceholder, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                },
-                                maxLines = 6,
-                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                                keyboardActions = KeyboardActions(onSend = { onSend() }),
-                                colors = TextFieldDefaults.colors(
-                                    focusedContainerColor = Color.Transparent,
-                                    unfocusedContainerColor = Color.Transparent,
-                                    focusedIndicatorColor = Color.Transparent,
-                                    unfocusedIndicatorColor = Color.Transparent,
-                                ),
-                                // 右侧用 modifier 预留给悬浮发送按钮
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .heightIn(min = 56.dp)
-                                    .padding(end = 48.dp),
-                            )
-
-                            // 已选图片缩略图（带删除）
+                            // 已选图片缩略图（带删除），放在输入框上方
                             if (pendingImages.isNotEmpty()) {
                                 Row(
                                     modifier = Modifier
@@ -202,16 +181,38 @@ fun ChatInputBar(
                                     }
                                 }
                             }
+
+                            TextField(
+                                value = input,
+                                onValueChange = onInputChange,
+                                placeholder = {
+                                    Text(s.inputPlaceholder, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                },
+                                maxLines = 6,
+                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                                keyboardActions = KeyboardActions(onSend = { onSend() }),
+                                colors = TextFieldDefaults.colors(
+                                    focusedContainerColor = Color.Transparent,
+                                    unfocusedContainerColor = Color.Transparent,
+                                    focusedIndicatorColor = Color.Transparent,
+                                    unfocusedIndicatorColor = Color.Transparent,
+                                ),
+                                // 默认三行文本高度，内容增多时向上扩展（有上限）
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(min = 112.dp, max = 220.dp)
+                                    .padding(end = 52.dp),
+                            )
                         }
 
-                        // 发送按钮：内嵌在输入框区域右侧（生成中变红色停止）
+                        // 发送按钮：锚定在输入区最后一行右侧（BottomEnd），不随文字增加上移
                         FilledIconButton(
                             onClick = if (isGenerating) onStop else onSend,
                             shape = CircleShape,
                             modifier = Modifier
-                                .align(Alignment.CenterEnd)
-                                .padding(end = 4.dp)
-                                .size(40.dp),
+                                .align(Alignment.BottomEnd)
+                                .padding(end = 2.dp, bottom = 2.dp)
+                                .size(48.dp),
                             colors = if (isGenerating) {
                                 androidx.compose.material3.IconButtonDefaults.filledIconButtonColors(
                                     containerColor = MaterialTheme.colorScheme.error,
@@ -223,7 +224,7 @@ fun ChatInputBar(
                         ) {
                             Text(
                                 text = if (isGenerating) "■" else "↑",
-                                style = MaterialTheme.typography.titleMedium,
+                                style = MaterialTheme.typography.headlineSmall,
                             )
                         }
                     }
@@ -241,6 +242,7 @@ fun ChatInputBar(
                     Box {
                         TextButton(
                             onClick = { modelMenuExpanded = true },
+                            modifier = Modifier.height(30.dp),
                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
                         ) {
                             Text(
@@ -253,6 +255,7 @@ fun ChatInputBar(
                         DropdownMenu(
                             expanded = modelMenuExpanded,
                             onDismissRequest = { modelMenuExpanded = false },
+                            shape = RoundedCornerShape(16.dp),
                         ) {
                             modelConfigs.forEach { config ->
                                 DropdownMenuItem(
@@ -277,6 +280,7 @@ fun ChatInputBar(
                         selected = thinkingEnabled,
                         onClick = { onToggleThinking(!thinkingEnabled) },
                         enabled = thinkingSupported,
+                        modifier = Modifier.height(30.dp),
                         label = { Text(s.thinking) },
                     )
 
@@ -284,6 +288,7 @@ fun ChatInputBar(
                     Box {
                         TextButton(
                             onClick = { uploadMenuExpanded = true },
+                            modifier = Modifier.height(30.dp),
                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
                         ) {
                             Text("📎", style = MaterialTheme.typography.titleMedium)
@@ -291,6 +296,7 @@ fun ChatInputBar(
                         DropdownMenu(
                             expanded = uploadMenuExpanded,
                             onDismissRequest = { uploadMenuExpanded = false },
+                            shape = RoundedCornerShape(16.dp),
                         ) {
                             DropdownMenuItem(
                                 text = { Text(s.uploadImage) },

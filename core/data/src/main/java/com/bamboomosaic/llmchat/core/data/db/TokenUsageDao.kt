@@ -13,6 +13,18 @@ data class TokenTotalsRow(
     @ColumnInfo(name = "completionTokens") val completionTokens: Long,
 )
 
+/** 按本地 3 小时时段聚合的 token 消耗（近 1 天柱状图数据源）。 */
+data class HourlyTokenRow(
+    @ColumnInfo(name = "hour") val hour: Int,
+    @ColumnInfo(name = "tokens") val tokens: Long,
+)
+
+/** 按本地日期聚合的每日 token 消耗（柱状图数据源）。 */
+data class DailyTokenRow(
+    @ColumnInfo(name = "day") val day: String,
+    @ColumnInfo(name = "tokens") val tokens: Long,
+)
+
 @Dao
 interface TokenUsageDao {
 
@@ -64,4 +76,30 @@ interface TokenUsageDao {
     /** 从 token_stats_models 视图读取按 model 的聚合统计。 */
     @Query("SELECT * FROM token_stats_models ORDER BY model")
     fun observeModelStats(): Flow<List<ModelStatsView>>
+
+    /** 从 [since]（epoch millis）起，按本地日期聚合每日 token 消耗。 */
+    @Query(
+        """
+        SELECT date(timestamp / 1000, 'unixepoch', 'localtime') AS day,
+               SUM(promptTokens + completionTokens) AS tokens
+        FROM token_usage_records
+        WHERE timestamp >= :since
+        GROUP BY day
+        ORDER BY day ASC
+        """,
+    )
+    fun observeDailyTotals(since: Long): Flow<List<DailyTokenRow>>
+
+    /** 从 [since] 起按本地 3 小时时段聚合（hour = 0/3/6/.../21）。 */
+    @Query(
+        """
+        SELECT (CAST(strftime('%H', timestamp / 1000, 'unixepoch', 'localtime') AS INTEGER) / 3) * 3 AS hour,
+               SUM(promptTokens + completionTokens) AS tokens
+        FROM token_usage_records
+        WHERE timestamp >= :since
+        GROUP BY hour
+        ORDER BY hour ASC
+        """,
+    )
+    fun observeHourlyTotals(since: Long): Flow<List<HourlyTokenRow>>
 }

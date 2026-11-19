@@ -79,6 +79,8 @@ data class AppStrings(
     val visionUnsupported: String,
     val upload: String,
     val uploadImage: String,
+    val last1Day: String,
+    val last7Days: String,
 ) {
     fun thisRound(prompt: Long, completion: Long, total: Long): String =
         String.format(thisRoundFormat, total, prompt, completion)
@@ -161,6 +163,8 @@ private val ZhCN = AppStrings(
     visionUnsupported = "当前模型不支持图片输入",
     upload = "上传",
     uploadImage = "上传图片",
+    last1Day = "近 1 天",
+    last7Days = "近 7 天",
 )
 
 private val ZhTW = AppStrings(
@@ -238,6 +242,8 @@ private val ZhTW = AppStrings(
     visionUnsupported = "目前模型不支援圖片輸入",
     upload = "上傳",
     uploadImage = "上傳圖片",
+    last1Day = "近 1 天",
+    last7Days = "近 7 天",
 )
 
 private val EnUS = AppStrings(
@@ -315,6 +321,8 @@ private val EnUS = AppStrings(
     visionUnsupported = "Current model does not support image input",
     upload = "Upload",
     uploadImage = "Upload image",
+    last1Day = "Last 1 day",
+    last7Days = "Last 7 days",
 )
 
 fun stringsFor(language: AppLanguage): AppStrings = when (language) {

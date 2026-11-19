@@ -19,6 +19,18 @@ data class ModelTokenStats(
     val requestCount: Long,
 )
 
+/** 某一天（本地时区 yyyy-MM-dd）的 token 消耗，用于柱状图。 */
+data class DailyTokenStats(
+    val date: String,
+    val tokens: Long,
+)
+
+/** 某 3 小时时段（本地时区起始小时 0/3/6/.../21）的 token 消耗。 */
+data class HourlyTokenStats(
+    val hour: Int,
+    val tokens: Long,
+)
+
 /** 输入/输出/总计三项 token 汇总。 */
 data class TokenTotals(
     val promptTokens: Long = 0,
@@ -43,4 +55,10 @@ interface TokenUsageRepository {
 
     /** 按 model 聚合的统计，供扩展 UI 使用。 */
     fun observeModelStats(): Flow<List<ModelTokenStats>>
+
+    /** 从 [since]（epoch millis）起按本地日期聚合的每日 token 消耗，供柱状图使用。 */
+    fun observeDailyTotals(since: Long): Flow<List<DailyTokenStats>>
+
+    /** 从 [since]（epoch millis）起按本地 3 小时时段聚合的 token 消耗，供近 1 天柱状图使用。 */
+    fun observeHourlyTotals(since: Long): Flow<List<HourlyTokenStats>>
 }

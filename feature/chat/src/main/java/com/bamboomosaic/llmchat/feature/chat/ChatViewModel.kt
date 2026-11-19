@@ -6,6 +6,8 @@ import androidx.lifecycle.viewModelScope
 import com.bamboomosaic.llmchat.core.domain.ApiConfig
 import com.bamboomosaic.llmchat.core.domain.AppLanguage
 import com.bamboomosaic.llmchat.core.domain.AppSettings
+import com.bamboomosaic.llmchat.core.domain.DailyTokenStats
+import com.bamboomosaic.llmchat.core.domain.HourlyTokenStats
 import com.bamboomosaic.llmchat.core.domain.ChatMessage
 import com.bamboomosaic.llmchat.core.domain.ChatRepository
 import com.bamboomosaic.llmchat.core.domain.ConfigRepository
@@ -110,6 +112,39 @@ class ChatViewModel @Inject constructor(
     val globalTotals: StateFlow<TokenTotals> = tokenUsageRepository
         .observeGlobalTotals()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), TokenTotals())
+
+    /** Token 统计图表周期（天数）：1 或 7。 */
+    private val _tokenStatsDays = MutableStateFlow(7)
+    val tokenStatsDays: StateFlow<Int> = _tokenStatsDays.asStateFlow()
+
+    fun setTokenStatsDays(days: Int) {
+        _tokenStatsDays.value = days
+    }
+
+    /** 按当前周期聚合的每日 token 消耗（供近 7 天柱状图）。 */
+    val dailyTokenStats: StateFlow<List<DailyTokenStats>> = _tokenStatsDays
+        .flatMapLatest { days ->
+            val cal = java.util.Calendar.getInstance()
+            cal.set(java.util.Calendar.HOUR_OF_DAY, 0)
+            cal.set(java.util.Calendar.MINUTE, 0)
+            cal.set(java.util.Calendar.SECOND, 0)
+            cal.set(java.util.Calendar.MILLISECOND, 0)
+            cal.add(java.util.Calendar.DAY_OF_MONTH, -(days - 1))
+            tokenUsageRepository.observeDailyTotals(cal.timeInMillis)
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /** 今天的 3 小时分段 token 消耗（供近 1 天柱状图）。 */
+    val hourlyTokenStats: StateFlow<List<HourlyTokenStats>> = tokenUsageRepository
+        .let { repo ->
+            val cal = java.util.Calendar.getInstance()
+            cal.set(java.util.Calendar.HOUR_OF_DAY, 0)
+            cal.set(java.util.Calendar.MINUTE, 0)
+            cal.set(java.util.Calendar.SECOND, 0)
+            cal.set(java.util.Calendar.MILLISECOND, 0)
+            repo.observeHourlyTotals(cal.timeInMillis)
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _messages = MutableStateFlow<List<UiMessage>>(emptyList())
     val messages: StateFlow<List<UiMessage>> = _messages.asStateFlow()

@@ -38,7 +38,6 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.bamboomosaic.llmchat.core.domain.Conversation
-import com.bamboomosaic.llmchat.core.domain.TokenTotals
 import com.bamboomosaic.llmchat.feature.chat.i18n.LocalAppStrings
 
 /** 侧边栏：宽度为屏幕 2/3，顶部标题 + 新对话，列表，底部 Token 统计 + 设置。 */
@@ -47,13 +46,13 @@ import com.bamboomosaic.llmchat.feature.chat.i18n.LocalAppStrings
 fun ConversationDrawer(
     conversations: List<Conversation>,
     currentId: String,
-    globalTotals: TokenTotals,
     onNewConversation: () -> Unit,
     onSelect: (String) -> Unit,
     onRename: (String, String) -> Unit,
     onArchive: (String) -> Unit,
     onEditPrompt: (String) -> Unit,
     onExport: (String) -> Unit,
+    onOpenTokenStats: () -> Unit,
     onOpenSettings: () -> Unit,
 ) {
     val s = LocalAppStrings.current
@@ -62,7 +61,6 @@ fun ConversationDrawer(
 
     var renameTarget by remember { mutableStateOf<Conversation?>(null) }
     var menuTarget by remember { mutableStateOf<Conversation?>(null) }
-    var tokenMenuExpanded by remember { mutableStateOf(false) }
 
     ModalDrawerSheet(
         modifier = Modifier.width(drawerWidth),
@@ -174,27 +172,8 @@ fun ConversationDrawer(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                Box {
-                    TextButton(onClick = { tokenMenuExpanded = true }) {
-                        Text("📊 ${s.tokenSummary}")
-                    }
-                    DropdownMenu(
-                        expanded = tokenMenuExpanded,
-                        onDismissRequest = { tokenMenuExpanded = false },
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("${s.inputTokens}: ${globalTotals.promptTokens}") },
-                            onClick = {},
-                        )
-                        DropdownMenuItem(
-                            text = { Text("${s.outputTokens}: ${globalTotals.completionTokens}") },
-                            onClick = {},
-                        )
-                        DropdownMenuItem(
-                            text = { Text("${s.totalTokens}: ${globalTotals.total}") },
-                            onClick = {},
-                        )
-                    }
+                TextButton(onClick = onOpenTokenStats) {
+                    Text("📊 ${s.tokenSummary}")
                 }
                 TextButton(onClick = onOpenSettings) { Text("⚙ ${s.settings}") }
             }
