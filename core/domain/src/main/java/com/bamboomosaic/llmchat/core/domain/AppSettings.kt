@@ -97,6 +97,8 @@ data class AppSettings(
     val themeMode: ThemeMode = ThemeMode.DARK,
     val language: AppLanguage = AppLanguage.SIMPLIFIED_CHINESE,
     val thinkingEnabled: Boolean = false,
+    /** 联网搜索开关（仅 DeepSeek 支持）。 */
+    val searchEnabled: Boolean = false,
     val maxContextTokens: Int = DEFAULT_MAX_CONTEXT_TOKENS,
     val maxOutputTokens: Int = DEFAULT_MAX_OUTPUT_TOKENS,
     val autoCompressEnabled: Boolean = true,
@@ -139,6 +141,7 @@ interface SettingsRepository {
     suspend fun setThemeMode(mode: ThemeMode)
     suspend fun setLanguage(language: AppLanguage)
     suspend fun setThinkingEnabled(enabled: Boolean)
+    suspend fun setSearchEnabled(enabled: Boolean)
     suspend fun setMaxContextTokens(value: Int)
     suspend fun setMaxOutputTokens(value: Int)
     suspend fun setAutoCompressEnabled(enabled: Boolean)

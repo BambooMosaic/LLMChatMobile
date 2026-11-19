@@ -248,9 +248,14 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
                 thinkingEnabled = settings.thinkingEnabled,
                 thinkingSupported = currentConfig?.supportReasoning ?: false,
                 onToggleThinking = viewModel::setThinkingEnabled,
+                searchEnabled = settings.searchEnabled,
+                searchSupported = isDeepSeekConfig(currentConfig),
+                onToggleSearch = viewModel::setSearchEnabled,
                 currentModel = currentConfig?.model?.ifBlank { currentConfig?.name } ?: "—",
+                currentConfigId = currentConfig?.id ?: 0,
                 modelConfigs = apiConfigs,
                 onSelectModel = viewModel::selectConfig,
+                onOpenApiSettings = { showSettings = true },
                 isGenerating = isGenerating,
                 visionSupported = Providers.supportsVision(currentConfig?.model ?: ""),
                 pendingImages = pendingImages,
@@ -270,6 +275,7 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
             archivedConversations = archivedConversations,
             apiConfigs = apiConfigs,
             onSaveConfig = viewModel::saveConfig,
+            onValidateConfig = viewModel::validateConfigRaw,
             onDeleteConfig = viewModel::deleteConfig,
             onSetDefaultConfig = viewModel::setDefaultConfig,
             onSetProvider = viewModel::setProvider,
@@ -500,6 +506,17 @@ private fun MessageBubble(
                 contentColor = contentColor,
             ) {
                 Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+                    // 联网搜索状态（思考区域上方）：搜索中 → 已搜索 N 个网页
+                    val pages = message.searchPages
+                    if (message.isStreaming && pages != null) {
+                        Text(
+                            text = if (pages > 0) s.searchedPages(pages) else s.searching,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        Spacer(Modifier.height(8.dp))
+                    }
+
                     // 思考内容：小一号半透明字，放在正文前面，可点击折叠
                     if (message.reasoning.isNotBlank()) {
                         ReasoningSection(
@@ -533,6 +550,16 @@ private fun MessageBubble(
                     } else {
                         // 生成结束后再按 Markdown 渲染（代码块自带语言标签 + 复制按钮）
                         MarkdownText(content = message.text)
+                    }
+
+                    // 联网搜索完成标记：缩小字号、降低透明度，固定在消息末尾
+                    if (!message.isStreaming && message.searchPages != null) {
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = s.searchDone,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                        )
                     }
                 }
             }
@@ -680,3 +707,10 @@ private fun ImageMessageContent(base64: String) {
         )
     }
 }
+
+/** 联网搜索仅 DeepSeek 支持服务端工具 deepseek_web_search，据此启用搜索开关。 */
+internal fun isDeepSeekConfig(config: com.bamboomosaic.llmchat.core.domain.ApiConfig?): Boolean =
+    config != null && (
+        config.provider.equals("deepseek", ignoreCase = true) ||
+            config.baseUrl.contains("deepseek", ignoreCase = true)
+        )

@@ -50,6 +50,8 @@ data class UiMessage(
     val reasoningCollapsed: Boolean = false,
     /** 多模态图片 base64（仅用户消息）。 */
     val images: List<String> = emptyList(),
+    /** 联网搜索到的网页累计数。null = 本轮未开启搜索；0 = 已发起尚未有结果。 */
+    val searchPages: Int? = null,
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -313,6 +315,8 @@ class ChatViewModel @Inject constructor(
         // 流式渲染节流：正文很长时每个 chunk 都重建列表 + 重新排版会明显闪烁，
         // 这里限制到约 16fps，结束时再强制渲染一次完整内容。
         val reasoningState = MutableStateFlow("")
+        // 联网搜索状态：null = 本轮未开启；0 = 已发起未出结果；N = 累计网页数
+        val searchPagesState = MutableStateFlow<Int?>(if (currentSettings.searchEnabled) 0 else null)
 
         streamJob?.cancel()
         streamJob = viewModelScope.launch {
@@ -342,6 +346,7 @@ class ChatViewModel @Inject constructor(
                         isStreaming = true,
                         reasoning = reasoningSnapshot,
                         reasoningCollapsed = collapsed,
+                        searchPages = searchPagesState.value,
                     )
                 }
             }
@@ -355,6 +360,12 @@ class ChatViewModel @Inject constructor(
                 onReasoning = { chunk ->
                     // 回调在 OkHttp 线程，StateFlow 的 update 是线程安全的
                     reasoningState.update { it + chunk }
+                    render(force = false)
+                },
+                searchEnabled = currentSettings.searchEnabled,
+                onSearchPages = { count ->
+                    // SearchStarted 回调 0（保持累计值不变），SearchCompleted 回调本次网页数（累加）
+                    searchPagesState.update { (it ?: 0) + count }
                     render(force = false)
                 },
             )
@@ -371,7 +382,12 @@ class ChatViewModel @Inject constructor(
             if (accumulated.isNotEmpty()) {
                 conversationRepository.appendMessage(
                     conversationId,
-                    ChatMessage(MessageRole.ASSISTANT, accumulated, reasoningText.takeIf { it.isNotBlank() }),
+                    ChatMessage(
+                        role = MessageRole.ASSISTANT,
+                        content = accumulated,
+                        reasoning = reasoningText.takeIf { it.isNotBlank() },
+                        searchPages = searchPagesState.value,
+                    ),
                 )
             } else if (_error.value == null) {
                 // 请求成功（可能消耗了 token）但没有任何正文：给出明确原因，而不是留一个空白气泡
@@ -389,6 +405,7 @@ class ChatViewModel @Inject constructor(
                     completionTokens = usage?.completionTokens,
                     reasoning = reasoningText,
                     reasoningCollapsed = last?.reasoningCollapsed ?: false,
+                    searchPages = searchPagesState.value,
                 )
             }
             _isGenerating.value = false
@@ -597,6 +614,13 @@ class ChatViewModel @Inject constructor(
     fun setThinkingEnabled(enabled: Boolean) {
         viewModelScope.launch { settingsRepository.setThinkingEnabled(enabled) }
     }
+
+    fun setSearchEnabled(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setSearchEnabled(enabled) }
+    }
+
+    /** 设置页「验证配置」：用表单里的配置发测试请求，不入库不计统计（与引导页一致）。 */
+    suspend fun validateConfigRaw(config: ApiConfig): Result<Unit> = chatRepository.validateConfig(config)
 
     fun setMaxContextTokens(value: Int) {
         viewModelScope.launch { settingsRepository.setMaxContextTokens(value) }

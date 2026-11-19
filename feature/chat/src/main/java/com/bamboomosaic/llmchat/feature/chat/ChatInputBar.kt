@@ -14,7 +14,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -60,9 +62,14 @@ fun ChatInputBar(
     thinkingEnabled: Boolean,
     thinkingSupported: Boolean = true,
     onToggleThinking: (Boolean) -> Unit,
+    searchEnabled: Boolean = false,
+    searchSupported: Boolean = false,
+    onToggleSearch: (Boolean) -> Unit = {},
     currentModel: String,
+    currentConfigId: Long = 0,
     modelConfigs: List<ApiConfig>,
     onSelectModel: (Long) -> Unit,
+    onOpenApiSettings: () -> Unit = {},
     isGenerating: Boolean,
     visionSupported: Boolean,
     pendingImages: List<String>,
@@ -230,15 +237,14 @@ fun ChatInputBar(
                     }
                 }
 
-                // ===== 下层：功能操作栏（深灰），三项单行均匀排布 =====
+                // ===== 下层：功能操作栏——模型最左，功能按钮整体右对齐 =====
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 8.dp, vertical = 0.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceEvenly,
                 ) {
-                    // 1. 模型按钮
+                    // 1. 模型按钮（最左）
                     Box {
                         TextButton(
                             onClick = { modelMenuExpanded = true },
@@ -257,14 +263,27 @@ fun ChatInputBar(
                             onDismissRequest = { modelMenuExpanded = false },
                             shape = RoundedCornerShape(16.dp),
                         ) {
+                            // 纯文字列表：左侧模型名 + 选中对勾，右侧价格档位标签
                             modelConfigs.forEach { config ->
+                                val tier = priceTierOf(config.model)
                                 DropdownMenuItem(
                                     text = {
-                                        Text(
-                                            text = config.name + "（" + config.model + "）",
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                        )
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(
+                                                text = if (config.id == currentConfigId) "✓" else "",
+                                                style = MaterialTheme.typography.labelMedium,
+                                                color = MaterialTheme.colorScheme.primary,
+                                            )
+                                            Spacer(Modifier.width(4.dp))
+                                            Text(
+                                                text = config.model,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                                style = MaterialTheme.typography.bodyMedium,
+                                            )
+                                            Spacer(Modifier.weight(1f))
+                                            if (tier != null) PriceTierLabel(tier, s)
+                                        }
                                     },
                                     onClick = {
                                         onSelectModel(config.id)
@@ -272,19 +291,48 @@ fun ChatInputBar(
                                     },
                                 )
                             }
+                            // 底部固定：跳转设置页 API 配置
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        text = s.configCustomModel,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.primary,
+                                    )
+                                },
+                                onClick = {
+                                    modelMenuExpanded = false
+                                    onOpenApiSettings()
+                                },
+                            )
                         }
                     }
 
-                    // 2. 深度思考开关（沿用 FilterChip 边框样式）
+                    Spacer(Modifier.weight(1f))
+
+                    // 2. 联网搜索开关（仅 DeepSeek 支持时可用）
+                    FilterChip(
+                        selected = searchEnabled,
+                        onClick = { onToggleSearch(!searchEnabled) },
+                        enabled = searchSupported,
+                        modifier = Modifier.height(28.dp),
+                        label = { Text(s.searchWeb, style = MaterialTheme.typography.labelSmall) },
+                    )
+
+                    Spacer(Modifier.width(4.dp))
+
+                    // 3. 深度思考开关
                     FilterChip(
                         selected = thinkingEnabled,
                         onClick = { onToggleThinking(!thinkingEnabled) },
                         enabled = thinkingSupported,
-                        modifier = Modifier.height(30.dp),
-                        label = { Text(s.thinking) },
+                        modifier = Modifier.height(28.dp),
+                        label = { Text(s.thinking, style = MaterialTheme.typography.labelSmall) },
                     )
 
-                    // 3. 上传按钮（沿用 📎 emoji，点击弹出菜单选图片/文件）
+                    Spacer(Modifier.width(4.dp))
+
+                    // 4. 上传按钮（沿用 📎 emoji，点击弹出菜单选图片/文件）
                     Box {
                         TextButton(
                             onClick = { uploadMenuExpanded = true },
@@ -353,5 +401,48 @@ private fun DecodedImage(base64: String, modifier: Modifier = Modifier) {
         )
     } else {
         Box(modifier = modifier.background(MaterialTheme.colorScheme.surfaceVariant))
+    }
+}
+
+
+/** 模型价格档位（按模型名精确匹配；未收录的模型不显示标签）。 */
+private enum class PriceTier { CHEAP, MEDIUM, HIGH, VERY_HIGH }
+
+private fun priceTierOf(model: String): PriceTier? {
+    val m = model.trim().lowercase()
+    return when (m) {
+        "deepseek-flash", "glm-5.3-flash", "qwen-turbo" -> PriceTier.CHEAP
+        "deepseek-v4-pro", "glm-5.3", "qwen-plus", "gpt-6-luna" -> PriceTier.MEDIUM
+        "gpt-6.1-sol" -> PriceTier.HIGH
+        "gpt-6-astra" -> PriceTier.VERY_HIGH
+        else -> null
+    }
+}
+
+/** 价格档位标签：带档位底色的小圆角文字（深浅主题用固定深底浅字保证对比度）。 */
+@Composable
+private fun PriceTierLabel(tier: PriceTier, s: com.bamboomosaic.llmchat.feature.chat.i18n.AppStrings) {
+    val (bg, fg) = when (tier) {
+        PriceTier.CHEAP -> Color(0xFF2E7D32) to Color.White
+        PriceTier.MEDIUM -> Color(0xFFF9A825) to Color(0xFF1C1B1F)
+        PriceTier.HIGH -> Color(0xFFEF6C00) to Color.White
+        PriceTier.VERY_HIGH -> Color(0xFFC62828) to Color.White
+    }
+    val label = when (tier) {
+        PriceTier.CHEAP -> s.priceCheap
+        PriceTier.MEDIUM -> s.priceMedium
+        PriceTier.HIGH -> s.priceHigh
+        PriceTier.VERY_HIGH -> s.priceVeryHigh
+    }
+    Surface(
+        shape = RoundedCornerShape(6.dp),
+        color = bg,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = fg,
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
+        )
     }
 }

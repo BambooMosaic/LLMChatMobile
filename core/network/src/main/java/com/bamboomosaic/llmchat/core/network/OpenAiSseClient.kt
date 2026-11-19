@@ -30,6 +30,12 @@ sealed interface SseEvent {
 
     /** 推理模型的思考内容（reasoning_content）；当前只用于兜底，不直接展示。 */
     data class Reasoning(val chunk: String) : SseEvent
+
+    /** 联网搜索：一次搜索类工具调用开始（DeepSeek server_tool_event）。 */
+    data object SearchStarted : SseEvent
+
+    /** 联网搜索：一次搜索类工具调用完成，携带本次返回的网页结果条数。 */
+    data class SearchCompleted(val pageCount: Int) : SseEvent
     data class Usage(val promptTokens: Long, val completionTokens: Long) : SseEvent
 }
 
@@ -45,7 +51,12 @@ private data class ChatRequestDto(
     @SerialName("thinking") val thinking: ThinkingDto? = null,
     // OpenAI 系：reasoning_effort
     @SerialName("reasoning_effort") val reasoningEffort: String? = null,
+    // DeepSeek 联网搜索：服务端工具声明（仅 deepseek_web_search）
+    val tools: List<ToolDto>? = null,
 )
+
+@Serializable
+private data class ToolDto(val type: String)
 
 @Serializable
 private data class ThinkingDto(val type: String)
@@ -65,7 +76,11 @@ private data class StreamChunkDto(
 )
 
 @Serializable
-private data class ChoiceDto(val delta: DeltaDto = DeltaDto())
+private data class ChoiceDto(
+    val delta: DeltaDto = DeltaDto(),
+    // DeepSeek 联网搜索事件（与 delta 并列的扩展字段），结构不定，手动解析
+    @SerialName("server_tool_event") val serverToolEvent: JsonElement? = null,
+)
 
 @Serializable
 private data class DeltaDto(
@@ -115,6 +130,7 @@ class OpenAiSseClient(
         messages: List<ChatMessage>,
         thinkingEnabled: Boolean = false,
         maxTokens: Int? = null,
+        searchEnabled: Boolean = false,
     ): Flow<SseEvent> = callbackFlow {
         // 各厂商"深度思考"参数不同：DeepSeek 用 thinking.type，OpenAI 系用 reasoning_effort。
         // 注意：DeepSeek 默认就会思考（不传也会返回 reasoning_content），
@@ -133,6 +149,8 @@ class OpenAiSseClient(
                 null
             },
             reasoningEffort = if (thinkingEnabled && !isDeepSeek) "high" else null,
+            // 联网搜索仅 DeepSeek 支持（deepseek_web_search 为服务端工具，搜索在服务端完成）
+            tools = if (searchEnabled && isDeepSeek) listOf(ToolDto("deepseek_web_search")) else null,
         )
         val body = json.encodeToString(payload).toRequestBody(JSON_MEDIA_TYPE)
         // baseUrl 约定已包含版本段（如 https://api.openai.com/v1），这里只拼 /chat/completions，
@@ -203,6 +221,8 @@ class OpenAiSseClient(
                                 ).isSuccess
                                 if (!sent) break@loop
                             }
+                            // DeepSeek 联网搜索事件（server_tool_event，与 delta 并列）
+                            chunk.choices.firstOrNull()?.serverToolEvent?.let { emitSearchEvents(listOf(it)) }
                             val delta = chunk.choices.firstOrNull()?.delta ?: continue@loop
                             delta.content?.takeIf { it.isNotEmpty() }?.let { content ->
                                 emittedText = true
@@ -235,6 +255,36 @@ class OpenAiSseClient(
         })
 
         awaitClose { call.cancel() }
+    }
+
+    /**
+     * 解析 DeepSeek 联网搜索事件（choice.server_tool_event，与 delta 并列）：
+     * - call_started：搜索类调用开始 → SearchStarted
+     * - call_completed：搜索类调用完成 → SearchCompleted（网页结果条数从 sources 提取）
+     * read_link（读用户贴的链接）不算搜索，忽略；解析失败静默跳过，不影响正文流。
+     */
+    private fun kotlinx.coroutines.channels.ProducerScope<SseEvent>.emitSearchEvents(
+        events: List<JsonElement>,
+    ) {
+        for (element in events) {
+            val obj = element as? JsonObject ?: continue
+            val type = (obj["type"] as? JsonPrimitive)?.content ?: continue
+            val call = obj["call"] as? JsonObject ?: continue
+            val kind = (call["kind"] as? JsonPrimitive)?.content ?: continue
+            val isSearchKind = kind == "search" || kind == "deep_search" || kind == "image_search"
+            when (type) {
+                "call_started" -> if (isSearchKind) trySend(SseEvent.SearchStarted)
+                "call_completed" -> {
+                    if (!isSearchKind) continue
+                    // "已搜索 N 个网页"：N = 本次调用返回的 url 类型结果条数
+                    val sources = call["sources"] as? JsonArray ?: JsonArray(emptyList())
+                    val pageCount = sources.count { src ->
+                        (src as? JsonObject)?.get("type")?.let { (it as? JsonPrimitive)?.content } == "url"
+                    }
+                    trySend(SseEvent.SearchCompleted(pageCount))
+                }
+            }
+        }
     }
 
     private fun MessageRole.wireValue(): String = when (this) {

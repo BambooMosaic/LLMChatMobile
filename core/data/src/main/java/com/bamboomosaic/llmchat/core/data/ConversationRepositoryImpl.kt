@@ -43,6 +43,7 @@ class ConversationRepositoryImpl @Inject constructor(
                 timestamp = now,
                 reasoning = message.reasoning?.takeIf { it.isNotBlank() },
                 images = message.images.takeIf { it.isNotEmpty() }?.joinToString(IMAGE_SEPARATOR),
+                searchPages = message.searchPages,
             ),
         )
         dao.touch(conversationId, now)
@@ -93,6 +94,7 @@ class ConversationRepositoryImpl @Inject constructor(
         content = content,
         reasoning = reasoning,
         images = images?.split(IMAGE_SEPARATOR)?.filter { it.isNotBlank() } ?: emptyList(),
+        searchPages = searchPages,
     )
 
     companion object {

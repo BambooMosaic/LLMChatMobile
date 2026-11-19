@@ -35,6 +35,7 @@ class SettingsStore @Inject constructor(
     private val themeModeKey = stringPreferencesKey("theme_mode")
     private val languageKey = stringPreferencesKey("language")
     private val thinkingKey = booleanPreferencesKey("thinking_enabled")
+    private val searchKey = booleanPreferencesKey("search_enabled")
     private val maxContextKey = intPreferencesKey("max_context_tokens")
     private val maxOutputKey = intPreferencesKey("max_output_tokens")
     private val autoCompressKey = booleanPreferencesKey("auto_compress_enabled")
@@ -54,6 +55,7 @@ class SettingsStore @Inject constructor(
                 .getOrDefault(ThemeMode.DARK),
             language = language,
             thinkingEnabled = prefs[thinkingKey] ?: false,
+            searchEnabled = prefs[searchKey] ?: false,
             maxContextTokens = prefs[maxContextKey] ?: AppSettings.DEFAULT_MAX_CONTEXT_TOKENS,
             maxOutputTokens = prefs[maxOutputKey] ?: AppSettings.DEFAULT_MAX_OUTPUT_TOKENS,
             autoCompressEnabled = prefs[autoCompressKey] ?: true,
@@ -94,6 +96,10 @@ class SettingsStore @Inject constructor(
 
     override suspend fun setThinkingEnabled(enabled: Boolean) {
         context.settingsDataStore.edit { it[thinkingKey] = enabled }
+    }
+
+    override suspend fun setSearchEnabled(enabled: Boolean) {
+        context.settingsDataStore.edit { it[searchKey] = enabled }
     }
 
     override suspend fun setMaxContextTokens(value: Int) {

@@ -29,6 +29,8 @@ class ChatRepositoryImpl @Inject constructor(
         thinkingEnabled: Boolean,
         maxTokens: Int?,
         onReasoning: (String) -> Unit,
+        searchEnabled: Boolean,
+        onSearchPages: (Int) -> Unit,
     ): Flow<String> = flow {
         // 从「当前选中的 API 配置」读取 URL/Key，不再读单条固定 DataStore 配置
         val config = configRepository.getCurrentConfig()
@@ -44,9 +46,12 @@ class ChatRepositoryImpl @Inject constructor(
                 messages = messages,
                 thinkingEnabled = thinkingEnabled,
                 maxTokens = maxTokens,
+                searchEnabled = searchEnabled,
             ).transform { event ->
                 when (event) {
                     is SseEvent.Text -> emit(event.chunk)
+                    is SseEvent.SearchStarted -> onSearchPages(0)
+                    is SseEvent.SearchCompleted -> onSearchPages(event.pageCount)
                     is SseEvent.Usage -> {
                         // data 层内部拦截 usage 写入 Room，不暴露给 UI 接口
                         tokenUsageDao.insert(

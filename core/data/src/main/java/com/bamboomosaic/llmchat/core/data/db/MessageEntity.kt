@@ -18,4 +18,6 @@ data class MessageEntity(
     val reasoning: String? = null,
     /** 多模态图片 base64，用 \u0001 分隔多张；仅用户消息可能有值。 */
     val images: String? = null,
+    /** 联网搜索到的网页总数（仅助手消息）；null = 未开启搜索。 */
+    val searchPages: Int? = null,
 )

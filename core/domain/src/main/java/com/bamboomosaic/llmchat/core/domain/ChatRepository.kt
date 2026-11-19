@@ -8,6 +8,7 @@ interface ChatRepository {
      * [sessionId] 由 UI 层生成并传入，用于 token 用量归集。
      * [messages] 为完整历史（含 system），[model] 为模型名。
      * [onReasoning] 推理模型（如 deepseek-flash）的思考内容回调，与正文流分开传递。
+     * [onSearchPages] 联网搜索回调：每次搜索类工具调用完成时回调本次返回的网页条数（增量）。
      */
     fun sendChatStream(
         sessionId: String,
@@ -16,6 +17,8 @@ interface ChatRepository {
         thinkingEnabled: Boolean = false,
         maxTokens: Int? = null,
         onReasoning: (String) -> Unit = {},
+        searchEnabled: Boolean = false,
+        onSearchPages: (Int) -> Unit = {},
     ): Flow<String>
 
     /**

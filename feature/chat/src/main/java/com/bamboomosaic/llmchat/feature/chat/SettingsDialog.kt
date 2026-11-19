@@ -1,5 +1,7 @@
 package com.bamboomosaic.llmchat.feature.chat
 
+import kotlinx.coroutines.launch
+
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -10,12 +12,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -30,6 +34,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -58,6 +63,7 @@ fun SettingsDialog(
     archivedConversations: List<Conversation>,
     apiConfigs: List<ApiConfig>,
     onSaveConfig: (ApiConfig) -> Unit,
+    onValidateConfig: suspend (ApiConfig) -> Result<Unit>,
     onDeleteConfig: (Long) -> Unit,
     onSetDefaultConfig: (Long) -> Unit,
     onSetProvider: (String) -> Unit,
@@ -140,6 +146,7 @@ fun SettingsDialog(
                         SettingsPage.API -> ApiConfigListPage(
                             configs = apiConfigs,
                             onSave = onSaveConfig,
+                            onValidateConfig = onValidateConfig,
                             onDelete = onDeleteConfig,
                             onSetDefault = onSetDefaultConfig,
                         )
@@ -272,6 +279,7 @@ private fun MenuRow(label: String, onClick: () -> Unit) {
 private fun ApiConfigListPage(
     configs: List<ApiConfig>,
     onSave: (ApiConfig) -> Unit,
+    onValidateConfig: suspend (ApiConfig) -> Result<Unit>,
     onDelete: (Long) -> Unit,
     onSetDefault: (Long) -> Unit,
 ) {
@@ -366,6 +374,7 @@ private fun ApiConfigListPage(
     if (adding || editing != null) {
         ConfigEditDialog(
             initial = editing,
+            onValidateConfig = onValidateConfig,
             onSave = { draft ->
                 onSave(draft)
                 adding = false
@@ -403,6 +412,7 @@ private fun ApiConfigListPage(
 private fun ConfigEditDialog(
     initial: ApiConfig?,
     onSave: (ApiConfig) -> Unit,
+    onValidateConfig: suspend (ApiConfig) -> Result<Unit>,
     onDismiss: () -> Unit,
 ) {
     val s = LocalAppStrings.current
@@ -420,7 +430,21 @@ private fun ConfigEditDialog(
 
     var providerExpanded by remember { mutableStateOf(false) }
     var modelExpanded by remember { mutableStateOf(false) }
+    var validating by remember { mutableStateOf(false) }
     val preset = Providers.find(provider)
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    fun buildConfig() = ApiConfig(
+        id = initial?.id ?: 0L,
+        name = name.ifBlank { model.ifBlank { "未命名" } },
+        provider = provider,
+        baseUrl = baseUrl,
+        apiKey = apiKey,
+        model = model,
+        supportReasoning = supportReasoning,
+        isDefault = initial?.isDefault ?: false,
+    )
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(
@@ -547,23 +571,37 @@ private fun ConfigEditDialog(
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    // 验证配置：发极短测试请求，成功自动保存，失败提示具体错误（与引导页一致）
+                    if (validating) {
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                        Spacer(Modifier.width(8.dp))
+                    } else {
+                        TextButton(
+                            onClick = {
+                                scope.launch {
+                                    validating = true
+                                    val result = onValidateConfig(buildConfig())
+                                    validating = false
+                                    val msg = result.fold(
+                                        onSuccess = { s.configSuccess },
+                                        onFailure = { e ->
+                                            e.message?.takeIf { it.isNotBlank() } ?: s.configFail
+                                        },
+                                    )
+                                    android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+                                    if (result.isSuccess) {
+                                        onSave(buildConfig())
+                                        onDismiss()
+                                    }
+                                }
+                            },
+                        ) { Text(s.verifyConfig) }
+                    }
                     TextButton(onClick = onDismiss) { Text(s.cancel) }
                     Spacer(Modifier.width(8.dp))
-                    Button(onClick = {
-                        onSave(
-                            ApiConfig(
-                                id = initial?.id ?: 0L,
-                                name = name.ifBlank { model.ifBlank { "未命名" } },
-                                provider = provider,
-                                baseUrl = baseUrl,
-                                apiKey = apiKey,
-                                model = model,
-                                supportReasoning = supportReasoning,
-                                isDefault = initial?.isDefault ?: false,
-                            ),
-                        )
-                    }) { Text(s.save) }
+                    Button(onClick = { onSave(buildConfig()) }) { Text(s.save) }
                 }
             }
         }

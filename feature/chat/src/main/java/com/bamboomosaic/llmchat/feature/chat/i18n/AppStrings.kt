@@ -98,11 +98,22 @@ data class AppStrings(
     val allDone: String,
     val backToGuide: String,
     val skipHint: String,
+    val searchWeb: String,
+    val searching: String,
+    val searchDone: String,
+    val configCustomModel: String,
+    val priceCheap: String,
+    val priceMedium: String,
+    val priceHigh: String,
+    val priceVeryHigh: String,
+    val searchedPagesFormat: String,
 ) {
     fun thisRound(prompt: Long, completion: Long, total: Long): String =
         String.format(thisRoundFormat, total, prompt, completion)
 
     fun sessionTokensText(total: Long): String = "$sessionTokens: $total"
+
+    fun searchedPages(n: Int): String = String.format(searchedPagesFormat, n)
 }
 
 private val ZhCN = AppStrings(
@@ -199,6 +210,15 @@ private val ZhCN = AppStrings(
     allDone = "完成！",
     backToGuide = "返回指引",
     skipHint = "跳过后仍可在设置中配置 API",
+    searchWeb = "联网搜索",
+    searching = "正在联网搜索...",
+    searchDone = "已联网搜索",
+    configCustomModel = "配置自定义模型",
+    priceCheap = "便宜",
+    priceMedium = "中等",
+    priceHigh = "昂贵",
+    priceVeryHigh = "非常昂贵",
+    searchedPagesFormat = "已搜索 %d 个网页",
 )
 
 private val ZhTW = AppStrings(
@@ -295,6 +315,15 @@ private val ZhTW = AppStrings(
     allDone = "完成！",
     backToGuide = "返回指引",
     skipHint = "跳過後仍可在設定中設定 API",
+    searchWeb = "連網搜尋",
+    searching = "正在連網搜尋...",
+    searchDone = "已連網搜尋",
+    configCustomModel = "設定自訂模型",
+    priceCheap = "便宜",
+    priceMedium = "中等",
+    priceHigh = "昂貴",
+    priceVeryHigh = "非常昂貴",
+    searchedPagesFormat = "已搜尋 %d 個網頁",
 )
 
 private val EnUS = AppStrings(
@@ -391,6 +420,15 @@ private val EnUS = AppStrings(
     allDone = "All set!",
     backToGuide = "Back to guide",
     skipHint = "You can still configure the API in Settings later",
+    searchWeb = "Web search",
+    searching = "Searching the web...",
+    searchDone = "Searched the web",
+    configCustomModel = "Configure custom models",
+    priceCheap = "Cheap",
+    priceMedium = "Medium",
+    priceHigh = "Pricey",
+    priceVeryHigh = "Very pricey",
+    searchedPagesFormat = "Searched %d pages",
 )
 
 fun stringsFor(language: AppLanguage): AppStrings = when (language) {
