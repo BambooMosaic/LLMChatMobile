@@ -16,4 +16,8 @@ data class ApiConfigEntity(
     val supportReasoning: Int = 0,
     /** 1 = 默认配置（全局只有一条为 1，由 Dao 的 CASE 语句维护） */
     val isDefault: Int = 0,
+    /** 该配置独立的最大上下文长度；null = 用全局默认。 */
+    val maxContextTokens: Int? = null,
+    /** 该配置独立的最大输出长度；null = 用全局默认。 */
+    val maxOutputTokens: Int? = null,
 )

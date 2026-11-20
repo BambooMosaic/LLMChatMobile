@@ -12,6 +12,14 @@ data class Conversation(
     val archived: Boolean = false,
     /** 会话独立系统提示词；null 表示使用全局默认。 */
     val systemPrompt: String? = null,
+    /** 当前会话使用的模式 ID（双层提示词架构的模式层）。 */
+    val modeId: String = ModeConfig.CUSTOM,
+    /** 用户自定义的第二层提示词内容。 */
+    val userPrompt: String? = null,
+    /** 实际生效的温度值（冗余存储，便于统计）。 */
+    val effectiveTemperature: Float? = null,
+    /** 实际生效的 top_p 值。 */
+    val effectiveTopP: Float? = null,
 )
 
 /** 会话与消息的持久化仓储，ViewModel 只注入此接口。 */
@@ -65,6 +73,31 @@ interface ConversationRepository {
     /** 按消息 id 取单条消息。 */
     suspend fun getMessageById(messageId: Long): ChatMessage?
 
+    /** 按 id 读会话（一次性，绕过 Flow 缓存延迟）。 */
+    suspend fun getConversationById(conversationId: String): Conversation?
+
     /** 同版本组的版本总数（显示 1/N 用）。 */
     suspend fun countVersions(conversationId: String, versionKey: Long): Int
+
+    /**
+     * 创建带模式配置的会话（已存在则忽略）。新对话创建弹窗用。
+     * [userPrompt] 为用户层提示词；自定义模式的参数也可自定义。
+     */
+    suspend fun ensureConversationWithMode(
+        conversationId: String,
+        title: String,
+        modeId: String,
+        userPrompt: String?,
+        temperature: Float?,
+        topP: Float?,
+    )
+
+    /** 更新会话的模式配置（仅限未发送过消息的会话）。 */
+    suspend fun updateConversationMode(
+        conversationId: String,
+        modeId: String,
+        userPrompt: String?,
+        temperature: Float?,
+        topP: Float?,
+    )
 }

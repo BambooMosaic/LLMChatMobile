@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -19,6 +20,9 @@ interface ConversationDao {
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertConversation(entity: ConversationEntity)
+
+    @Update
+    suspend fun updateConversation(entity: ConversationEntity)
 
     @Query("SELECT * FROM conversations WHERE id = :conversationId LIMIT 1")
     suspend fun getConversation(conversationId: String): ConversationEntity?

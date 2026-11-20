@@ -107,7 +107,22 @@ data class AppStrings(
     val priceHigh: String,
     val priceVeryHigh: String,
     val searchedPagesFormat: String,
+    val defaultModeLabel: String,
+    val defaultModeOff: String,
+    val advancedOptions: String,
+    val newConversationTitle: String,
+    val createConversation: String,
+    val modeUserPromptLabel: String,
+    val customTemperature: String,
+    val customTopP: String,
+    val modeLocked: String,
+    val promptTruncated: String,
+    val modeLabel: String,
+    val modeSelectTitle: String,
+    val searchShort: String,
+    val thinkingShort: String,
 ) {
+
     fun thisRound(prompt: Long, completion: Long, total: Long): String =
         String.format(thisRoundFormat, total, prompt, completion)
 
@@ -219,6 +234,20 @@ private val ZhCN = AppStrings(
     priceHigh = "昂贵",
     priceVeryHigh = "非常昂贵",
     searchedPagesFormat = "已搜索 %d 个网页",
+    defaultModeLabel = "新对话默认模式",
+    defaultModeOff = "禁用（新建时手动选择）",
+    advancedOptions = "高级选项",
+    newConversationTitle = "新建对话",
+    createConversation = "创建对话",
+    modeUserPromptLabel = "你的补充提示词",
+    customTemperature = "温度（随机性）",
+    customTopP = "Top P（多样性）",
+    modeLocked = "已发送消息后模式不可修改",
+    promptTruncated = "系统提示词过长已自动截断",
+    modeLabel = "模式",
+    modeSelectTitle = "选择模式",
+    searchShort = "搜索",
+    thinkingShort = "思考",
 )
 
 private val ZhTW = AppStrings(
@@ -324,6 +353,20 @@ private val ZhTW = AppStrings(
     priceHigh = "昂貴",
     priceVeryHigh = "非常昂貴",
     searchedPagesFormat = "已搜尋 %d 個網頁",
+    defaultModeLabel = "新對話預設模式",
+    defaultModeOff = "停用（新建時手動選擇）",
+    advancedOptions = "進階選項",
+    newConversationTitle = "新建對話",
+    createConversation = "建立對話",
+    modeUserPromptLabel = "你的補充提示詞",
+    customTemperature = "溫度（隨機性）",
+    customTopP = "Top P（多樣性）",
+    modeLocked = "已傳送訊息後模式不可修改",
+    promptTruncated = "系統提示詞過長已自動截斷",
+    modeLabel = "模式",
+    modeSelectTitle = "選擇模式",
+    searchShort = "搜尋",
+    thinkingShort = "思考",
 )
 
 private val EnUS = AppStrings(
@@ -429,6 +472,20 @@ private val EnUS = AppStrings(
     priceHigh = "Pricey",
     priceVeryHigh = "Very pricey",
     searchedPagesFormat = "Searched %d pages",
+    defaultModeLabel = "Default mode for new chats",
+    defaultModeOff = "Off (choose when creating)",
+    advancedOptions = "Advanced",
+    newConversationTitle = "New chat",
+    createConversation = "Create chat",
+    modeUserPromptLabel = "Your extra prompt",
+    customTemperature = "Temperature (randomness)",
+    customTopP = "Top P (diversity)",
+    modeLocked = "Mode is locked after the first message",
+    promptTruncated = "System prompt too long, truncated automatically",
+    modeLabel = "Mode",
+    modeSelectTitle = "Choose a mode",
+    searchShort = "Search",
+    thinkingShort = "Think",
 )
 
 fun stringsFor(language: AppLanguage): AppStrings = when (language) {

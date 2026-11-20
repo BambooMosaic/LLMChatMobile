@@ -102,6 +102,8 @@ data class AppSettings(
     val maxContextTokens: Int = DEFAULT_MAX_CONTEXT_TOKENS,
     val maxOutputTokens: Int = DEFAULT_MAX_OUTPUT_TOKENS,
     val autoCompressEnabled: Boolean = true,
+    /** 新对话默认模式 ID；"off" = 禁用（新建时手动选择）。 */
+    val defaultModeId: String = "off",
 ) {
     companion object {
         const val DEFAULT_MODEL = "deepseek-flash"
@@ -109,6 +111,7 @@ data class AppSettings(
         const val DEFAULT_API_KEY = ""
         const val DEFAULT_MAX_CONTEXT_TOKENS = 80000
         const val DEFAULT_MAX_OUTPUT_TOKENS = 4096
+        const val DEFAULT_MODE_OFF = "off"
 
         /** 各语言的默认系统提示词（systemPrompt 为空时使用）。 */
         fun defaultSystemPrompt(language: AppLanguage): String = when (language) {
@@ -145,4 +148,17 @@ interface SettingsRepository {
     suspend fun setMaxContextTokens(value: Int)
     suspend fun setMaxOutputTokens(value: Int)
     suspend fun setAutoCompressEnabled(enabled: Boolean)
+
+    /** 新对话默认模式（"off" = 禁用）。 */
+    suspend fun setDefaultModeId(modeId: String)
+
+    /** 模式模板记忆：每个模式下用户最后一次填写的用户提示词。 */
+    fun observeModeUserPrompt(modeId: String): kotlinx.coroutines.flow.Flow<String?>
+
+    suspend fun setModeUserPrompt(modeId: String, prompt: String?)
+
+    /** 自定义模式缓存的参数。 */
+    fun observeModeCustomParams(modeId: String): kotlinx.coroutines.flow.Flow<Pair<Float, Float>?>
+
+    suspend fun setModeCustomParams(modeId: String, temperature: Float, topP: Float)
 }

@@ -11,6 +11,14 @@ data class ConversationEntity(
     val updatedAt: Long,
     /** 1 = 已归档；0 = 正常。用 Int 而非 Boolean，便于后续直接用 SQL 统计。 */
     val archived: Int = 0,
-    /** 会话独立系统提示词；null/空串表示使用全局默认。 */
+    /** 会话独立系统提示词；null/空串表示使用全局默认。（旧字段，v9 起由 userPrompt 取代） */
     val systemPrompt: String? = null,
+    /** 当前会话使用的模式 ID。 */
+    val modeId: String = "custom",
+    /** 用户自定义的第二层提示词内容。 */
+    val userPrompt: String? = null,
+    /** 实际生效的温度值。 */
+    val effectiveTemperature: Float? = null,
+    /** 实际生效的 top_p 值。 */
+    val effectiveTopP: Float? = null,
 )

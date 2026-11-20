@@ -47,6 +47,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.bamboomosaic.llmchat.core.domain.ApiConfig
+import com.bamboomosaic.llmchat.core.domain.ChatModes
 import com.bamboomosaic.llmchat.core.domain.AppLanguage
 import com.bamboomosaic.llmchat.core.domain.AppSettings
 import com.bamboomosaic.llmchat.core.domain.Conversation
@@ -70,11 +71,9 @@ fun SettingsDialog(
     onSetBaseUrl: (String) -> Unit,
     onSetApiKey: (String) -> Unit,
     onSetModel: (String) -> Unit,
-    onSetSystemPrompt: (String) -> Unit,
+    onSetDefaultModeId: (String) -> Unit,
     onSetThemeMode: (ThemeMode) -> Unit,
     onSetLanguage: (AppLanguage) -> Unit,
-    onSetMaxContextTokens: (Int) -> Unit,
-    onSetMaxOutputTokens: (Int) -> Unit,
     onSetAutoCompressEnabled: (Boolean) -> Unit,
     onRestoreConversation: (String) -> Unit,
     onDeleteConversation: (String) -> Unit,
@@ -163,9 +162,7 @@ fun SettingsDialog(
 
                         SettingsPage.OTHER -> OtherPage(
                             settings = settings,
-                            onSetSystemPrompt = onSetSystemPrompt,
-                            onSetMaxContextTokens = onSetMaxContextTokens,
-                            onSetMaxOutputTokens = onSetMaxOutputTokens,
+                            onSetDefaultModeId = onSetDefaultModeId,
                             onSetAutoCompressEnabled = onSetAutoCompressEnabled,
                         )
 
@@ -431,6 +428,14 @@ private fun ConfigEditDialog(
     var providerExpanded by remember { mutableStateOf(false) }
     var modelExpanded by remember { mutableStateOf(false) }
     var validating by remember { mutableStateOf(false) }
+    // 高级选项：留空 = 不限（用全局默认）
+    var advExpanded by remember { mutableStateOf(false) }
+    var maxContext by remember(initial) {
+        mutableStateOf(initial?.maxContextTokens?.toString().orEmpty())
+    }
+    var maxOutput by remember(initial) {
+        mutableStateOf(initial?.maxOutputTokens?.toString().orEmpty())
+    }
     val preset = Providers.find(provider)
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -444,6 +449,8 @@ private fun ConfigEditDialog(
         model = model,
         supportReasoning = supportReasoning,
         isDefault = initial?.isDefault ?: false,
+        maxContextTokens = maxContext.toIntOrNull(),
+        maxOutputTokens = maxOutput.toIntOrNull(),
     )
 
     Dialog(onDismissRequest = onDismiss) {
@@ -567,6 +574,28 @@ private fun ConfigEditDialog(
                     Switch(checked = supportReasoning, onCheckedChange = { supportReasoning = it })
                 }
 
+                // 高级选项：最大上下文 / 最大输出（仅对本配置生效，留空 = 用全局默认）
+                TextButton(onClick = { advExpanded = !advExpanded }) {
+                    Text((if (advExpanded) "▾ " else "▸ ") + s.advancedOptions)
+                }
+                if (advExpanded) {
+                    OutlinedTextField(
+                        value = maxContext,
+                        onValueChange = { maxContext = it.filter { c -> c.isDigit() } },
+                        label = { Text(s.maxContext) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = maxOutput,
+                        onValueChange = { maxOutput = it.filter { c -> c.isDigit() } },
+                        label = { Text(s.maxOutput) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+
                 Spacer(Modifier.height(8.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -612,53 +641,37 @@ private fun ConfigEditDialog(
 @Composable
 private fun OtherPage(
     settings: AppSettings,
-    onSetSystemPrompt: (String) -> Unit,
-    onSetMaxContextTokens: (Int) -> Unit,
-    onSetMaxOutputTokens: (Int) -> Unit,
+    onSetDefaultModeId: (String) -> Unit,
     onSetAutoCompressEnabled: (Boolean) -> Unit,
 ) {
     val s = LocalAppStrings.current
 
-    var prompt by remember(settings.systemPrompt) { mutableStateOf(settings.systemPrompt) }
-    OutlinedTextField(
-        value = prompt,
-        onValueChange = { prompt = it; onSetSystemPrompt(it) },
-        label = { Text(s.systemPrompt) },
-        minLines = 3,
-        modifier = Modifier.fillMaxWidth(),
-    )
-
-    Spacer(Modifier.height(12.dp))
-    var maxContext by remember(settings.maxContextTokens) {
-        mutableStateOf(settings.maxContextTokens.toString())
-    }
-    OutlinedTextField(
-        value = maxContext,
-        onValueChange = {
-            maxContext = it.filter { c -> c.isDigit() }
-            maxContext.toIntOrNull()?.let(onSetMaxContextTokens)
-        },
-        label = { Text(s.maxContext) },
-        singleLine = true,
-        modifier = Modifier.fillMaxWidth(),
-    )
-
-    Spacer(Modifier.height(12.dp))
-    var maxOutput by remember(settings.maxOutputTokens) {
-        mutableStateOf(settings.maxOutputTokens.toString())
-    }
-    OutlinedTextField(
-        value = maxOutput,
-        onValueChange = {
-            maxOutput = it.filter { c -> c.isDigit() }
-            maxOutput.toIntOrNull()?.let(onSetMaxOutputTokens)
-        },
-        label = { Text(s.maxOutput) },
-        singleLine = true,
-        modifier = Modifier.fillMaxWidth(),
-    )
-
+    // 新对话默认模式：禁用 + 6 套内置模式
+    Spacer(Modifier.height(4.dp))
+    Text(s.defaultModeLabel, style = MaterialTheme.typography.bodyLarge)
     Spacer(Modifier.height(8.dp))
+    val modeOptions = buildList {
+        add("off" to s.defaultModeOff)
+        ChatModes.all.forEach { add(it.modeId to it.modeName) }
+    }
+    modeOptions.forEach { (id, label) ->
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onSetDefaultModeId(id) }
+                .padding(vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            RadioButton(
+                selected = settings.defaultModeId == id,
+                onClick = { onSetDefaultModeId(id) },
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(label, style = MaterialTheme.typography.bodyMedium)
+        }
+    }
+
+    Spacer(Modifier.height(16.dp))
     Row(
         modifier = Modifier
             .fillMaxWidth()

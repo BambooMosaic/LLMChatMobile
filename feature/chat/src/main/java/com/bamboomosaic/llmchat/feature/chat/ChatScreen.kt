@@ -101,6 +101,22 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
     val pendingImages by viewModel.pendingImages.collectAsState()
 
     var input by remember { mutableStateOf("") }
+    val currentConversation = conversations.firstOrNull { it.id == currentId }
+    val screenContext = LocalContext.current
+    val screenStrings = LocalAppStrings.current
+    // 新建对话模式弹窗：默认模式为「禁用」时先弹窗选择
+    var showNewChatModeDialog by remember { mutableStateOf(false) }
+    // 会话模式编辑弹窗（工具栏模式按钮）
+    var showModeEditor by remember { mutableStateOf(false) }
+    // 截断轻提示
+    LaunchedEffect(Unit) {
+        viewModel.truncatedToast.collect {
+            android.widget.Toast.makeText(
+                screenContext, screenStrings.promptTruncated,
+                android.widget.Toast.LENGTH_SHORT,
+            ).show()
+        }
+    }
     // 长按编辑：VM 发出待编辑草稿 → 回填输入框
     val editDraft by viewModel.editDraft.collectAsState()
     LaunchedEffect(editDraft) {
@@ -111,7 +127,6 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
     }
     var showSettings by remember { mutableStateOf(false) }
     var showTokenStats by remember { mutableStateOf(false) }
-    var promptEditTarget by remember { mutableStateOf<String?>(null) }
     var exportTarget by remember { mutableStateOf<String?>(null) }
 
     val drawerState = rememberDrawerState(DrawerValue.Closed)
@@ -147,8 +162,13 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
                 conversations = conversations,
                 currentId = currentId,
                 onNewConversation = {
-                    viewModel.newConversation()
                     scope.launch { drawerState.close() }
+                    if (settings.defaultModeId == "off") {
+                        // 禁用：弹模式选择弹窗
+                        showNewChatModeDialog = true
+                    } else {
+                        viewModel.newConversation()
+                    }
                 },
                 onSelect = { id ->
                     viewModel.selectConversation(id)
@@ -157,8 +177,9 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
                 onRename = { id, title -> viewModel.renameConversation(id, title) },
                 onArchive = { id -> viewModel.archiveConversation(id) },
                 onEditPrompt = { id ->
-                    promptEditTarget = id
+                    viewModel.selectConversation(id)
                     scope.launch { drawerState.close() }
+                    showModeEditor = true
                 },
                 onExport = { id ->
                     exportTarget = id
@@ -277,6 +298,11 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
                 modelConfigs = apiConfigs,
                 onSelectModel = viewModel::selectConfig,
                 onOpenApiSettings = { showSettings = true },
+                modeName = currentConversation?.let {
+                    com.bamboomosaic.llmchat.core.domain.ChatModes.find(it.modeId).modeName
+                },
+                modeLocked = messages.any { it.role == MessageRole.ASSISTANT && it.dbId > 0 },
+                onOpenModeEditor = { if (!messages.any { m -> m.role == MessageRole.ASSISTANT && m.dbId > 0 }) showModeEditor = true },
                 isGenerating = isGenerating,
                 visionSupported = Providers.supportsVision(currentConfig?.model ?: ""),
                 pendingImages = pendingImages,
@@ -303,15 +329,41 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
             onSetBaseUrl = viewModel::setBaseUrl,
             onSetApiKey = viewModel::setApiKey,
             onSetModel = viewModel::setModel,
-            onSetSystemPrompt = viewModel::setSystemPrompt,
+            onSetDefaultModeId = viewModel::setDefaultModeId,
             onSetThemeMode = viewModel::setThemeMode,
             onSetLanguage = viewModel::setLanguage,
-            onSetMaxContextTokens = viewModel::setMaxContextTokens,
-            onSetMaxOutputTokens = viewModel::setMaxOutputTokens,
             onSetAutoCompressEnabled = viewModel::setAutoCompressEnabled,
             onRestoreConversation = viewModel::restoreConversation,
             onDeleteConversation = viewModel::deleteConversationPermanently,
             onDismiss = { showSettings = false },
+        )
+    }
+
+    // 新建对话：模式选择弹窗
+    if (showNewChatModeDialog) {
+        ModeEditorDialog(
+            initialModeId = com.bamboomosaic.llmchat.core.domain.ModeConfig.CHAT,
+            initialUserPrompt = null,
+            onConfirm = { modeId, userPrompt, temp, topp ->
+                viewModel.newConversation()
+                viewModel.createConversationWithMode(modeId, userPrompt, temp, topp)
+                showNewChatModeDialog = false
+            },
+            onDismiss = { showNewChatModeDialog = false },
+        )
+    }
+
+    // 会话模式编辑弹窗（工具栏模式按钮）
+    if (showModeEditor) {
+        val cur = currentConversation
+        ModeEditorDialog(
+            initialModeId = cur?.modeId ?: com.bamboomosaic.llmchat.core.domain.ModeConfig.CUSTOM,
+            initialUserPrompt = cur?.userPrompt,
+            onConfirm = { modeId, userPrompt, temp, topp ->
+                viewModel.updateConversationMode(modeId, userPrompt, temp, topp)
+                showModeEditor = false
+            },
+            onDismiss = { showModeEditor = false },
         )
     }
 
@@ -329,17 +381,6 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
     }
 
     // 会话独立提示词编辑弹窗
-    promptEditTarget?.let { conversationId ->
-        val currentPrompt = conversations.firstOrNull { it.id == conversationId }?.systemPrompt ?: ""
-        PromptEditDialog(
-            initial = currentPrompt,
-            onConfirm = { newPrompt ->
-                viewModel.setConversationSystemPrompt(conversationId, newPrompt)
-                promptEditTarget = null
-            },
-            onDismiss = { promptEditTarget = null },
-        )
-    }
 
     // 导出格式选择弹窗
     exportTarget?.let { conversationId ->

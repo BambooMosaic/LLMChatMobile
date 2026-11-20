@@ -115,6 +115,8 @@ class ConfigRepositoryImpl @Inject constructor(
         model = model,
         supportReasoning = supportReasoning == 1,
         isDefault = isDefault == 1,
+        maxContextTokens = maxContextTokens,
+        maxOutputTokens = maxOutputTokens,
     )
 
     private fun ApiConfig.toEntity() = ApiConfigEntity(
@@ -126,5 +128,7 @@ class ConfigRepositoryImpl @Inject constructor(
         model = model,
         supportReasoning = if (supportReasoning) 1 else 0,
         isDefault = if (isDefault) 1 else 0,
+        maxContextTokens = maxContextTokens,
+        maxOutputTokens = maxOutputTokens,
     )
 }

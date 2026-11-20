@@ -70,6 +70,9 @@ fun ChatInputBar(
     modelConfigs: List<ApiConfig>,
     onSelectModel: (Long) -> Unit,
     onOpenApiSettings: () -> Unit = {},
+    modeName: String? = null,
+    modeLocked: Boolean = false,
+    onOpenModeEditor: () -> Unit = {},
     isGenerating: Boolean,
     visionSupported: Boolean,
     pendingImages: List<String>,
@@ -308,31 +311,48 @@ fun ChatInputBar(
                         }
                     }
 
+                    // 2. 模式按钮（显示当前会话模式名；首条消息后置灰锁定）
+                    Box {
+                        TextButton(
+                            onClick = onOpenModeEditor,
+                            enabled = !modeLocked,
+                            modifier = Modifier.height(30.dp),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                        ) {
+                            Text(
+                                text = modeName ?: s.modeLabel,
+                                style = MaterialTheme.typography.labelMedium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
+
                     Spacer(Modifier.weight(1f))
 
-                    // 2. 联网搜索开关（仅 DeepSeek 支持时可用）
+                    // 3. 联网搜索开关（仅 DeepSeek 支持时可用）
                     FilterChip(
                         selected = searchEnabled,
                         onClick = { onToggleSearch(!searchEnabled) },
                         enabled = searchSupported,
                         modifier = Modifier.height(28.dp),
-                        label = { Text(s.searchWeb, style = MaterialTheme.typography.labelSmall) },
+                        label = { Text(s.searchShort, style = MaterialTheme.typography.labelSmall) },
                     )
 
-                    Spacer(Modifier.width(4.dp))
+                    Spacer(Modifier.width(2.dp))
 
-                    // 3. 深度思考开关
+                    // 4. 深度思考开关
                     FilterChip(
                         selected = thinkingEnabled,
                         onClick = { onToggleThinking(!thinkingEnabled) },
                         enabled = thinkingSupported,
                         modifier = Modifier.height(28.dp),
-                        label = { Text(s.thinking, style = MaterialTheme.typography.labelSmall) },
+                        label = { Text(s.thinkingShort, style = MaterialTheme.typography.labelSmall) },
                     )
 
-                    Spacer(Modifier.width(4.dp))
+                    Spacer(Modifier.width(2.dp))
 
-                    // 4. 上传按钮（沿用 📎 emoji，点击弹出菜单选图片/文件）
+                    // 5. 上传按钮（沿用 📎 emoji，点击弹出菜单选图片/文件）
                     Box {
                         TextButton(
                             onClick = { uploadMenuExpanded = true },

@@ -19,6 +19,8 @@ interface ChatRepository {
         onReasoning: (String) -> Unit = {},
         searchEnabled: Boolean = false,
         onSearchPages: (Int) -> Unit = {},
+        temperature: Float? = null,
+        topP: Float? = null,
     ): Flow<String>
 
     /**

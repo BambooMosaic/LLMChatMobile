@@ -14,6 +14,10 @@ data class ApiConfig(
     val supportReasoning: Boolean = false,
     /** 是否为默认配置（列表高亮 + 无选中记录时的兜底）。 */
     val isDefault: Boolean = false,
+    /** 该配置独立的最大上下文长度；null = 用全局默认（API 高级选项）。 */
+    val maxContextTokens: Int? = null,
+    /** 该配置独立的最大输出长度；null = 用全局默认（API 高级选项）。 */
+    val maxOutputTokens: Int? = null,
 )
 
 /** 多套 API 配置的持久化仓储，ViewModel 只注入此接口。 */

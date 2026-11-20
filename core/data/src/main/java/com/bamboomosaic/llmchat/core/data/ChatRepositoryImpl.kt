@@ -31,6 +31,8 @@ class ChatRepositoryImpl @Inject constructor(
         onReasoning: (String) -> Unit,
         searchEnabled: Boolean,
         onSearchPages: (Int) -> Unit,
+        temperature: Float?,
+        topP: Float?,
     ): Flow<String> = flow {
         // 从「当前选中的 API 配置」读取 URL/Key，不再读单条固定 DataStore 配置
         val config = configRepository.getCurrentConfig()
@@ -47,6 +49,8 @@ class ChatRepositoryImpl @Inject constructor(
                 thinkingEnabled = thinkingEnabled,
                 maxTokens = maxTokens,
                 searchEnabled = searchEnabled,
+                temperature = temperature,
+                topP = topP,
             ).transform { event ->
                 when (event) {
                     is SseEvent.Text -> emit(event.chunk)

@@ -13,7 +13,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ApiConfigEntity::class,
     ],
     views = [ModelStatsView::class],
-    version = 8,
+    version = 9,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -88,6 +88,24 @@ abstract class AppDatabase : RoomDatabase() {
          * v7 -> v8：消息多版本（重新生成/编辑重发保留历史版本）。
          * 历史单版本数据自动升级为 version=1；usageId 关联该版本的 token 用量。
          */
+        /**
+         * v8 -> v9：双层系统提示词架构。
+         * 会话加模式字段；历史会话自动标记为自定义模式，原 systemPrompt 迁移至 userPrompt。
+         * api_configs 加每配置独立的最大上下文/最大输出（NULL = 不限制，用全局默认）。
+         */
+        val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE conversations ADD COLUMN modeId TEXT NOT NULL DEFAULT 'custom'")
+                db.execSQL("ALTER TABLE conversations ADD COLUMN userPrompt TEXT")
+                db.execSQL("ALTER TABLE conversations ADD COLUMN effectiveTemperature REAL")
+                db.execSQL("ALTER TABLE conversations ADD COLUMN effectiveTopP REAL")
+                // 原全局/会话系统提示词迁移至用户层（历史数据不丢失）
+                db.execSQL("UPDATE conversations SET userPrompt = systemPrompt WHERE systemPrompt IS NOT NULL")
+                db.execSQL("ALTER TABLE api_configs ADD COLUMN maxContextTokens INTEGER")
+                db.execSQL("ALTER TABLE api_configs ADD COLUMN maxOutputTokens INTEGER")
+            }
+        }
+
         val MIGRATION_7_8 = object : Migration(7, 8) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE messages ADD COLUMN version INTEGER NOT NULL DEFAULT 1")

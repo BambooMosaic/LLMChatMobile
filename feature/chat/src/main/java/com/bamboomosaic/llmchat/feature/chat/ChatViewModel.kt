@@ -9,6 +9,9 @@ import com.bamboomosaic.llmchat.core.domain.AppSettings
 import com.bamboomosaic.llmchat.core.domain.DailyTokenStats
 import com.bamboomosaic.llmchat.core.domain.HourlyTokenStats
 import com.bamboomosaic.llmchat.core.domain.ChatMessage
+import com.bamboomosaic.llmchat.core.domain.ChatModes
+import com.bamboomosaic.llmchat.core.domain.ModeConfig
+import com.bamboomosaic.llmchat.core.domain.SystemPromptBuilder
 import com.bamboomosaic.llmchat.core.domain.ChatRepository
 import com.bamboomosaic.llmchat.core.domain.ConfigRepository
 import com.bamboomosaic.llmchat.core.domain.ContextWindow
@@ -25,7 +28,10 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -243,7 +249,7 @@ class ChatViewModel @Inject constructor(
 
         launchStream(
             conversationId = conversationId,
-            compressed = buildRequestMessages(currentSettings, outgoing),
+            history = outgoing,
             currentSettings = currentSettings,
             userTextForTitle = text,
             userImages = images,
@@ -289,7 +295,7 @@ class ChatViewModel @Inject constructor(
 
         launchStream(
             conversationId = conversationId,
-            compressed = buildRequestMessages(currentSettings, history),
+            history = history,
             currentSettings = currentSettings,
             userTextForTitle = lastUser.text,
             persistUserMessage = false,
@@ -390,7 +396,7 @@ class ChatViewModel @Inject constructor(
             ChatMessage(MessageRole.USER, newText)
         launchStream(
             conversationId = conversationId,
-            compressed = buildRequestMessages(currentSettings, outgoing),
+            history = outgoing,
             currentSettings = currentSettings,
             userTextForTitle = newText,
             persistUserMessage = true,
@@ -402,18 +408,35 @@ class ChatViewModel @Inject constructor(
     }
 
     /** 组装请求消息：system + 历史，可选压缩。 */
-    private fun buildRequestMessages(
+    /** 请求组装结果：消息列表 + 模式采样参数 + 用户层是否被截断。 */
+    data class RequestBundle(
+        val messages: List<ChatMessage>,
+        val temperature: Float?,
+        val topP: Float?,
+        val truncated: Boolean,
+    )
+
+    /**
+     * 双层系统提示词组装：按当前会话绑定的模式 + 用户提示词拼接（SystemPromptBuilder），
+     * temperature/top_p 从会话模式配置读取，最后按最大上下文压缩。
+     */
+    private suspend fun buildRequestBundle(
         currentSettings: AppSettings,
         history: List<ChatMessage>,
-    ): List<ChatMessage> {
-        // 会话独立提示词优先，否则用全局默认
+    ): RequestBundle {
         val conversationId = _currentConversationId.value
-        val customPrompt = conversations.value
-            .firstOrNull { it.id == conversationId }
-            ?.systemPrompt
-        val systemPrompt = customPrompt ?: currentSettings.systemPrompt
-        val withSystem = listOf(ChatMessage(MessageRole.SYSTEM, systemPrompt)) + history
-        return if (currentSettings.autoCompressEnabled) {
+        // 直接查库：会话列表 Flow 可能有刷新延迟（新建后立刻发送的场景）
+        val conversation = conversationRepository.getConversationById(conversationId)
+        val mode = ChatModes.find(conversation?.modeId ?: ModeConfig.CUSTOM)
+        // 自定义模式参数：会话冗余值优先，否则用模式默认
+        val temperature = conversation?.effectiveTemperature
+            ?: (if (mode.modeId == ModeConfig.CUSTOM) mode.temperature else mode.temperature)
+        val topP = conversation?.effectiveTopP ?: mode.topP
+        // 截断上限 = 最大上下文的 30%（字符数近似）
+        val maxChars = (currentSettings.maxContextTokens * 30 / 100).coerceAtLeast(500)
+        val sp = SystemPromptBuilder.build(mode, conversation?.userPrompt, maxChars = maxChars)
+        val withSystem = listOf(ChatMessage(MessageRole.SYSTEM, sp.prompt)) + history
+        val compressed = if (currentSettings.autoCompressEnabled) {
             contextWindowRepository.compress(
                 withSystem,
                 ContextWindow(maxTokens = currentSettings.maxContextTokens),
@@ -421,17 +444,46 @@ class ChatViewModel @Inject constructor(
         } else {
             withSystem
         }
+        return RequestBundle(compressed, temperature, topP, sp.userLayerTruncated)
     }
 
     /** 发起流式请求的核心逻辑（普通发送与重新生成共用）。 */
     private fun launchStream(
+        conversationId: String,
+        history: List<ChatMessage>,
+        currentSettings: AppSettings,
+        userTextForTitle: String,
+        userImages: List<String> = emptyList(),
+        persistUserMessage: Boolean,
+        /** 多版本上下文：触发本次回复的用户消息 dbId（0 = 普通新消息，持久化后再取 id）。 */
+        versionKeyOf: suspend () -> Long = { 0L },
+    ) {
+        viewModelScope.launch {
+            val bundle = buildRequestBundle(currentSettings, history)
+            if (bundle.truncated) {
+                _error.value = null
+                _truncatedToast.tryEmit(Unit)
+            }
+            streamInternal(
+                conversationId, bundle.messages, currentSettings, userTextForTitle,
+                userImages, persistUserMessage, bundle.temperature, bundle.topP, versionKeyOf,
+            )
+        }
+    }
+
+    /** 截断轻提示事件。 */
+    private val _truncatedToast = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val truncatedToast: SharedFlow<Unit> = _truncatedToast.asSharedFlow()
+
+    private fun streamInternal(
         conversationId: String,
         compressed: List<ChatMessage>,
         currentSettings: AppSettings,
         userTextForTitle: String,
         userImages: List<String> = emptyList(),
         persistUserMessage: Boolean,
-        /** 多版本上下文：触发本次回复的用户消息 dbId（0 = 普通新消息，持久化后再取 id）。 */
+        temperature: Float?,
+        topP: Float?,
         versionKeyOf: suspend () -> Long = { 0L },
     ) {
         // 流式渲染节流：正文很长时每个 chunk 都重建列表 + 重新排版会明显闪烁，
@@ -485,6 +537,8 @@ class ChatViewModel @Inject constructor(
                     render(force = false)
                 },
                 searchEnabled = currentSettings.searchEnabled,
+                temperature = temperature,
+                topP = topP,
                 onSearchPages = { count ->
                     // SearchStarted 回调 0（保持累计值不变），SearchCompleted 回调本次网页数（累加）
                     searchPagesState.update { (it ?: 0) + count }
@@ -560,6 +614,78 @@ class ChatViewModel @Inject constructor(
         _error.value = null
         _currentConversationId.value = UUID.randomUUID().toString()
         _messages.value = emptyList()
+        // 有默认模式：直接按默认模式创建（"off" 时由 UI 弹窗选择后调 createConversationWithMode）
+        val defaultMode = settings.value.defaultModeId
+        if (defaultMode != "off") {
+            createConversationWithModeInternal(defaultMode, null)
+        }
+    }
+
+    /** 内部创建：不带模板记忆副作用（默认模式路径）。 */
+    private fun createConversationWithModeInternal(modeId: String, userPrompt: String?) {
+        val mode = ChatModes.find(modeId)
+        viewModelScope.launch {
+            conversationRepository.ensureConversationWithMode(
+                conversationId = _currentConversationId.value,
+                title = "",
+                modeId = modeId,
+                userPrompt = userPrompt,
+                temperature = null,
+                topP = null,
+            )
+        }
+    }
+
+    /** 当前会话是否已锁定模式（发送过消息）。 */
+    val currentConversationLocked: Boolean
+        get() = _messages.value.any { it.role == MessageRole.ASSISTANT && it.dbId > 0 }
+
+    /**
+     * 创建带模式配置的会话并设为当前。
+     * [userPrompt] 缓存到模式模板记忆（下次新建同模式自动回填）。
+     */
+    fun createConversationWithMode(modeId: String, userPrompt: String?, temperature: Float? = null, topP: Float? = null) {
+        val conversationId = _currentConversationId.value
+        val mode = ChatModes.find(modeId)
+        val userPromptTrimmed = userPrompt?.trim()?.takeIf { it.isNotBlank() }
+        viewModelScope.launch {
+            conversationRepository.ensureConversationWithMode(
+                conversationId = conversationId,
+                title = "",
+                modeId = modeId,
+                userPrompt = userPromptTrimmed,
+                temperature = temperature,
+                topP = topP,
+            )
+            // 刷新会话列表（确保当前会话的模式信息立即可用）
+            _messages.value = emptyList()
+        }
+        // 模板记忆
+        saveModeUserPrompt(modeId, userPromptTrimmed)
+        if (modeId == ModeConfig.CUSTOM && temperature != null && topP != null) {
+            saveModeCustomParams(modeId, temperature, topP)
+        }
+    }
+
+    /** 更新当前会话的模式配置（仅未发送消息时可调）。 */
+    fun updateConversationMode(modeId: String, userPrompt: String?, temperature: Float? = null, topP: Float? = null) {
+        if (currentConversationLocked) return
+        val conversationId = _currentConversationId.value
+        val mode = ChatModes.find(modeId)
+        val userPromptTrimmed = userPrompt?.trim()?.takeIf { it.isNotBlank() }
+        viewModelScope.launch {
+            conversationRepository.updateConversationMode(
+                conversationId = conversationId,
+                modeId = modeId,
+                userPrompt = userPromptTrimmed,
+                temperature = temperature,
+                topP = topP,
+            )
+        }
+        saveModeUserPrompt(modeId, userPromptTrimmed)
+        if (modeId == ModeConfig.CUSTOM && temperature != null && topP != null) {
+            saveModeCustomParams(modeId, temperature, topP)
+        }
     }
 
     fun selectConversation(conversationId: String) {
@@ -800,6 +926,23 @@ class ChatViewModel @Inject constructor(
 
     fun setSearchEnabled(enabled: Boolean) {
         viewModelScope.launch { settingsRepository.setSearchEnabled(enabled) }
+    }
+
+    fun setDefaultModeId(modeId: String) {
+        viewModelScope.launch { settingsRepository.setDefaultModeId(modeId) }
+    }
+
+    /** 模式模板记忆：保存/清除某模式的用户提示词缓存。 */
+    fun saveModeUserPrompt(modeId: String, prompt: String?) {
+        viewModelScope.launch { settingsRepository.setModeUserPrompt(modeId, prompt) }
+    }
+
+    fun observeModeUserPrompt(modeId: String) = settingsRepository.observeModeUserPrompt(modeId)
+
+    fun observeModeCustomParams(modeId: String) = settingsRepository.observeModeCustomParams(modeId)
+
+    fun saveModeCustomParams(modeId: String, temperature: Float, topP: Float) {
+        viewModelScope.launch { settingsRepository.setModeCustomParams(modeId, temperature, topP) }
     }
 
     /** 设置页「验证配置」：用表单里的配置发测试请求，不入库不计统计（与引导页一致）。 */

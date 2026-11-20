@@ -53,6 +53,9 @@ private data class ChatRequestDto(
     @SerialName("reasoning_effort") val reasoningEffort: String? = null,
     // DeepSeek 联网搜索：服务端工具声明（仅 deepseek_web_search）
     val tools: List<ToolDto>? = null,
+    // 模式绑定的采样参数（模式体系注入；null = 不发，用服务端默认）
+    val temperature: Double? = null,
+    @SerialName("top_p") val topP: Double? = null,
 )
 
 @Serializable
@@ -131,6 +134,8 @@ class OpenAiSseClient(
         thinkingEnabled: Boolean = false,
         maxTokens: Int? = null,
         searchEnabled: Boolean = false,
+        temperature: Float? = null,
+        topP: Float? = null,
     ): Flow<SseEvent> = callbackFlow {
         // 各厂商"深度思考"参数不同：DeepSeek 用 thinking.type，OpenAI 系用 reasoning_effort。
         // 注意：DeepSeek 默认就会思考（不传也会返回 reasoning_content），
@@ -151,6 +156,9 @@ class OpenAiSseClient(
             reasoningEffort = if (thinkingEnabled && !isDeepSeek) "high" else null,
             // 联网搜索仅 DeepSeek 支持（deepseek_web_search 为服务端工具，搜索在服务端完成）
             tools = if (searchEnabled && isDeepSeek) listOf(ToolDto("deepseek_web_search")) else null,
+            // 模式绑定的采样参数（Float -> Double 序列化）
+            temperature = temperature?.toDouble(),
+            topP = topP?.toDouble(),
         )
         val body = json.encodeToString(payload).toRequestBody(JSON_MEDIA_TYPE)
         // baseUrl 约定已包含版本段（如 https://api.openai.com/v1），这里只拼 /chat/completions，
@@ -171,7 +179,7 @@ class OpenAiSseClient(
 
             override fun onResponse(call: Call, response: Response) {
                 response.use { resp ->
-                    println("[SSE] ${resp.code} $endpoint model=$model thinking=$thinkingEnabled maxTokens=$maxTokens")
+                    println("[SSE] ${resp.code} $endpoint model=$model thinking=$thinkingEnabled maxTokens=$maxTokens temp=$temperature topP=$topP")
                     if (!resp.isSuccessful) {
                         val errBody = runCatching { resp.body?.string() }.getOrNull()
                         println("[SSE] error body=${errBody?.take(500)}")

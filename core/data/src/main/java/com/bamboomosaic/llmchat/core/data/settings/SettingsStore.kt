@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -41,6 +42,7 @@ class SettingsStore @Inject constructor(
     private val autoCompressKey = booleanPreferencesKey("auto_compress_enabled")
     private val currentConfigIdKey = longPreferencesKey("current_config_id")
     private val firstLaunchKey = booleanPreferencesKey("is_first_launch")
+    private val defaultModeIdKey = stringPreferencesKey("default_mode_id")
 
     override fun observeSettings(): Flow<AppSettings> = context.settingsDataStore.data.map { prefs ->
         val language = AppLanguage.fromTag(prefs[languageKey])
@@ -59,6 +61,7 @@ class SettingsStore @Inject constructor(
             maxContextTokens = prefs[maxContextKey] ?: AppSettings.DEFAULT_MAX_CONTEXT_TOKENS,
             maxOutputTokens = prefs[maxOutputKey] ?: AppSettings.DEFAULT_MAX_OUTPUT_TOKENS,
             autoCompressEnabled = prefs[autoCompressKey] ?: true,
+            defaultModeId = prefs[defaultModeIdKey] ?: "off",
         )
     }
 
@@ -100,6 +103,36 @@ class SettingsStore @Inject constructor(
 
     override suspend fun setSearchEnabled(enabled: Boolean) {
         context.settingsDataStore.edit { it[searchKey] = enabled }
+    }
+
+    override suspend fun setDefaultModeId(modeId: String) {
+        context.settingsDataStore.edit { it[defaultModeIdKey] = modeId }
+    }
+
+    override fun observeModeUserPrompt(modeId: String): Flow<String?> =
+        context.settingsDataStore.data.map { prefs ->
+            prefs[stringPreferencesKey("mode_user_prompt_$modeId")]
+        }
+
+    override suspend fun setModeUserPrompt(modeId: String, prompt: String?) {
+        context.settingsDataStore.edit { prefs ->
+            val key = stringPreferencesKey("mode_user_prompt_$modeId")
+            if (prompt.isNullOrBlank()) prefs.remove(key) else prefs[key] = prompt
+        }
+    }
+
+    override fun observeModeCustomParams(modeId: String): Flow<Pair<Float, Float>?> =
+        context.settingsDataStore.data.map { prefs ->
+            val t = prefs[floatPreferencesKey("mode_temp_$modeId")]
+            val p = prefs[floatPreferencesKey("mode_topp_$modeId")]
+            if (t != null && p != null) t to p else null
+        }
+
+    override suspend fun setModeCustomParams(modeId: String, temperature: Float, topP: Float) {
+        context.settingsDataStore.edit { prefs ->
+            prefs[floatPreferencesKey("mode_temp_$modeId")] = temperature
+            prefs[floatPreferencesKey("mode_topp_$modeId")] = topP
+        }
     }
 
     override suspend fun setMaxContextTokens(value: Int) {

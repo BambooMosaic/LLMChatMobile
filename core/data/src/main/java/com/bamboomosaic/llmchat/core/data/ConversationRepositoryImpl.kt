@@ -76,6 +76,9 @@ class ConversationRepositoryImpl @Inject constructor(
     override suspend fun getMessageById(messageId: Long): ChatMessage? =
         dao.getMessageById(messageId)?.toDomain()
 
+    override suspend fun getConversationById(conversationId: String): Conversation? =
+        dao.getConversation(conversationId)?.toDomain()
+
     override suspend fun countVersions(conversationId: String, versionKey: Long): Int =
         dao.countVersions(conversationId, versionKey)
 
@@ -110,6 +113,50 @@ class ConversationRepositoryImpl @Inject constructor(
     override fun observeMessages(conversationId: String): Flow<List<ChatMessage>> =
         dao.observeMessages(conversationId).map { list -> list.map { it.toDomain() } }
 
+    override suspend fun ensureConversationWithMode(
+        conversationId: String,
+        title: String,
+        modeId: String,
+        userPrompt: String?,
+        temperature: Float?,
+        topP: Float?,
+    ) {
+        val now = System.currentTimeMillis()
+        val existing = dao.getConversation(conversationId)
+        if (existing != null) return
+        dao.insertConversation(
+            ConversationEntity(
+                id = conversationId,
+                title = title,
+                createdAt = now,
+                updatedAt = now,
+                modeId = modeId,
+                userPrompt = userPrompt?.takeIf { it.isNotBlank() },
+                effectiveTemperature = temperature,
+                effectiveTopP = topP,
+            ),
+        )
+    }
+
+    override suspend fun updateConversationMode(
+        conversationId: String,
+        modeId: String,
+        userPrompt: String?,
+        temperature: Float?,
+        topP: Float?,
+    ) {
+        val entity = dao.getConversation(conversationId) ?: return
+        dao.updateConversation(
+            entity.copy(
+                modeId = modeId,
+                userPrompt = userPrompt?.takeIf { it.isNotBlank() },
+                effectiveTemperature = temperature,
+                effectiveTopP = topP,
+                updatedAt = System.currentTimeMillis(),
+            ),
+        )
+    }
+
     private fun ConversationEntity.toDomain() = Conversation(
         id = id,
         title = title,
@@ -117,6 +164,10 @@ class ConversationRepositoryImpl @Inject constructor(
         updatedAt = updatedAt,
         archived = archived == 1,
         systemPrompt = systemPrompt,
+        modeId = modeId,
+        userPrompt = userPrompt,
+        effectiveTemperature = effectiveTemperature,
+        effectiveTopP = effectiveTopP,
     )
 
     private fun MessageEntity.toDomain() = ChatMessage(
