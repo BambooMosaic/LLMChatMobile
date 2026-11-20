@@ -27,6 +27,17 @@ class TokenUsageRepositoryImpl @Inject constructor(
     override fun observeGlobalTotals(): Flow<TokenTotals> =
         dao.observeGlobalTotals().map { it.toDomain() }
 
+    override suspend fun getUsageById(id: Long): TokenUsageRecord? =
+        dao.getRecordById(id)?.let {
+            TokenUsageRecord(
+                sessionId = it.sessionId,
+                model = it.model,
+                promptTokens = it.promptTokens,
+                completionTokens = it.completionTokens,
+                timestamp = it.timestamp,
+            )
+        }
+
     override suspend fun getLastUsage(sessionId: String): TokenUsageRecord? =
         dao.getLastRecord(sessionId)?.let {
             TokenUsageRecord(

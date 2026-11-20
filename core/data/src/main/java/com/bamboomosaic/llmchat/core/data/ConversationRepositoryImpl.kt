@@ -34,8 +34,25 @@ class ConversationRepositoryImpl @Inject constructor(
     }
 
     override suspend fun appendMessage(conversationId: String, message: ChatMessage) {
+        appendVersionedReply(conversationId, message, versionKey = message.versionKey ?: 0L)
+    }
+
+    override suspend fun appendVersionedReply(
+        conversationId: String,
+        message: ChatMessage,
+        versionKey: Long,
+    ): ChatMessage {
         val now = System.currentTimeMillis()
-        dao.insertMessage(
+        // 版本号 = 同组内最大 version + 1（新组从 1 开始）
+        val nextVersion = if (versionKey > 0L) {
+            (dao.getSiblingVersionsByGroup(conversationId, versionKey).maxOfOrNull { it.version } ?: 0) + 1
+        } else {
+            1
+        }
+        // 助手回复未显式指定 usageId 时自动关联该会话最近一条用量记录
+        val effectiveUsageId = message.usageId
+            ?: if (message.role == MessageRole.ASSISTANT) dao.getLastUsageId(conversationId) else null
+        val entityId = dao.insertMessage(
             MessageEntity(
                 conversationId = conversationId,
                 role = message.role.name,
@@ -44,10 +61,23 @@ class ConversationRepositoryImpl @Inject constructor(
                 reasoning = message.reasoning?.takeIf { it.isNotBlank() },
                 images = message.images.takeIf { it.isNotEmpty() }?.joinToString(IMAGE_SEPARATOR),
                 searchPages = message.searchPages,
+                version = if (message.role == MessageRole.USER) 1 else nextVersion,
+                versionKey = if (message.role == MessageRole.USER) null else versionKey.takeIf { it > 0 },
+                usageId = effectiveUsageId,
             ),
         )
         dao.touch(conversationId, now)
+        return message.copy(id = entityId, version = if (message.role == MessageRole.USER) 1 else nextVersion)
     }
+
+    override suspend fun getSiblingVersions(messageId: Long): List<ChatMessage> =
+        dao.getSiblingVersions(messageId).map { it.toDomain() }
+
+    override suspend fun getMessageById(messageId: Long): ChatMessage? =
+        dao.getMessageById(messageId)?.toDomain()
+
+    override suspend fun countVersions(conversationId: String, versionKey: Long): Int =
+        dao.countVersions(conversationId, versionKey)
 
     override suspend fun getMessages(conversationId: String): List<ChatMessage> =
         dao.getMessages(conversationId).map { it.toDomain() }
@@ -95,6 +125,10 @@ class ConversationRepositoryImpl @Inject constructor(
         reasoning = reasoning,
         images = images?.split(IMAGE_SEPARATOR)?.filter { it.isNotBlank() } ?: emptyList(),
         searchPages = searchPages,
+        id = id,
+        version = version,
+        versionKey = versionKey,
+        usageId = usageId,
     )
 
     companion object {

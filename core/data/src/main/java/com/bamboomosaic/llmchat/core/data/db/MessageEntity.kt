@@ -20,4 +20,13 @@ data class MessageEntity(
     val images: String? = null,
     /** 联网搜索到的网页总数（仅助手消息）；null = 未开启搜索。 */
     val searchPages: Int? = null,
+    /**
+     * 消息版本号：同一用户提问下的第 N 版 AI 回复（用户消息恒为 1）。
+     * 重新生成 / 编辑重发产生新版本（version+1），旧版本保留不覆盖。
+     */
+    val version: Int = 1,
+    /** 版本组键 = 触发该回复的用户消息 id；同一组下的助手消息互为多版本。 */
+    val versionKey: Long? = null,
+    /** 该版本对应的 token 用量记录 id（token_usage_records.id），用于按版本展示消耗。 */
+    val usageId: Long? = null,
 )

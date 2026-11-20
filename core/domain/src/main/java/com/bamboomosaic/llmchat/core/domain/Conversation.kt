@@ -48,4 +48,23 @@ interface ConversationRepository {
     suspend fun setSystemPrompt(conversationId: String, prompt: String?)
 
     fun observeMessages(conversationId: String): Flow<List<ChatMessage>>
+
+    /**
+     * 追加多版本助手回复：version = 同组内最大 version + 1。
+     * [versionKey] 为触发该回复的用户消息 id。
+     */
+    suspend fun appendVersionedReply(
+        conversationId: String,
+        message: ChatMessage,
+        versionKey: Long,
+    ): ChatMessage
+
+    /** 取某条助手消息的全部兄弟版本（含自身），按版本升序。 */
+    suspend fun getSiblingVersions(messageId: Long): List<ChatMessage>
+
+    /** 按消息 id 取单条消息。 */
+    suspend fun getMessageById(messageId: Long): ChatMessage?
+
+    /** 同版本组的版本总数（显示 1/N 用）。 */
+    suspend fun countVersions(conversationId: String, versionKey: Long): Int
 }

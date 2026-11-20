@@ -53,6 +53,9 @@ interface TokenUsageRepository {
     /** 该会话最近一次请求的用量，用于展示"本轮消耗"。 */
     suspend fun getLastUsage(sessionId: String): TokenUsageRecord?
 
+    /** 按记录 id 取用量（多版本切换时按版本显示消耗）。 */
+    suspend fun getUsageById(id: Long): TokenUsageRecord?
+
     /** 按 model 聚合的统计，供扩展 UI 使用。 */
     fun observeModelStats(): Flow<List<ModelTokenStats>>
 

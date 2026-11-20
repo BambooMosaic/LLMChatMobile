@@ -27,6 +27,14 @@ data class DailyTokenRow(
 
 @Dao
 interface TokenUsageDao {
+    /** 按主键取用量记录（多版本切换显示对应消耗）。 */
+    @Query("SELECT * FROM token_usage_records WHERE id = :id LIMIT 1")
+    suspend fun getRecordById(id: Long): TokenUsageRecordEntity?
+
+    /** 某会话最近一条用量记录 id（消息 usageId 关联用）。 */
+    @Query("SELECT id FROM token_usage_records WHERE sessionId = :sessionId ORDER BY id DESC LIMIT 1")
+    suspend fun getLastUsageId(sessionId: String): Long?
+
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(record: TokenUsageRecordEntity)

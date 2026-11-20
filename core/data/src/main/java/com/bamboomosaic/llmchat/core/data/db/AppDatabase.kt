@@ -13,7 +13,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ApiConfigEntity::class,
     ],
     views = [ModelStatsView::class],
-    version = 7,
+    version = 8,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -81,6 +81,18 @@ abstract class AppDatabase : RoomDatabase() {
         val MIGRATION_6_7 = object : Migration(6, 7) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE messages ADD COLUMN searchPages INTEGER")
+            }
+        }
+
+        /**
+         * v7 -> v8：消息多版本（重新生成/编辑重发保留历史版本）。
+         * 历史单版本数据自动升级为 version=1；usageId 关联该版本的 token 用量。
+         */
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE messages ADD COLUMN version INTEGER NOT NULL DEFAULT 1")
+                db.execSQL("ALTER TABLE messages ADD COLUMN versionKey INTEGER")
+                db.execSQL("ALTER TABLE messages ADD COLUMN usageId INTEGER")
             }
         }
     }

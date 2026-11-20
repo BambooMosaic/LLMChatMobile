@@ -7,11 +7,14 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -56,7 +59,10 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -95,6 +101,14 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
     val pendingImages by viewModel.pendingImages.collectAsState()
 
     var input by remember { mutableStateOf("") }
+    // 长按编辑：VM 发出待编辑草稿 → 回填输入框
+    val editDraft by viewModel.editDraft.collectAsState()
+    LaunchedEffect(editDraft) {
+        editDraft?.let {
+            input = it
+            viewModel.consumeEditDraft()
+        }
+    }
     var showSettings by remember { mutableStateOf(false) }
     var showTokenStats by remember { mutableStateOf(false) }
     var promptEditTarget by remember { mutableStateOf<String?>(null) }
@@ -216,6 +230,13 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
                             index == messages.lastIndex &&
                             messages.lastOrNull()?.role == MessageRole.ASSISTANT,
                         onRegenerate = viewModel::regenerateLast,
+                        onCopy = { viewModel.copyMessage(index) },
+                        onEdit = if (msg.role == MessageRole.USER && !msg.isStreaming) {
+                            { viewModel.startEditMessage(index) }
+                        } else {
+                            null
+                        },
+                        onSwitchVersion = { delta -> viewModel.switchVersion(index, delta) },
                     )
                 }
                 // 底部锚点：scrollToItem 只能把某项"顶部"对齐视口，而单条消息可能很长
@@ -469,15 +490,24 @@ private fun FirstLaunchDialog(onConfirm: () -> Unit) {
     )
 }
 
-/** 输入栏上方的模型快速切换：显示当前模型，点击弹出配置列表。 */
+/** 消息气泡：支持长按菜单（复制全文/编辑）、多版本切换标识。 */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun MessageBubble(
     message: UiMessage,
     onToggleReasoning: () -> Unit,
     showRegenerate: Boolean = false,
     onRegenerate: () -> Unit = {},
+    onCopy: () -> Unit = {},
+    onEdit: (() -> Unit)? = null,
+    onSwitchVersion: (Int) -> Unit = {},
 ) {
     val s = LocalAppStrings.current
+    val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var showMenu by remember { mutableStateOf(false) }
+    var menuDismissed by remember { mutableStateOf(false) }
     val isUser = message.role == MessageRole.USER
     val containerColor = if (isUser) {
         MaterialTheme.colorScheme.primaryContainer
@@ -488,6 +518,31 @@ private fun MessageBubble(
         MaterialTheme.colorScheme.onPrimaryContainer
     } else {
         MaterialTheme.colorScheme.onSurfaceVariant
+    }
+
+    if (showMenu) {
+        DropdownMenu(
+            expanded = true,
+            onDismissRequest = { showMenu = false },
+        ) {
+            DropdownMenuItem(
+                text = { Text(s.copy) },
+                onClick = {
+                    clipboard.setText(AnnotatedString(message.text))
+                    android.widget.Toast.makeText(context, s.copied, android.widget.Toast.LENGTH_SHORT).show()
+                    showMenu = false
+                },
+            )
+            if (onEdit != null) {
+                DropdownMenuItem(
+                    text = { Text(s.edit) },
+                    onClick = {
+                        showMenu = false
+                        onEdit()
+                    },
+                )
+            }
+        }
     }
 
     Row(
@@ -504,6 +559,13 @@ private fun MessageBubble(
                 shape = RoundedCornerShape(BubbleRadius),
                 color = containerColor,
                 contentColor = contentColor,
+                modifier = Modifier.combinedClickable(
+                    onClick = onToggleReasoning,
+                    onLongClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        showMenu = true
+                    },
+                ),
             ) {
                 Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
                     // 联网搜索状态（思考区域上方）：搜索中 → 已搜索 N 个网页
@@ -561,6 +623,29 @@ private fun MessageBubble(
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                         )
                     }
+                }
+            }
+            // 多版本切换标识（右上角：‹ 2/3 ›），仅多版本助手消息显示
+            if (message.latestVersion > 1 && !message.isStreaming) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(top = 2.dp),
+                ) {
+                    TextButton(
+                        onClick = { onSwitchVersion(-1) },
+                        contentPadding = PaddingValues(horizontal = 4.dp),
+                        modifier = Modifier.height(24.dp),
+                    ) { Text("‹") }
+                    Text(
+                        text = "${message.version}/${message.latestVersion}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    TextButton(
+                        onClick = { onSwitchVersion(1) },
+                        contentPadding = PaddingValues(horizontal = 4.dp),
+                        modifier = Modifier.height(24.dp),
+                    ) { Text("›") }
                 }
             }
             val p = message.promptTokens

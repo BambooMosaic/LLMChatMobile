@@ -52,6 +52,12 @@ data class UiMessage(
     val images: List<String> = emptyList(),
     /** 联网搜索到的网页累计数。null = 本轮未开启搜索；0 = 已发起尚未有结果。 */
     val searchPages: Int? = null,
+    /** 消息数据库 id（0 = 尚未持久化，如正在流式生成的消息）。 */
+    val dbId: Long = 0,
+    /** 版本号：同一用户提问下的第 N 版 AI 回复。 */
+    val version: Int = 1,
+    /** 该组最新版本号（>1 时 UI 显示版本切换标识）。 */
+    val latestVersion: Int = 1,
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -242,10 +248,18 @@ class ChatViewModel @Inject constructor(
             userTextForTitle = text,
             userImages = images,
             persistUserMessage = true,
+            // 普通发送：用户消息在本流中持久化，versionKey 取该消息 dbId
+            versionKeyOf = {
+                conversationRepository.getMessages(conversationId)
+                    .lastOrNull { it.role == MessageRole.USER }?.id ?: 0L
+            },
         )
     }
 
-    /** 重新生成最后一条助手回复：复用上一条用户消息重新请求。 */
+    /**
+     * 重新生成最后一条助手回复：多版本保留，不覆盖旧版本。
+     * versionKey = 被重新生成的助手消息所属版本组（定位不到时回退触发它的用户消息 id）。
+     */
     fun regenerateLast() {
         if (_isGenerating.value) return
         _error.value = null
@@ -253,9 +267,10 @@ class ChatViewModel @Inject constructor(
         val currentSettings = settings.value
 
         val msgs = _messages.value
-        // 找到最后一条用户消息（去掉最后的助手消息）
+        // 找到最后一条助手消息及其版本组
+        val lastAssistant = msgs.lastOrNull()?.takeIf { it.role == MessageRole.ASSISTANT } ?: return
         val lastUser = msgs.filter { it.role == MessageRole.USER }.lastOrNull() ?: return
-        // 去掉最后一条助手消息（将被覆盖）
+        // 去掉尾部的助手消息（新版本将追加在原位）
         val withoutLastAssistant = if (msgs.lastOrNull()?.role == MessageRole.ASSISTANT) {
             msgs.dropLast(1)
         } else {
@@ -267,7 +282,7 @@ class ChatViewModel @Inject constructor(
         }
         _isGenerating.value = true
 
-        // 历史消息（不含被覆盖的助手消息），用于拼请求
+        // 历史消息（不含最后的助手消息），用于拼请求
         val history = withoutLastAssistant
             .filter { !it.isStreaming }
             .map { ChatMessage(it.role, it.text, images = it.images) }
@@ -278,6 +293,111 @@ class ChatViewModel @Inject constructor(
             currentSettings = currentSettings,
             userTextForTitle = lastUser.text,
             persistUserMessage = false,
+            // 重新生成：versionKey 复用原助手消息的版本组
+            versionKeyOf = {
+                val dbId = lastAssistant.dbId
+                if (dbId > 0) {
+                    val original = conversationRepository.getMessageById(dbId)
+                    val key = original?.versionKey
+                    if (key != null && key > 0) {
+                        key
+                    } else {
+                        // 老数据（迁移前）：没有 versionKey，回退用触发它的用户消息 id
+                        conversationRepository.getMessages(conversationId)
+                            .lastOrNull { it.role == MessageRole.USER }?.id ?: 0L
+                    }
+                } else {
+                    conversationRepository.getMessages(conversationId)
+                        .lastOrNull { it.role == MessageRole.USER }?.id ?: 0L
+                }
+            },
+        )
+    }
+
+    /** 长按复制消息全文（纯文本）。 */
+    fun copyMessage(index: Int) {
+        // 复制动作由 UI 层直接读 _messages[index].text 写剪贴板，这里无需处理
+    }
+
+    /** 编辑用户消息：回填输入框由 UI 监听 editDraft 事件完成。 */
+    private val _editDraft = MutableStateFlow<String?>(null)
+    val editDraft: StateFlow<String?> = _editDraft.asStateFlow()
+
+    fun startEditMessage(index: Int) {
+        val msg = _messages.value.getOrNull(index) ?: return
+        if (msg.role != MessageRole.USER) return
+        _editDraft.value = msg.text
+    }
+
+    fun consumeEditDraft() {
+        _editDraft.value = null
+    }
+
+    /**
+     * 切换某条助手消息的显示版本（1/N）：[delta] +1 下一版 / -1 上一版，循环滚动。
+     */
+    fun switchVersion(index: Int, delta: Int) {
+        val current = _messages.value.getOrNull(index) ?: return
+        if (current.latestVersion <= 1 || current.dbId <= 0) return
+        viewModelScope.launch {
+            val siblings = conversationRepository.getSiblingVersions(current.dbId)
+            if (siblings.size <= 1) return@launch
+            val versions = siblings.map { it.version }
+            val curIdx = versions.indexOf(current.version).takeIf { it >= 0 } ?: 0
+            val nextIdx = ((curIdx + delta) % versions.size + versions.size) % versions.size
+            val target = siblings[nextIdx]
+            // 切换版本的 token 消耗同步更新
+            val usage = target.usageId?.let { tokenUsageRepository.getUsageById(it) }
+            _messages.update { list ->
+                list.toMutableList().also { mutable ->
+                    mutable[index] = UiMessage(
+                        role = target.role,
+                        text = target.content,
+                        reasoning = target.reasoning.orEmpty(),
+                        searchPages = target.searchPages,
+                        dbId = target.id,
+                        version = target.version,
+                        latestVersion = versions.maxOrNull() ?: target.version,
+                        promptTokens = usage?.promptTokens,
+                        completionTokens = usage?.completionTokens,
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * 编辑用户消息并重发：内容回填已由 UI 处理；这里用原文触发新一轮生成。
+     * 产出的助手回复挂到新的版本组（原组保留），旧消息不入库删除。
+     */
+    fun editAndResend(messageIndex: Int, newText: String) {
+        if (_isGenerating.value) return
+        if (newText.isBlank()) return
+        val conversationId = _currentConversationId.value
+        val currentSettings = settings.value
+
+        // 截断该用户消息及之后的所有 UI 消息（历史请求历史也截断到此消息之前）
+        val history = _messages.value.take(messageIndex).filter { !it.isStreaming }
+        _messages.value = history
+
+        _messages.update {
+            it + UiMessage(MessageRole.USER, newText) +
+                UiMessage(MessageRole.ASSISTANT, "", isStreaming = true)
+        }
+        _isGenerating.value = true
+
+        val outgoing = history.map { ChatMessage(it.role, it.text, images = it.images) } +
+            ChatMessage(MessageRole.USER, newText)
+        launchStream(
+            conversationId = conversationId,
+            compressed = buildRequestMessages(currentSettings, outgoing),
+            currentSettings = currentSettings,
+            userTextForTitle = newText,
+            persistUserMessage = true,
+            versionKeyOf = {
+                conversationRepository.getMessages(conversationId)
+                    .lastOrNull { it.role == MessageRole.USER }?.id ?: 0L
+            },
         )
     }
 
@@ -311,6 +431,8 @@ class ChatViewModel @Inject constructor(
         userTextForTitle: String,
         userImages: List<String> = emptyList(),
         persistUserMessage: Boolean,
+        /** 多版本上下文：触发本次回复的用户消息 dbId（0 = 普通新消息，持久化后再取 id）。 */
+        versionKeyOf: suspend () -> Long = { 0L },
     ) {
         // 流式渲染节流：正文很长时每个 chunk 都重建列表 + 重新排版会明显闪烁，
         // 这里限制到约 16fps，结束时再强制渲染一次完整内容。
@@ -379,8 +501,12 @@ class ChatViewModel @Inject constructor(
             render(force = true)
 
             val reasoningText = reasoningState.value
+            var savedReplyId = 0L
+            var savedVersion = 1
             if (accumulated.isNotEmpty()) {
-                conversationRepository.appendMessage(
+                val vk = versionKeyOf()
+                // usageId 在 data 层写入消息时自动关联最近一条用量记录
+                val saved = conversationRepository.appendVersionedReply(
                     conversationId,
                     ChatMessage(
                         role = MessageRole.ASSISTANT,
@@ -388,7 +514,10 @@ class ChatViewModel @Inject constructor(
                         reasoning = reasoningText.takeIf { it.isNotBlank() },
                         searchPages = searchPagesState.value,
                     ),
+                    versionKey = vk,
                 )
+                savedReplyId = saved.id
+                savedVersion = saved.version
             } else if (_error.value == null) {
                 // 请求成功（可能消耗了 token）但没有任何正文：给出明确原因，而不是留一个空白气泡
                 _error.value = emptyResponseHint(currentSettings)
@@ -406,6 +535,9 @@ class ChatViewModel @Inject constructor(
                     reasoning = reasoningText,
                     reasoningCollapsed = last?.reasoningCollapsed ?: false,
                     searchPages = searchPagesState.value,
+                    dbId = savedReplyId,
+                    version = savedVersion,
+                    latestVersion = maxOf(savedVersion, last?.latestVersion ?: 1),
                 )
             }
             _isGenerating.value = false
@@ -436,11 +568,57 @@ class ChatViewModel @Inject constructor(
         _error.value = null
         _currentConversationId.value = conversationId
         viewModelScope.launch {
-            val loaded = conversationRepository.getMessages(conversationId)
-                .map { UiMessage(it.role, it.content, reasoning = it.reasoning.orEmpty(), images = it.images) }
-            _messages.value = loaded
+            _messages.value = loadLatestMessages(conversationId)
         }
     }
+
+    /**
+     * 加载会话消息并只保留每组的最新版本：
+     * 普通消息（versionKey=null）直接保留；助手多版本组只留 version 最大的一条。
+     */
+    private suspend fun loadLatestMessages(conversationId: String): List<UiMessage> {
+        val all = conversationRepository.getMessages(conversationId)
+        val latestById = mutableMapOf<Long, ChatMessage>() // versionKey -> 最新版
+        val result = mutableListOf<UiMessage>()
+        for (m in all) {
+            val key = m.versionKey
+            if (key == null) {
+                result += m.toUi()
+            } else {
+                val cur = latestById[key]
+                if (cur == null || m.version > cur.version) latestById[key] = m
+            }
+        }
+        // 按原始顺序回填多版本组的最新版
+        val out = mutableListOf<UiMessage>()
+        var lastKey: Long? = null
+        for (m in all) {
+            if (m.versionKey == null) {
+                out += m.toUi()
+                lastKey = null
+            } else if (m.versionKey != lastKey) {
+                lastKey = m.versionKey
+                val latest = latestById[m.versionKey]
+                if (latest != null) {
+                    val siblings = conversationRepository.getSiblingVersions(latest.id)
+                    val maxV = siblings.maxOfOrNull { it.version } ?: latest.version
+                    out += latest.toUi(latestVersion = maxV)
+                }
+            }
+        }
+        return out
+    }
+
+    private fun ChatMessage.toUi(latestVersion: Int = version): UiMessage = UiMessage(
+        role = role,
+        text = content,
+        reasoning = reasoning.orEmpty(),
+        images = images,
+        searchPages = searchPages,
+        dbId = id,
+        version = version,
+        latestVersion = latestVersion,
+    )
 
     fun renameConversation(conversationId: String, title: String) {
         if (title.isBlank()) return
@@ -466,7 +644,12 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) {
             val conversation = conversations.value.firstOrNull { it.id == conversationId }
             val title = conversation?.title?.ifBlank { "conversation" } ?: "conversation"
-            val messages = conversationRepository.getMessages(conversationId)
+            // 导出只包含每组最新版本的回复（不导出历史版本）
+            val all = conversationRepository.getMessages(conversationId)
+            val latestByKey = all.filter { it.versionKey != null }
+                .groupBy { it.versionKey }
+                .mapValues { (_, group) -> group.maxByOrNull { it.version }!! }
+            val messages = all.filter { it.versionKey == null || latestByKey[it.versionKey]?.id == it.id }
             val content = buildExportContent(title, messages, markdown)
             val ext = if (markdown) "md" else "txt"
             val fileName = "${sanitizeFileName(title)}_${System.currentTimeMillis()}.$ext"

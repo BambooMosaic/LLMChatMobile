@@ -48,5 +48,46 @@ interface ConversationDao {
     suspend fun getMessages(conversationId: String): List<MessageEntity>
 
     @Insert
-    suspend fun insertMessage(entity: MessageEntity)
+    suspend fun insertMessage(entity: MessageEntity): Long
+
+    /** 指定助手消息的同组版本（同会话、同 versionKey、role=ASSISTANT），按版本升序。 */
+    @Query(
+        """
+        SELECT m2.* FROM messages m2
+        WHERE m2.conversationId = (SELECT conversationId FROM messages WHERE id = :messageId)
+          AND m2.role = 'ASSISTANT'
+          AND m2.versionKey = (SELECT versionKey FROM messages WHERE id = :messageId)
+        ORDER BY m2.version ASC, m2.id ASC
+        """,
+    )
+    suspend fun getSiblingVersions(messageId: Long): List<MessageEntity>
+
+    /** 按版本组键取同组全部助手消息（算下一版本号用）。 */
+    @Query(
+        """
+        SELECT * FROM messages
+        WHERE conversationId = :conversationId AND versionKey = :versionKey AND role = 'ASSISTANT'
+        """,
+    )
+    suspend fun getSiblingVersionsByGroup(conversationId: String, versionKey: Long): List<MessageEntity>
+
+    /** 同组版本数（显示 1/N 用）。 */
+    @Query(
+        """
+        SELECT COUNT(*) FROM messages
+        WHERE conversationId = :conversationId AND versionKey = :versionKey AND role = 'ASSISTANT'
+        """,
+    )
+    suspend fun countVersions(conversationId: String, versionKey: Long): Int
+
+    /** 某会话最近一条 token 用量记录 id（助手消息 usageId 自动关联用）。 */
+    @Query(
+        "SELECT id FROM token_usage_records WHERE sessionId = :conversationId " +
+            "ORDER BY id DESC LIMIT 1",
+    )
+    suspend fun getLastUsageId(conversationId: String): Long?
+
+    /** 按 versionKey 取单条消息（多版本切换时定位）。 */
+    @Query("SELECT * FROM messages WHERE id = :messageId LIMIT 1")
+    suspend fun getMessageById(messageId: Long): MessageEntity?
 }
