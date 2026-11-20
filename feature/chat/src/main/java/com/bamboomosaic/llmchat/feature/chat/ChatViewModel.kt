@@ -72,6 +72,7 @@ class ChatViewModel @Inject constructor(
     private val chatRepository: ChatRepository,
     private val contextWindowRepository: ContextWindowRepository,
     private val settingsRepository: SettingsRepository,
+    private val contextReminderProvider: com.bamboomosaic.llmchat.core.domain.ContextReminderProvider,
     private val conversationRepository: ConversationRepository,
     private val tokenUsageRepository: TokenUsageRepository,
     private val configRepository: ConfigRepository,
@@ -435,7 +436,14 @@ class ChatViewModel @Inject constructor(
         // 截断上限 = 最大上下文的 30%（字符数近似）
         val maxChars = (currentSettings.maxContextTokens * 30 / 100).coerceAtLeast(500)
         val sp = SystemPromptBuilder.build(mode, conversation?.userPrompt, maxChars = maxChars)
-        val withSystem = listOf(ChatMessage(MessageRole.SYSTEM, sp.prompt)) + history
+        // 环境上下文注入：仅 injectContext=true 的模式（ds_web），实时生成，追加 system 末尾
+        val systemText = if (mode.injectContext) {
+            sp.prompt + "\n\n[当前环境] " +
+                contextReminderProvider.buildReminder(currentSettings.language, currentSettings.regionOverride)
+        } else {
+            sp.prompt
+        }
+        val withSystem = listOf(ChatMessage(MessageRole.SYSTEM, systemText)) + history
         val compressed = if (currentSettings.autoCompressEnabled) {
             contextWindowRepository.compress(
                 withSystem,
@@ -648,6 +656,13 @@ class ChatViewModel @Inject constructor(
         val conversationId = _currentConversationId.value
         val mode = ChatModes.find(modeId)
         val userPromptTrimmed = userPrompt?.trim()?.takeIf { it.isNotBlank() }
+        // 模式绑定模型：当前配置不含绑定模型时，自动切换到含该模型的配置
+        mode.bindModel?.let { bind ->
+            val match = apiConfigs.value.firstOrNull { it.model == bind }
+            if (match != null && currentConfig.value?.model != bind) {
+                selectConfig(match.id)
+            }
+        }
         viewModelScope.launch {
             conversationRepository.ensureConversationWithMode(
                 conversationId = conversationId,
@@ -939,6 +954,10 @@ class ChatViewModel @Inject constructor(
 
     fun setDefaultModeId(modeId: String) {
         viewModelScope.launch { settingsRepository.setDefaultModeId(modeId) }
+    }
+
+    fun setRegionOverride(value: String) {
+        viewModelScope.launch { settingsRepository.setRegionOverride(value) }
     }
 
     /** 模式模板记忆：保存/清除某模式的用户提示词缓存。 */

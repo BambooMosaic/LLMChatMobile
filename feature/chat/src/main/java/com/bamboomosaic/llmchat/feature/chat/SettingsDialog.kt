@@ -72,6 +72,7 @@ fun SettingsDialog(
     onSetApiKey: (String) -> Unit,
     onSetModel: (String) -> Unit,
     onSetDefaultModeId: (String) -> Unit,
+    onSetRegionOverride: (String) -> Unit,
     onSetThemeMode: (ThemeMode) -> Unit,
     onSetLanguage: (AppLanguage) -> Unit,
     onSetAutoCompressEnabled: (Boolean) -> Unit,
@@ -163,6 +164,7 @@ fun SettingsDialog(
                         SettingsPage.OTHER -> OtherPage(
                             settings = settings,
                             onSetDefaultModeId = onSetDefaultModeId,
+                            onSetRegionOverride = onSetRegionOverride,
                             onSetAutoCompressEnabled = onSetAutoCompressEnabled,
                         )
 
@@ -655,10 +657,23 @@ private fun ConfigEditDialog(
 private fun OtherPage(
     settings: AppSettings,
     onSetDefaultModeId: (String) -> Unit,
+    onSetRegionOverride: (String) -> Unit,
     onSetAutoCompressEnabled: (Boolean) -> Unit,
 ) {
     val s = LocalAppStrings.current
 
+    // 地区（环境上下文注入用；留空跟随设备）
+    var region by remember(settings.regionOverride) { mutableStateOf(settings.regionOverride) }
+    OutlinedTextField(
+        value = region,
+        onValueChange = { region = it; onSetRegionOverride(it) },
+        label = { Text(s.regionLabel) },
+        placeholder = { Text(s.regionPlaceholder) },
+        singleLine = true,
+        modifier = Modifier.fillMaxWidth(),
+    )
+
+    Spacer(Modifier.height(12.dp))
     // 新对话默认模式：圆角直排单选列表（与新建弹窗样式一致）
     Spacer(Modifier.height(4.dp))
     Text(s.defaultModeLabel, style = MaterialTheme.typography.bodyLarge)

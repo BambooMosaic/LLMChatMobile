@@ -58,6 +58,11 @@ abstract class RepositoryModule {
     companion object {
         @Provides
         @Singleton
+        fun provideContextReminderProvider(): com.bamboomosaic.llmchat.core.domain.ContextReminderProvider =
+            com.bamboomosaic.llmchat.core.domain.ContextReminderProviderImpl()
+
+        @Provides
+        @Singleton
         fun provideOpenAiSseClient(): OpenAiSseClient = OpenAiSseClient()
 
         @Provides

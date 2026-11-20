@@ -121,6 +121,8 @@ data class AppStrings(
     val modeSelectTitle: String,
     val searchShort: String,
     val thinkingShort: String,
+    val regionLabel: String,
+    val regionPlaceholder: String,
 ) {
 
     fun thisRound(prompt: Long, completion: Long, total: Long): String =
@@ -248,6 +250,8 @@ private val ZhCN = AppStrings(
     modeSelectTitle = "选择模式",
     searchShort = "搜索",
     thinkingShort = "思考",
+    regionLabel = "地区",
+    regionPlaceholder = "跟随设备地区，可手动填写城市名",
 )
 
 private val ZhTW = AppStrings(
@@ -367,6 +371,8 @@ private val ZhTW = AppStrings(
     modeSelectTitle = "選擇模式",
     searchShort = "搜尋",
     thinkingShort = "思考",
+    regionLabel = "地區",
+    regionPlaceholder = "跟隨裝置地區，可手動填寫城市名",
 )
 
 private val EnUS = AppStrings(
@@ -486,6 +492,8 @@ private val EnUS = AppStrings(
     modeSelectTitle = "Choose a mode",
     searchShort = "Search",
     thinkingShort = "Think",
+    regionLabel = "Region",
+    regionPlaceholder = "Follows device; tap to enter a city",
 )
 
 fun stringsFor(language: AppLanguage): AppStrings = when (language) {

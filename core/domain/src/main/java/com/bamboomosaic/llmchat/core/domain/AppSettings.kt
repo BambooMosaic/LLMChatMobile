@@ -104,6 +104,8 @@ data class AppSettings(
     val autoCompressEnabled: Boolean = true,
     /** 新对话默认模式 ID；"off" = 禁用（新建时手动选择）。 */
     val defaultModeId: String = "off",
+    /** 环境上下文地区覆盖；空 = 跟随设备地区。 */
+    val regionOverride: String = "",
 ) {
     companion object {
         const val DEFAULT_MODEL = "deepseek-flash"
@@ -151,6 +153,9 @@ interface SettingsRepository {
 
     /** 新对话默认模式（"off" = 禁用）。 */
     suspend fun setDefaultModeId(modeId: String)
+
+    /** 环境上下文地区覆盖（空 = 跟随设备）。 */
+    suspend fun setRegionOverride(value: String)
 
     /** 模式模板记忆：每个模式下用户最后一次填写的用户提示词。 */
     fun observeModeUserPrompt(modeId: String): kotlinx.coroutines.flow.Flow<String?>

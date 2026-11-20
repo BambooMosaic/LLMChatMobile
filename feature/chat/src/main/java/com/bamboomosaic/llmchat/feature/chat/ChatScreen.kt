@@ -330,6 +330,7 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
             onSetApiKey = viewModel::setApiKey,
             onSetModel = viewModel::setModel,
             onSetDefaultModeId = viewModel::setDefaultModeId,
+            onSetRegionOverride = viewModel::setRegionOverride,
             onSetThemeMode = viewModel::setThemeMode,
             onSetLanguage = viewModel::setLanguage,
             onSetAutoCompressEnabled = viewModel::setAutoCompressEnabled,

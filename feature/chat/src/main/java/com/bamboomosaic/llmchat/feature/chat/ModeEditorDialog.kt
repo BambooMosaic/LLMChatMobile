@@ -164,6 +164,8 @@ fun ModeEditorDialog(
                     }
                 }
 
+                // 用户层输入：allowUserPrompt=false 的模式（ds_web）整块隐藏
+                if (selected.allowUserPrompt) {
                 // 角色扮演：双面板切换
                 if (isRoleplay) {
                     Spacer(Modifier.height(12.dp))
@@ -219,6 +221,8 @@ fun ModeEditorDialog(
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
+
+                } // allowUserPrompt 收口
 
                 // 自定义模式：温度 / topP 输入
                 if (selected.modeId == ModeConfig.CUSTOM) {

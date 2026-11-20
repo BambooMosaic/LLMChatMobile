@@ -21,6 +21,12 @@ data class ModeConfig(
     val userPromptPlaceholder: String,
     /** 是否为内置模式；自定义模式为 false。 */
     val isBuiltin: Boolean = true,
+    /** false 时隐藏用户层提示词输入（ds_web 禁止用户层）。 */
+    val allowUserPrompt: Boolean = true,
+    /** 模式绑定/推荐模型（新建会话选中时自动优先选含此模型的配置）。 */
+    val bindModel: String? = null,
+    /** 是否在 system 末尾注入环境上下文（时间/地区/客户端/语言）。 */
+    val injectContext: Boolean = false,
 ) {
     companion object {
         const val CHAT = "chat"
@@ -30,6 +36,7 @@ data class ModeConfig(
         const val CREATIVE = "creative"
         const val CUSTOM = "custom"
         const val LEGACY = "legacy"
+        const val DS_WEB = "ds_web"
     }
 }
 
@@ -104,6 +111,18 @@ object ChatModes {
             builtinPrompt = BASE_SAFETY_PROMPT,
             userPromptPlaceholder = "请输入你的自定义提示词（角色卡、规则等）",
             isBuiltin = false,
+        ),
+        ModeConfig(
+            modeId = ModeConfig.DS_WEB,
+            modeName = "DS 网页版",
+            description = "模拟 DeepSeek 官方网页版对话体验",
+            temperature = 0.3f,
+            topP = 0.75f,
+            builtinPrompt = "该助手为 DeepSeek，由深度求索公司创造。",
+            userPromptPlaceholder = "",
+            allowUserPrompt = false,
+            bindModel = "deepseek-flash",
+            injectContext = true,
         ),
         ModeConfig(
             modeId = ModeConfig.LEGACY,
