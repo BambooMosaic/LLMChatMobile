@@ -674,6 +674,15 @@ class ChatViewModel @Inject constructor(
         val mode = ChatModes.find(modeId)
         val userPromptTrimmed = userPrompt?.trim()?.takeIf { it.isNotBlank() }
         viewModelScope.launch {
+            // 会话可能还未落库（新建后未发过消息），不存在时按该模式直接创建
+            conversationRepository.ensureConversationWithMode(
+                conversationId = conversationId,
+                title = "",
+                modeId = modeId,
+                userPrompt = userPromptTrimmed,
+                temperature = temperature,
+                topP = topP,
+            )
             conversationRepository.updateConversationMode(
                 conversationId = conversationId,
                 modeId = modeId,

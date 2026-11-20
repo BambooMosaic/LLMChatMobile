@@ -461,13 +461,17 @@ private fun ConfigEditDialog(
                 .fillMaxWidth(0.94f)
                 .heightIn(max = 560.dp),
         ) {
-            Column(
-                modifier = Modifier
-                    .verticalScroll(rememberScrollState())
-                    .padding(16.dp),
-            ) {
-                Text(s.editConfig, style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.height(12.dp))
+            Column(modifier = Modifier.padding(top = 16.dp)) {
+                Text(s.editConfig, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(horizontal = 16.dp))
+                Spacer(Modifier.height(4.dp))
+                // 表单区域可滚动
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 16.dp),
+                ) {
+                Spacer(Modifier.height(8.dp))
 
                 OutlinedTextField(
                     value = name,
@@ -564,21 +568,19 @@ private fun ConfigEditDialog(
                     )
                 }
 
-                Spacer(Modifier.height(8.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Text(s.supportReasoning, style = MaterialTheme.typography.bodyLarge)
-                    Switch(checked = supportReasoning, onCheckedChange = { supportReasoning = it })
-                }
-
-                // 高级选项：最大上下文 / 最大输出（仅对本配置生效，留空 = 用全局默认）
+                // 高级选项：支持思考 + 最大上下文/最大输出（仅对本配置生效）
                 TextButton(onClick = { advExpanded = !advExpanded }) {
                     Text((if (advExpanded) "▾ " else "▸ ") + s.advancedOptions)
                 }
                 if (advExpanded) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text(s.supportReasoning, style = MaterialTheme.typography.bodyLarge)
+                        Switch(checked = supportReasoning, onCheckedChange = { supportReasoning = it })
+                    }
                     OutlinedTextField(
                         value = maxContext,
                         onValueChange = { maxContext = it.filter { c -> c.isDigit() } },
@@ -594,14 +596,24 @@ private fun ConfigEditDialog(
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                     )
+                    Spacer(Modifier.height(4.dp))
                 }
-
                 Spacer(Modifier.height(8.dp))
-                Row(
+                } // 滚动表单区结束
+
+                // 底部固定操作区（阴影悬浮，始终可见）
+                Surface(
+                    color = MaterialTheme.colorScheme.surface,
+                    shadowElevation = 12.dp,
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
-                    verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
                     // 验证配置：发极短测试请求，成功自动保存，失败提示具体错误（与引导页一致）
                     if (validating) {
                         CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
@@ -631,6 +643,7 @@ private fun ConfigEditDialog(
                     TextButton(onClick = onDismiss) { Text(s.cancel) }
                     Spacer(Modifier.width(8.dp))
                     Button(onClick = { onSave(buildConfig()) }) { Text(s.save) }
+                    }
                 }
             }
         }
@@ -646,28 +659,76 @@ private fun OtherPage(
 ) {
     val s = LocalAppStrings.current
 
-    // 新对话默认模式：禁用 + 6 套内置模式
+    // 新对话默认模式：折叠下拉菜单（与新建弹窗样式一致）
     Spacer(Modifier.height(4.dp))
     Text(s.defaultModeLabel, style = MaterialTheme.typography.bodyLarge)
     Spacer(Modifier.height(8.dp))
-    val modeOptions = buildList {
-        add("off" to s.defaultModeOff)
-        ChatModes.all.forEach { add(it.modeId to it.modeName) }
-    }
-    modeOptions.forEach { (id, label) ->
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { onSetDefaultModeId(id) }
-                .padding(vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            RadioButton(
-                selected = settings.defaultModeId == id,
-                onClick = { onSetDefaultModeId(id) },
+    var modeDropdownOpen by remember { mutableStateOf(false) }
+    val currentDefaultMode = ChatModes.all.firstOrNull { it.modeId == settings.defaultModeId }
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { modeDropdownOpen = true },
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+            Text(
+                text = settings.defaultModeId.takeIf { it != "off" }
+                    ?.let { id -> ChatModes.find(id).modeName }
+                    ?: s.defaultModeOff,
+                style = MaterialTheme.typography.bodyMedium,
             )
-            Spacer(Modifier.width(8.dp))
-            Text(label, style = MaterialTheme.typography.bodyMedium)
+            currentDefaultMode?.let {
+                Text(
+                    text = it.description,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+    DropdownMenu(
+        expanded = modeDropdownOpen,
+        onDismissRequest = { modeDropdownOpen = false },
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        DropdownMenuItem(
+            text = {
+                Column {
+                    Text(s.defaultModeOff, style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        text = "新建时手动选择模式",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            },
+            onClick = {
+                onSetDefaultModeId("off")
+                modeDropdownOpen = false
+            },
+        )
+        ChatModes.all.forEach { mode ->
+            DropdownMenuItem(
+                text = {
+                    Column {
+                        Text(
+                            text = mode.modeName + if (mode.modeId == com.bamboomosaic.llmchat.core.domain.ModeConfig.LEGACY) "（不推荐）" else "",
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        Text(
+                            text = mode.description,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                },
+                onClick = {
+                    onSetDefaultModeId(mode.modeId)
+                    modeDropdownOpen = false
+                },
+            )
         }
     }
 

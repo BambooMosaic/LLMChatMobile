@@ -344,6 +344,7 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
         ModeEditorDialog(
             initialModeId = com.bamboomosaic.llmchat.core.domain.ModeConfig.CHAT,
             initialUserPrompt = null,
+            createMode = true,
             onConfirm = { modeId, userPrompt, temp, topp ->
                 viewModel.newConversation()
                 viewModel.createConversationWithMode(modeId, userPrompt, temp, topp)
@@ -359,6 +360,7 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
         ModeEditorDialog(
             initialModeId = cur?.modeId ?: com.bamboomosaic.llmchat.core.domain.ModeConfig.CUSTOM,
             initialUserPrompt = cur?.userPrompt,
+            createMode = false,
             onConfirm = { modeId, userPrompt, temp, topp ->
                 viewModel.updateConversationMode(modeId, userPrompt, temp, topp)
                 showModeEditor = false

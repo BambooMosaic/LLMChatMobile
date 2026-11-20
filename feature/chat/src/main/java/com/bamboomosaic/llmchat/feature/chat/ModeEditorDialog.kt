@@ -13,9 +13,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -34,26 +37,45 @@ import com.bamboomosaic.llmchat.feature.chat.i18n.LocalAppStrings
 
 /**
  * 模式选择/编辑弹窗（新建对话 与 会话模式修改 共用）。
- * - 模式列表（单选，选中显示简介）
- * - 用户层提示词输入框（占位符随模式变化）
- * - 自定义模式额外显示温度/topP 参数
- * - 底部「创建对话」/确认按钮
+ * - 模式为折叠下拉菜单（主标题 + 小白副标题），选中后下方显示说明
+ * - 角色扮演模式：使用角色卡（表单）/ 我要自己配置（自由输入）双面板切换，数据互相隔离
+ * - 底部按钮：新建对话=「创建对话」；工具栏编辑=「确定」
  */
 @Composable
 fun ModeEditorDialog(
     initialModeId: String,
     initialUserPrompt: String?,
+    /** 底部按钮文字：true=创建对话（新建场景），false=确定（编辑场景）。 */
+    createMode: Boolean,
     /** 提交回调：modeId + 用户提示词 + 自定义参数（非自定义模式为 null）。 */
     onConfirm: (modeId: String, userPrompt: String?, temperature: Float?, topP: Float?) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val s = LocalAppStrings.current
     var selectedId by remember { mutableStateOf(initialModeId) }
-    var userPrompt by remember { mutableStateOf(initialUserPrompt.orEmpty()) }
+    var dropdownOpen by remember { mutableStateOf(false) }
+
+    // 两个面板的数据互相隔离：角色卡表单 vs 自由输入
+    var cardName by remember { mutableStateOf("") }
+    var cardInfo by remember { mutableStateOf("") }
+    var freePrompt by remember { mutableStateOf(initialUserPrompt.orEmpty()) }
+    var useRoleCard by remember { mutableStateOf(true) }
+
     var customTemp by remember { mutableStateOf(ChatModes.CUSTOM_DEFAULT_TEMPERATURE.toString()) }
     var customTopP by remember { mutableStateOf(ChatModes.CUSTOM_DEFAULT_TOP_P.toString()) }
 
     val selected = ChatModes.find(selectedId)
+    val isRoleplay = selected.modeId == ModeConfig.ROLEPLAY
+
+    // 最终提交的用户提示词：角色卡拼接 / 自由输入
+    val effectiveUserPrompt = when {
+        isRoleplay && useRoleCard -> {
+            val name = cardName.trim()
+            val info = cardInfo.trim()
+            if (name.isEmpty() && info.isEmpty()) "" else "角色名：$name\n角色设定：\n$info"
+        }
+        else -> freePrompt.trim()
+    }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -74,41 +96,107 @@ fun ModeEditorDialog(
                 Text(s.modeSelectTitle, style = MaterialTheme.typography.titleMedium)
 
                 Spacer(Modifier.height(12.dp))
-                ChatModes.all.forEach { mode ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { selectedId = mode.modeId }
-                            .padding(vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        RadioButton(
-                            selected = selectedId == mode.modeId,
-                            onClick = { selectedId = mode.modeId },
+                // 折叠下拉选择框
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { dropdownOpen = true },
+                ) {
+                    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                        Text(selected.modeName + if (selected.modeId == ModeConfig.LEGACY) "（不推荐）" else "",
+                             style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            text = selected.description,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                        Column {
-                            Text(
-                                text = mode.modeName + if (mode.modeId == ModeConfig.LEGACY) "（不推荐）" else "",
-                                style = MaterialTheme.typography.bodyMedium,
-                            )
-                            Text(
-                                text = mode.description,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
+                    }
+                }
+                DropdownMenu(
+                    expanded = dropdownOpen,
+                    onDismissRequest = { dropdownOpen = false },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    ChatModes.all.forEach { mode ->
+                        DropdownMenuItem(
+                            text = {
+                                Column {
+                                    Text(
+                                        text = mode.modeName + if (mode.modeId == ModeConfig.LEGACY) "（不推荐）" else "",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                    )
+                                    Text(
+                                        text = mode.description,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            },
+                            onClick = {
+                                selectedId = mode.modeId
+                                dropdownOpen = false
+                            },
+                        )
                     }
                 }
 
-                Spacer(Modifier.height(12.dp))
-                OutlinedTextField(
-                    value = userPrompt,
-                    onValueChange = { userPrompt = it },
-                    label = { Text(s.modeUserPromptLabel) },
-                    placeholder = { Text(selected.userPromptPlaceholder) },
-                    minLines = 2,
-                    modifier = Modifier.fillMaxWidth(),
-                )
+                // 角色扮演：双面板切换
+                if (isRoleplay) {
+                    Spacer(Modifier.height(12.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(
+                            selected = useRoleCard,
+                            onClick = { useRoleCard = true },
+                            label = { Text("使用角色卡") },
+                        )
+                        FilterChip(
+                            selected = !useRoleCard,
+                            onClick = { useRoleCard = false },
+                            label = { Text("我要自己配置") },
+                        )
+                    }
+                    if (useRoleCard) {
+                        Spacer(Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = cardName,
+                            onValueChange = { cardName = it },
+                            label = { Text("角色名") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = cardInfo,
+                            onValueChange = { cardInfo = it },
+                            label = { Text("角色信息") },
+                            placeholder = { Text("性格、说话风格、背景故事、口头禅等") },
+                            minLines = 4,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    } else {
+                        Spacer(Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = freePrompt,
+                            onValueChange = { freePrompt = it },
+                            label = { Text(s.modeUserPromptLabel) },
+                            placeholder = { Text(selected.userPromptPlaceholder) },
+                            minLines = 2,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                } else {
+                    Spacer(Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = freePrompt,
+                        onValueChange = { freePrompt = it },
+                        label = { Text(s.modeUserPromptLabel) },
+                        placeholder = { Text(selected.userPromptPlaceholder) },
+                        minLines = 2,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
 
                 // 自定义模式：温度 / topP 输入
                 if (selected.modeId == ModeConfig.CUSTOM) {
@@ -139,14 +227,14 @@ fun ModeEditorDialog(
                         val topp = customTopP.toFloatOrNull()
                         onConfirm(
                             selectedId,
-                            userPrompt.trim().takeIf { it.isNotBlank() },
+                            effectiveUserPrompt.takeIf { it.isNotBlank() },
                             if (selectedId == ModeConfig.CUSTOM) temp else null,
                             if (selectedId == ModeConfig.CUSTOM) topp else null,
                         )
                     },
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text(s.createConversation)
+                    Text(if (createMode) s.createConversation else "确定")
                 }
             }
         }

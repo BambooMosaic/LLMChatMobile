@@ -48,7 +48,7 @@ object ChatModes {
         ModeConfig(
             modeId = ModeConfig.CHAT,
             modeName = "聊天模式",
-            description = "简洁自然的日常对话，适合问答、翻译与简单规划",
+            description = "日常问答、翻译、简单出主意，轻松对话",
             temperature = 0.6f,
             topP = 0.75f,
             builtinPrompt = "回答简洁自然，按需分段；支持多领域问答、翻译、简单规划；" +
@@ -58,7 +58,7 @@ object ChatModes {
         ModeConfig(
             modeId = ModeConfig.WORK,
             modeName = "工作模式",
-            description = "结构化、严谨的职场表达，自动提炼核心结论",
+            description = "帮你整理文档、写方案、总结内容，条理清晰",
             temperature = 0.4f,
             topP = 0.65f,
             builtinPrompt = "输出结构化、逻辑严谨；优先分点罗列、条理清晰；" +
@@ -68,7 +68,7 @@ object ChatModes {
         ModeConfig(
             modeId = ModeConfig.CODE,
             modeName = "代码开发模式",
-            description = "可运行的正确代码，附带必要注释与根因排查",
+            description = "写代码、查 bug、解释程序，输出可直接用代码",
             temperature = 0.2f,
             topP = 0.4f,
             builtinPrompt = "代码必须包裹带语言标识的 Markdown 代码块；优先保证语法正确、可直接运行；" +
@@ -78,7 +78,7 @@ object ChatModes {
         ModeConfig(
             modeId = ModeConfig.ROLEPLAY,
             modeName = "角色扮演模式",
-            description = "维持人设的沉浸式对话，（）包裹动作神态",
+            description = "和虚拟角色对话，扮演剧情、人设互动",
             temperature = 0.9f,
             topP = 0.85f,
             builtinPrompt = "动作、神态、环境描写统一用（）包裹；严格维持人设一致性；" +
@@ -88,7 +88,7 @@ object ChatModes {
         ModeConfig(
             modeId = ModeConfig.CREATIVE,
             modeName = "创意写作模式",
-            description = "多文风发散的创作，适配小说、文案、歌词等场景",
+            description = "写小说、文案、诗歌、剧本，自由发挥创作",
             temperature = 1.0f,
             topP = 0.92f,
             builtinPrompt = "鼓励修辞与氛围描写；支持多文风发散；剧情逻辑自洽；" +
@@ -98,7 +98,7 @@ object ChatModes {
         ModeConfig(
             modeId = ModeConfig.CUSTOM,
             modeName = "自定义模式",
-            description = "参数与提示词完全由你控制，仅保留安全底线",
+            description = "全部参数、提示词自己掌控，自由度最高",
             temperature = CUSTOM_DEFAULT_TEMPERATURE,
             topP = CUSTOM_DEFAULT_TOP_P,
             builtinPrompt = BASE_SAFETY_PROMPT,
@@ -108,7 +108,7 @@ object ChatModes {
         ModeConfig(
             modeId = ModeConfig.LEGACY,
             modeName = "Legacy 模式",
-            description = "不推荐：跳过双层提示词与安全隔离，直接发送原始提示词（适合开发者调试）",
+            description = "开发者调试用，不使用双层提示词隔离",
             temperature = CUSTOM_DEFAULT_TEMPERATURE,
             topP = CUSTOM_DEFAULT_TOP_P,
             builtinPrompt = "",

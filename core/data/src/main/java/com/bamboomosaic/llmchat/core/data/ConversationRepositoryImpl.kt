@@ -145,7 +145,14 @@ class ConversationRepositoryImpl @Inject constructor(
         temperature: Float?,
         topP: Float?,
     ) {
-        val entity = dao.getConversation(conversationId) ?: return
+        // 会话不存在（新建后未发消息）时先创建占位记录，避免静默丢失修改
+        val entity = dao.getConversation(conversationId)
+            ?: ConversationEntity(
+                id = conversationId,
+                title = "",
+                createdAt = System.currentTimeMillis(),
+                updatedAt = System.currentTimeMillis(),
+            )
         dao.updateConversation(
             entity.copy(
                 modeId = modeId,
