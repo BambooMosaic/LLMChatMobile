@@ -102,6 +102,8 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
 
     var input by remember { mutableStateOf("") }
     val currentConversation = conversations.firstOrNull { it.id == currentId }
+    val effectiveModeId by viewModel.effectiveModeId.collectAsState()
+    val effectiveUserPrompt by viewModel.effectiveUserPrompt.collectAsState()
     val screenContext = LocalContext.current
     val screenStrings = LocalAppStrings.current
     // 新建对话模式弹窗：默认模式为「禁用」时先弹窗选择
@@ -298,9 +300,9 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
                 modelConfigs = apiConfigs,
                 onSelectModel = viewModel::selectConfig,
                 onOpenApiSettings = { showSettings = true },
-                // 未指定模式的会话（含未落库新会话）自动视为聊天模式
+                // 正式会话读库；临时会话读内存草稿
                 modeName = com.bamboomosaic.llmchat.core.domain.ChatModes.find(
-                    currentConversation?.modeId ?: com.bamboomosaic.llmchat.core.domain.ModeConfig.CHAT,
+                    effectiveModeId,
                 ).modeName,
                 modeLocked = messages.any { it.role == MessageRole.ASSISTANT && it.dbId > 0 },
                 onOpenModeEditor = { if (!messages.any { m -> m.role == MessageRole.ASSISTANT && m.dbId > 0 }) showModeEditor = true },
@@ -360,8 +362,8 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
     if (showModeEditor) {
         val cur = currentConversation
         ModeEditorDialog(
-            initialModeId = cur?.modeId ?: com.bamboomosaic.llmchat.core.domain.ModeConfig.CUSTOM,
-            initialUserPrompt = cur?.userPrompt,
+            initialModeId = effectiveModeId,
+            initialUserPrompt = effectiveUserPrompt,
             createMode = false,
             onConfirm = { modeId, userPrompt, temp, topp ->
                 viewModel.updateConversationMode(modeId, userPrompt, temp, topp)

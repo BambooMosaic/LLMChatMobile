@@ -164,6 +164,10 @@ class ChatViewModel @Inject constructor(
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    /** 临时会话的内存模式配置（未转正前不入库）。声明必须在 init 之前，避免初始化顺序 NPE。 */
+    private val _draftModeId = MutableStateFlow(ModeConfig.CHAT)
+    private val _draftUserPrompt = MutableStateFlow<String?>(null)
+
     private val _messages = MutableStateFlow<List<UiMessage>>(emptyList())
     val messages: StateFlow<List<UiMessage>> = _messages.asStateFlow()
 
@@ -522,6 +526,17 @@ class ChatViewModel @Inject constructor(
             conversationRepository.ensureConversation(conversationId, userTextForTitle.take(MAX_TITLE_LENGTH))
             conversationRepository.updateTitleIfPlaceholder(conversationId, userTextForTitle.take(MAX_TITLE_LENGTH))
             if (persistUserMessage) {
+                // 临时空白会话发消息即转正入库（用户层为空也转正——规则 7）
+                if (conversations.value.none { it.id == conversationId }) {
+                    conversationRepository.ensureConversationWithMode(
+                        conversationId = conversationId,
+                        title = "新对话",
+                        modeId = _draftModeId.value,
+                        userPrompt = _draftUserPrompt.value,
+                        temperature = null,
+                        topP = null,
+                    )
+                }
                 conversationRepository.appendMessage(
                     conversationId,
                     ChatMessage(MessageRole.USER, userTextForTitle, images = userImages),
@@ -634,29 +649,68 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+    /**
+     * 新建对话：生成一条「临时空白对话」，仅存在于内存（不入库、侧边栏不显示）。
+     * 转正条件（唯一）：用户层提示词有有效内容（补充提示词 / 角色卡输出），或用户发送了消息。
+     * 内存临时状态：模式 ID、用户提示词暂存，转正时一并写入。
+     */
     fun newConversation() {
         streamJob?.cancel()
         _error.value = null
         _currentConversationId.value = UUID.randomUUID().toString()
         _messages.value = emptyList()
-        // 立即落库：侧边栏马上出现「新对话」条目；未指定模式自动落为聊天模式
+        // 临时会话内存配置：默认模式设置非 off 用之，否则聊天模式；用户层为空
         val defaultMode = settings.value.defaultModeId
-        val modeId = if (defaultMode != "off") defaultMode else ModeConfig.CHAT
-        createConversationWithModeInternal(modeId, null)
+        _draftModeId.value = if (defaultMode != "off") defaultMode else ModeConfig.CHAT
+        _draftUserPrompt.value = null
     }
 
-    /** 内部创建：落库为「新对话」，指定模式（未指定自动聊天模式）。 */
-    private fun createConversationWithModeInternal(modeId: String, userPrompt: String?) {
-        viewModelScope.launch {
-            conversationRepository.ensureConversationWithMode(
-                conversationId = _currentConversationId.value,
-                title = "新对话",
-                modeId = modeId,
-                userPrompt = userPrompt,
-                temperature = null,
-                topP = null,
-            )
+    /** 当前会话生效的模式 ID：正式会话读库，临时会话读内存草稿。 */
+    val effectiveModeId: StateFlow<String> = combine(
+        conversations,
+        _currentConversationId,
+        _draftModeId,
+    ) { list, id, draft ->
+        list.firstOrNull { it.id == id }?.modeId ?: draft
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ModeConfig.CHAT)
+
+    /** 当前会话生效的用户提示词：正式会话读库，临时会话读内存草稿。 */
+    val effectiveUserPrompt: StateFlow<String?> = combine(
+        conversations,
+        _currentConversationId,
+        _draftUserPrompt,
+    ) { list, id, draft ->
+        list.firstOrNull { it.id == id }?.userPrompt ?: draft
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    /** 当前会话是否为临时空白（未入库）。 */
+    val isDraftConversation: StateFlow<Boolean> = combine(
+        conversations,
+        _currentConversationId,
+    ) { list, id ->
+        list.firstOrNull { it.id == id } == null
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    /**
+     * 转正临时会话（唯一入库点）：用户层提示词有内容时调用。
+     * 写库 + 清空草稿；用户层为空则什么都不做（保持临时态）。
+     */
+    private suspend fun promoteDraftIfValid(
+        modeId: String,
+        userPrompt: String?,
+        temperature: Float?,
+        topP: Float?,
+    ) {
+        if (userPrompt.isNullOrBlank()) return
+        val id = _currentConversationId.value
+        // 已是正式会话则更新配置，否则入库转正
+        if (conversations.value.any { it.id == id }) {
+            conversationRepository.updateConversationMode(id, modeId, userPrompt, temperature, topP)
+        } else {
+            conversationRepository.ensureConversationWithMode(id, "新对话", modeId, userPrompt, temperature, topP)
         }
+        _draftModeId.value = modeId
+        _draftUserPrompt.value = userPrompt
     }
 
     /** 当前会话是否已锁定模式（发送过消息）。 */
@@ -668,7 +722,6 @@ class ChatViewModel @Inject constructor(
      * [userPrompt] 缓存到模式模板记忆（下次新建同模式自动回填）。
      */
     fun createConversationWithMode(modeId: String, userPrompt: String?, temperature: Float? = null, topP: Float? = null) {
-        val conversationId = _currentConversationId.value
         val mode = ChatModes.find(modeId)
         val userPromptTrimmed = userPrompt?.trim()?.takeIf { it.isNotBlank() }
         // 模式绑定模型：当前配置不含绑定模型时，自动切换到含该模型的配置
@@ -678,19 +731,12 @@ class ChatViewModel @Inject constructor(
                 selectConfig(match.id)
             }
         }
+        // 草稿记录（临时会话内存态）；仅当用户层有内容时转正入库
+        _draftModeId.value = modeId
+        _draftUserPrompt.value = userPromptTrimmed
         viewModelScope.launch {
-            conversationRepository.ensureConversationWithMode(
-                conversationId = conversationId,
-                title = "",
-                modeId = modeId,
-                userPrompt = userPromptTrimmed,
-                temperature = temperature,
-                topP = topP,
-            )
-            // 刷新会话列表（确保当前会话的模式信息立即可用）
-            _messages.value = emptyList()
+            promoteDraftIfValid(modeId, userPromptTrimmed, temperature, topP)
         }
-        // 模板记忆
         saveModeUserPrompt(modeId, userPromptTrimmed)
         if (modeId == ModeConfig.CUSTOM && temperature != null && topP != null) {
             saveModeCustomParams(modeId, temperature, topP)
@@ -700,26 +746,29 @@ class ChatViewModel @Inject constructor(
     /** 更新当前会话的模式配置（仅未发送消息时可调）。 */
     fun updateConversationMode(modeId: String, userPrompt: String?, temperature: Float? = null, topP: Float? = null) {
         if (currentConversationLocked) return
-        val conversationId = _currentConversationId.value
-        val mode = ChatModes.find(modeId)
         val userPromptTrimmed = userPrompt?.trim()?.takeIf { it.isNotBlank() }
+        // 更新内存草稿（临时会话态）
+        _draftModeId.value = modeId
+        _draftUserPrompt.value = userPromptTrimmed
         viewModelScope.launch {
-            // 会话可能还未落库（新建后未发过消息），不存在时按该模式直接创建
-            conversationRepository.ensureConversationWithMode(
-                conversationId = conversationId,
-                title = "",
-                modeId = modeId,
-                userPrompt = userPromptTrimmed,
-                temperature = temperature,
-                topP = topP,
-            )
-            conversationRepository.updateConversationMode(
-                conversationId = conversationId,
-                modeId = modeId,
-                userPrompt = userPromptTrimmed,
-                temperature = temperature,
-                topP = topP,
-            )
+            // 有用户层内容才转正/更新入库；为空保持临时态
+            if (userPromptTrimmed != null) {
+                conversationRepository.ensureConversationWithMode(
+                    conversationId = _currentConversationId.value,
+                    title = "新对话",
+                    modeId = modeId,
+                    userPrompt = userPromptTrimmed,
+                    temperature = temperature,
+                    topP = topP,
+                )
+                conversationRepository.updateConversationMode(
+                    conversationId = _currentConversationId.value,
+                    modeId = modeId,
+                    userPrompt = userPromptTrimmed,
+                    temperature = temperature,
+                    topP = topP,
+                )
+            }
         }
         saveModeUserPrompt(modeId, userPromptTrimmed)
         if (modeId == ModeConfig.CUSTOM && temperature != null && topP != null) {
@@ -731,6 +780,9 @@ class ChatViewModel @Inject constructor(
         if (conversationId == _currentConversationId.value) return
         streamJob?.cancel()
         _error.value = null
+        // 切走临时会话：草稿直接丢弃（未转正的不留任何数据）
+        _draftModeId.value = ModeConfig.CHAT
+        _draftUserPrompt.value = null
         _currentConversationId.value = conversationId
         viewModelScope.launch {
             _messages.value = loadLatestMessages(conversationId)
