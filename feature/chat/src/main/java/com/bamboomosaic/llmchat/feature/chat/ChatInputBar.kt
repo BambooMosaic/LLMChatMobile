@@ -265,27 +265,36 @@ fun ChatInputBar(
                             expanded = modelMenuExpanded,
                             onDismissRequest = { modelMenuExpanded = false },
                             shape = RoundedCornerShape(16.dp),
+                            modifier = Modifier.width(540.dp), // 约半个屏宽（1080 屏）
                         ) {
-                            // 纯文字列表：左侧模型名 + 选中对勾，右侧价格档位标签
+                            // 双行条目：上行=模型名+价格标签，下行=配置名
                             modelConfigs.forEach { config ->
                                 val tier = priceTierOf(config.model)
                                 DropdownMenuItem(
                                     text = {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Text(
+                                                    text = if (config.id == currentConfigId) "✓ " else "",
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    color = MaterialTheme.colorScheme.primary,
+                                                )
+                                                Text(
+                                                    text = config.model,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis,
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                )
+                                                Spacer(Modifier.weight(1f))
+                                                if (tier != null) PriceTierLabel(tier, s)
+                                            }
                                             Text(
-                                                text = if (config.id == currentConfigId) "✓" else "",
-                                                style = MaterialTheme.typography.labelMedium,
-                                                color = MaterialTheme.colorScheme.primary,
-                                            )
-                                            Spacer(Modifier.width(4.dp))
-                                            Text(
-                                                text = config.model,
+                                                text = config.name,
                                                 maxLines = 1,
                                                 overflow = TextOverflow.Ellipsis,
-                                                style = MaterialTheme.typography.bodyMedium,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             )
-                                            Spacer(Modifier.weight(1f))
-                                            if (tier != null) PriceTierLabel(tier, s)
                                         }
                                     },
                                     onClick = {

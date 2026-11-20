@@ -13,12 +13,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -37,9 +35,8 @@ import com.bamboomosaic.llmchat.feature.chat.i18n.LocalAppStrings
 
 /**
  * 模式选择/编辑弹窗（新建对话 与 会话模式修改 共用）。
- * - 模式为折叠下拉菜单（主标题 + 小白副标题），选中后下方显示说明
- * - 角色扮演模式：使用角色卡（表单）/ 我要自己配置（自由输入）双面板切换，数据互相隔离
- * - 底部按钮：新建对话=「创建对话」；工具栏编辑=「确定」
+ * 模式列表为圆角直排单选列表（radio + 标题 + 小白副标题），
+ * 角色扮演模式双面板（角色卡表单 / 自由输入），底部按钮按场景区分。
  */
 @Composable
 fun ModeEditorDialog(
@@ -47,13 +44,11 @@ fun ModeEditorDialog(
     initialUserPrompt: String?,
     /** 底部按钮文字：true=创建对话（新建场景），false=确定（编辑场景）。 */
     createMode: Boolean,
-    /** 提交回调：modeId + 用户提示词 + 自定义参数（非自定义模式为 null）。 */
     onConfirm: (modeId: String, userPrompt: String?, temperature: Float?, topP: Float?) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val s = LocalAppStrings.current
     var selectedId by remember { mutableStateOf(initialModeId) }
-    var dropdownOpen by remember { mutableStateOf(false) }
 
     // 两个面板的数据互相隔离：角色卡表单 vs 自由输入
     var cardName by remember { mutableStateOf("") }
@@ -96,32 +91,28 @@ fun ModeEditorDialog(
                 Text(s.modeSelectTitle, style = MaterialTheme.typography.titleMedium)
 
                 Spacer(Modifier.height(12.dp))
-                // 折叠下拉选择框
+                // 圆角直排单选列表（radio + 标题 + 副标题）
                 Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { dropdownOpen = true },
-                ) {
-                    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-                        Text(selected.modeName + if (selected.modeId == ModeConfig.LEGACY) "（不推荐）" else "",
-                             style = MaterialTheme.typography.bodyMedium)
-                        Text(
-                            text = selected.description,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-                DropdownMenu(
-                    expanded = dropdownOpen,
-                    onDismissRequest = { dropdownOpen = false },
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    ChatModes.all.forEach { mode ->
-                        DropdownMenuItem(
-                            text = {
+                    Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                        ChatModes.all.forEach { mode ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { selectedId = mode.modeId }
+                                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                RadioButton(
+                                    selected = selectedId == mode.modeId,
+                                    onClick = { selectedId = mode.modeId },
+                                    colors = RadioButtonDefaults.colors(
+                                        selectedColor = MaterialTheme.colorScheme.primary,
+                                    ),
+                                )
                                 Column {
                                     Text(
                                         text = mode.modeName + if (mode.modeId == ModeConfig.LEGACY) "（不推荐）" else "",
@@ -133,12 +124,8 @@ fun ModeEditorDialog(
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
                                 }
-                            },
-                            onClick = {
-                                selectedId = mode.modeId
-                                dropdownOpen = false
-                            },
-                        )
+                            }
+                        }
                     }
                 }
 
@@ -146,15 +133,15 @@ fun ModeEditorDialog(
                 if (isRoleplay) {
                     Spacer(Modifier.height(12.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilterChip(
+                        FilterChipCompact(
                             selected = useRoleCard,
                             onClick = { useRoleCard = true },
-                            label = { Text("使用角色卡") },
+                            label = "使用角色卡",
                         )
-                        FilterChip(
+                        FilterChipCompact(
                             selected = !useRoleCard,
                             onClick = { useRoleCard = false },
-                            label = { Text("我要自己配置") },
+                            label = "我要自己配置",
                         )
                     }
                     if (useRoleCard) {
@@ -239,4 +226,14 @@ fun ModeEditorDialog(
             }
         }
     }
+}
+
+/** 紧凑 FilterChip（角色卡面板切换用）。 */
+@Composable
+private fun FilterChipCompact(selected: Boolean, onClick: () -> Unit, label: String) {
+    androidx.compose.material3.FilterChip(
+        selected = selected,
+        onClick = onClick,
+        label = { Text(label, style = MaterialTheme.typography.labelMedium) },
+    )
 }

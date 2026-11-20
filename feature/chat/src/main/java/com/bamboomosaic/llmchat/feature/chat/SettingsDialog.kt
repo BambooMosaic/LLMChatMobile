@@ -659,42 +659,28 @@ private fun OtherPage(
 ) {
     val s = LocalAppStrings.current
 
-    // 新对话默认模式：折叠下拉菜单（与新建弹窗样式一致）
+    // 新对话默认模式：圆角直排单选列表（与新建弹窗样式一致）
     Spacer(Modifier.height(4.dp))
     Text(s.defaultModeLabel, style = MaterialTheme.typography.bodyLarge)
     Spacer(Modifier.height(8.dp))
-    var modeDropdownOpen by remember { mutableStateOf(false) }
-    val currentDefaultMode = ChatModes.all.firstOrNull { it.modeId == settings.defaultModeId }
     Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { modeDropdownOpen = true },
-    ) {
-        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-            Text(
-                text = settings.defaultModeId.takeIf { it != "off" }
-                    ?.let { id -> ChatModes.find(id).modeName }
-                    ?: s.defaultModeOff,
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            currentDefaultMode?.let {
-                Text(
-                    text = it.description,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-    }
-    DropdownMenu(
-        expanded = modeDropdownOpen,
-        onDismissRequest = { modeDropdownOpen = false },
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
         modifier = Modifier.fillMaxWidth(),
     ) {
-        DropdownMenuItem(
-            text = {
+        Column(modifier = Modifier.padding(vertical = 4.dp)) {
+            // 禁用选项
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onSetDefaultModeId("off") }
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                RadioButton(
+                    selected = settings.defaultModeId == "off",
+                    onClick = { onSetDefaultModeId("off") },
+                )
                 Column {
                     Text(s.defaultModeOff, style = MaterialTheme.typography.bodyMedium)
                     Text(
@@ -703,15 +689,19 @@ private fun OtherPage(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-            },
-            onClick = {
-                onSetDefaultModeId("off")
-                modeDropdownOpen = false
-            },
-        )
-        ChatModes.all.forEach { mode ->
-            DropdownMenuItem(
-                text = {
+            }
+            ChatModes.all.forEach { mode ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onSetDefaultModeId(mode.modeId) }
+                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    RadioButton(
+                        selected = settings.defaultModeId == mode.modeId,
+                        onClick = { onSetDefaultModeId(mode.modeId) },
+                    )
                     Column {
                         Text(
                             text = mode.modeName + if (mode.modeId == com.bamboomosaic.llmchat.core.domain.ModeConfig.LEGACY) "（不推荐）" else "",
@@ -723,12 +713,8 @@ private fun OtherPage(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                },
-                onClick = {
-                    onSetDefaultModeId(mode.modeId)
-                    modeDropdownOpen = false
-                },
-            )
+                }
+            }
         }
     }
 
