@@ -404,7 +404,7 @@ private fun ApiConfigPage(
             ApiFormState.GUIDE -> {
                 Text(s.configApiTitle, style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onBackground)
                 Spacer(Modifier.height(16.dp))
-                Text(s.apiGuideText, style = MaterialTheme.typography.bodyLarge)
+                Text(s.apiGuideText, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onBackground)
                 Spacer(Modifier.height(16.dp))
                 TextButton(onClick = {
                     val intent = android.content.Intent(
