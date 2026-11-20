@@ -122,13 +122,14 @@ fun ModeEditorDialog(
                         )
                     }
                 }
-                // 独立弹出菜单（锚定触发框下方，radio + 标题 + 副标题，圆角）
-                androidx.compose.foundation.layout.Box {
+                // 独立弹出菜单（锚定触发框下方，radio + 标题 + 副标题，圆角，宽度与弹窗内容一致）
+                androidx.compose.foundation.layout.BoxWithConstraints {
+                    val menuWidth = maxWidth
                     androidx.compose.material3.DropdownMenu(
                         expanded = dropdownOpen,
                         onDismissRequest = { dropdownOpen = false },
                         shape = RoundedCornerShape(16.dp),
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.width(menuWidth),
                     ) {
                         ChatModes.all.forEach { mode ->
                             androidx.compose.material3.DropdownMenuItem(
@@ -193,7 +194,7 @@ fun ModeEditorDialog(
                             onValueChange = { cardInfo = it },
                             label = { Text("角色信息") },
                             placeholder = { Text("性格、说话风格、背景故事、口头禅等") },
-                            minLines = 4,
+                            minLines = 8,
                             modifier = Modifier.fillMaxWidth(),
                         )
                     } else {
@@ -203,7 +204,7 @@ fun ModeEditorDialog(
                             onValueChange = { freePrompt = it },
                             label = { Text(s.modeUserPromptLabel) },
                             placeholder = { Text(selected.userPromptPlaceholder) },
-                            minLines = 2,
+                            minLines = 4,
                             modifier = Modifier.fillMaxWidth(),
                         )
                     }
@@ -214,7 +215,7 @@ fun ModeEditorDialog(
                         onValueChange = { freePrompt = it },
                         label = { Text(s.modeUserPromptLabel) },
                         placeholder = { Text(selected.userPromptPlaceholder) },
-                        minLines = 2,
+                        minLines = 4,
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
