@@ -87,7 +87,7 @@ class ConversationRepositoryImpl @Inject constructor(
 
     override suspend fun updateTitleIfPlaceholder(conversationId: String, title: String) {
         val current = dao.getConversation(conversationId) ?: return
-        if (current.title == PLACEHOLDER_TITLE || current.title.isBlank()) {
+        if (current.title == PLACEHOLDER_TITLE || current.title == "新对话" || current.title.isBlank()) {
             dao.updateTitle(conversationId, title, System.currentTimeMillis())
         }
     }

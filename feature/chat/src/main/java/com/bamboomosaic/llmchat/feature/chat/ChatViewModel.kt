@@ -79,6 +79,9 @@ class ChatViewModel @Inject constructor(
     @ApplicationContext private val appContext: Context,
 ) : ViewModel() {
 
+    /** 新建对话的初始标题（发送首条消息后被占位标题逻辑替换）。 */
+    private suspend fun newConversationTitle() = "新对话"
+
     private val _currentConversationId = MutableStateFlow(UUID.randomUUID().toString())
     val currentConversationId: StateFlow<String> = _currentConversationId.asStateFlow()
 
@@ -189,6 +192,19 @@ class ChatViewModel @Inject constructor(
     init {
         // 首次启动时把升级前的单条 DataStore 配置迁移成第一条默认 API 配置
         viewModelScope.launch { configRepository.ensureSeeded() }
+        // 启动自动恢复上次对话（无任何会话则新建「新对话」）
+        viewModelScope.launch { restoreLastConversation() }
+    }
+
+    /** 恢复最近更新的会话；一个会话都没有时新建「新对话」（聊天模式）。 */
+    private suspend fun restoreLastConversation() {
+        val last = conversations.value.maxByOrNull { it.updatedAt }
+        if (last != null) {
+            _currentConversationId.value = last.id
+            _messages.value = loadLatestMessages(last.id)
+        } else {
+            newConversation()
+        }
     }
 
     /** 中断当前流式生成：取消协程，把已生成内容固化到消息里。 */
@@ -623,20 +639,18 @@ class ChatViewModel @Inject constructor(
         _error.value = null
         _currentConversationId.value = UUID.randomUUID().toString()
         _messages.value = emptyList()
-        // 有默认模式：直接按默认模式创建（"off" 时由 UI 弹窗选择后调 createConversationWithMode）
+        // 立即落库：侧边栏马上出现「新对话」条目；未指定模式自动落为聊天模式
         val defaultMode = settings.value.defaultModeId
-        if (defaultMode != "off") {
-            createConversationWithModeInternal(defaultMode, null)
-        }
+        val modeId = if (defaultMode != "off") defaultMode else ModeConfig.CHAT
+        createConversationWithModeInternal(modeId, null)
     }
 
-    /** 内部创建：不带模板记忆副作用（默认模式路径）。 */
+    /** 内部创建：落库为「新对话」，指定模式（未指定自动聊天模式）。 */
     private fun createConversationWithModeInternal(modeId: String, userPrompt: String?) {
-        val mode = ChatModes.find(modeId)
         viewModelScope.launch {
             conversationRepository.ensureConversationWithMode(
                 conversationId = _currentConversationId.value,
-                title = "",
+                title = "新对话",
                 modeId = modeId,
                 userPrompt = userPrompt,
                 temperature = null,

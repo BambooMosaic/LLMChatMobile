@@ -298,9 +298,10 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
                 modelConfigs = apiConfigs,
                 onSelectModel = viewModel::selectConfig,
                 onOpenApiSettings = { showSettings = true },
-                modeName = currentConversation?.let {
-                    com.bamboomosaic.llmchat.core.domain.ChatModes.find(it.modeId).modeName
-                },
+                // 未指定模式的会话（含未落库新会话）自动视为聊天模式
+                modeName = com.bamboomosaic.llmchat.core.domain.ChatModes.find(
+                    currentConversation?.modeId ?: com.bamboomosaic.llmchat.core.domain.ModeConfig.CHAT,
+                ).modeName,
                 modeLocked = messages.any { it.role == MessageRole.ASSISTANT && it.dbId > 0 },
                 onOpenModeEditor = { if (!messages.any { m -> m.role == MessageRole.ASSISTANT && m.dbId > 0 }) showModeEditor = true },
                 isGenerating = isGenerating,
