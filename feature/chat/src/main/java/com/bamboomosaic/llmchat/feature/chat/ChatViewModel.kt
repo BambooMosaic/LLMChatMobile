@@ -436,10 +436,11 @@ class ChatViewModel @Inject constructor(
         // 截断上限 = 最大上下文的 30%（字符数近似）
         val maxChars = (currentSettings.maxContextTokens * 30 / 100).coerceAtLeast(500)
         val sp = SystemPromptBuilder.build(mode, conversation?.userPrompt, maxChars = maxChars)
-        // 环境上下文注入：仅 injectContext=true 的模式（ds_web），实时生成，追加 system 末尾
-        val systemText = if (mode.injectContext) {
+        // 环境上下文注入：ds_web 强制开启；其他模式跟随「自动注入环境信息」开关
+        val shouldInject = mode.injectContext || currentSettings.contextInjectionEnabled
+        val systemText = if (shouldInject) {
             sp.prompt + "\n\n[当前环境] " +
-                contextReminderProvider.buildReminder(currentSettings.language, currentSettings.regionOverride)
+                contextReminderProvider.buildReminder(currentSettings.language)
         } else {
             sp.prompt
         }
@@ -956,8 +957,8 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch { settingsRepository.setDefaultModeId(modeId) }
     }
 
-    fun setRegionOverride(value: String) {
-        viewModelScope.launch { settingsRepository.setRegionOverride(value) }
+    fun setContextInjectionEnabled(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setContextInjectionEnabled(enabled) }
     }
 
     /** 模式模板记忆：保存/清除某模式的用户提示词缓存。 */

@@ -72,7 +72,7 @@ fun SettingsDialog(
     onSetApiKey: (String) -> Unit,
     onSetModel: (String) -> Unit,
     onSetDefaultModeId: (String) -> Unit,
-    onSetRegionOverride: (String) -> Unit,
+    onSetContextInjectionEnabled: (Boolean) -> Unit,
     onSetThemeMode: (ThemeMode) -> Unit,
     onSetLanguage: (AppLanguage) -> Unit,
     onSetAutoCompressEnabled: (Boolean) -> Unit,
@@ -164,7 +164,7 @@ fun SettingsDialog(
                         SettingsPage.OTHER -> OtherPage(
                             settings = settings,
                             onSetDefaultModeId = onSetDefaultModeId,
-                            onSetRegionOverride = onSetRegionOverride,
+                            onSetContextInjectionEnabled = onSetContextInjectionEnabled,
                             onSetAutoCompressEnabled = onSetAutoCompressEnabled,
                         )
 
@@ -652,83 +652,117 @@ private fun ConfigEditDialog(
     }
 }
 
-/** 其他设置：系统提示词、最大上下文、最大输出、自动压缩上下文。 */
+/** 其他设置：环境注入开关、新对话默认模式、自动压缩上下文。 */
 @Composable
 private fun OtherPage(
     settings: AppSettings,
     onSetDefaultModeId: (String) -> Unit,
-    onSetRegionOverride: (String) -> Unit,
+    onSetContextInjectionEnabled: (Boolean) -> Unit,
     onSetAutoCompressEnabled: (Boolean) -> Unit,
 ) {
     val s = LocalAppStrings.current
 
-    // 地区（环境上下文注入用；留空跟随设备）
-    var region by remember(settings.regionOverride) { mutableStateOf(settings.regionOverride) }
-    OutlinedTextField(
-        value = region,
-        onValueChange = { region = it; onSetRegionOverride(it) },
-        label = { Text(s.regionLabel) },
-        placeholder = { Text(s.regionPlaceholder) },
-        singleLine = true,
-        modifier = Modifier.fillMaxWidth(),
+    // 自动注入环境信息开关（ds_web 强制开启，无视此开关）
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(s.contextInjectionLabel, style = MaterialTheme.typography.bodyLarge)
+        Switch(checked = settings.contextInjectionEnabled, onCheckedChange = { onSetContextInjectionEnabled(it) })
+    }
+    Text(
+        text = s.contextInjectionHint,
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
 
-    Spacer(Modifier.height(12.dp))
-    // 新对话默认模式：圆角直排单选列表（与新建弹窗样式一致）
+    Spacer(Modifier.height(16.dp))
+    // 新对话默认模式：折叠下拉菜单（与新建对话弹窗 UI 一致）
     Spacer(Modifier.height(4.dp))
     Text(s.defaultModeLabel, style = MaterialTheme.typography.bodyLarge)
     Spacer(Modifier.height(8.dp))
+    var modeDropdownOpen by remember { mutableStateOf(false) }
+    val currentDefaultMode = ChatModes.all.firstOrNull { it.modeId == settings.defaultModeId }
     Surface(
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { modeDropdownOpen = true },
     ) {
-        Column(modifier = Modifier.padding(vertical = 4.dp)) {
-            // 禁用选项
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onSetDefaultModeId("off") }
-                    .padding(horizontal = 8.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                RadioButton(
-                    selected = settings.defaultModeId == "off",
-                    onClick = { onSetDefaultModeId("off") },
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = settings.defaultModeId.takeIf { it != "off" }
+                        ?.let { id -> ChatModes.find(id).modeName }
+                        ?: s.defaultModeOff,
+                    style = MaterialTheme.typography.bodyMedium,
                 )
-                Column {
-                    Text(s.defaultModeOff, style = MaterialTheme.typography.bodyMedium)
+                currentDefaultMode?.let {
                     Text(
-                        text = "新建时手动选择模式",
+                        text = it.description,
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
-            ChatModes.all.forEach { mode ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onSetDefaultModeId(mode.modeId) }
-                        .padding(horizontal = 8.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    RadioButton(
-                        selected = settings.defaultModeId == mode.modeId,
-                        onClick = { onSetDefaultModeId(mode.modeId) },
-                    )
+            Text(
+                text = if (modeDropdownOpen) "▾" else "▸",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+    androidx.compose.foundation.layout.BoxWithConstraints {
+        val menuWidth = maxWidth
+        DropdownMenu(
+            expanded = modeDropdownOpen,
+            onDismissRequest = { modeDropdownOpen = false },
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.width(menuWidth),
+        ) {
+            DropdownMenuItem(
+                text = {
                     Column {
+                        Text(s.defaultModeOff, style = MaterialTheme.typography.bodyMedium)
                         Text(
-                            text = mode.modeName + if (mode.modeId == com.bamboomosaic.llmchat.core.domain.ModeConfig.LEGACY) "（不推荐）" else "",
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                        Text(
-                            text = mode.description,
+                            text = "新建时手动选择模式",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                }
+                },
+                onClick = {
+                    onSetDefaultModeId("off")
+                    modeDropdownOpen = false
+                },
+            )
+            ChatModes.all.forEach { mode ->
+                DropdownMenuItem(
+                    text = {
+                        Column {
+                            Text(
+                                text = mode.modeName + if (mode.modeId == com.bamboomosaic.llmchat.core.domain.ModeConfig.LEGACY) "（不推荐）" else "",
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                            Text(
+                                text = mode.description,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    },
+                    onClick = {
+                        onSetDefaultModeId(mode.modeId)
+                        modeDropdownOpen = false
+                    },
+                )
             }
         }
     }

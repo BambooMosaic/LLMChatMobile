@@ -7,35 +7,33 @@ import java.time.format.TextStyle
 import java.util.Locale
 
 /**
- * 环境上下文 Provider：组装「日期,星期,地区,客户端,语言」五项字符串。
- * 每次请求实时生成（ds_web 模式注入 system 末尾），不落库、不进历史。
+ * 环境上下文 Provider：组装「日期-时分,星期,地区,客户端署名,语言」五项字符串。
+ * 每次请求实时生成（注入开关开启的模式，system 末尾），不落库、不进历史。
+ * 地区自动识别：系统地区，失败兜底「无」。
  */
 interface ContextReminderProvider {
-    /** @param language 当前应用语言；@param regionOverride 用户设置的地区覆盖（空 = 跟随设备）。 */
-    fun buildReminder(language: AppLanguage, regionOverride: String): String
+    fun buildReminder(language: AppLanguage): String
 }
 
 class ContextReminderProviderImpl() : ContextReminderProvider {
 
-    override fun buildReminder(language: AppLanguage, regionOverride: String): String {
+    override fun buildReminder(language: AppLanguage): String {
         val locale = when (language) {
             AppLanguage.SIMPLIFIED_CHINESE -> Locale.SIMPLIFIED_CHINESE
             AppLanguage.TRADITIONAL_CHINESE -> Locale.TRADITIONAL_CHINESE
             AppLanguage.ENGLISH -> Locale.ENGLISH
         }
-        // 本地时区日期（禁止 UTC，避免跨日错位）
+        // 本地时区日期 + 精确时分
         val now = LocalDateTime.now(ZoneId.systemDefault())
-        val date = now.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))
+        val dateTime = now.format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HH:mm"))
         val weekday = now.dayOfWeek.getDisplayName(TextStyle.FULL, locale)
-        // 地区回退链：设置覆盖 → 设备地区 → 默认"北京"
-        val region = regionOverride.takeIf { it.isNotBlank() }
-            ?: Locale.getDefault().displayCountry.takeIf { it.isNotBlank() }
-            ?: "北京"
+        // 地区自动识别：系统地区，失败兜底「无」
+        val region = Locale.getDefault().displayCountry.takeIf { it.isNotBlank() } ?: "无"
         val langText = when (language) {
             AppLanguage.SIMPLIFIED_CHINESE -> "中文"
             AppLanguage.TRADITIONAL_CHINESE -> "繁體中文"
             AppLanguage.ENGLISH -> "English"
         }
-        return "$date,$weekday,$region,LLMChatMobile客户端,$langText"
+        return "$dateTime,$weekday,$region,由BambooMosaic制作的LLMChatMobile客户端,$langText"
     }
 }

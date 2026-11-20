@@ -121,6 +121,8 @@ data class AppStrings(
     val modeSelectTitle: String,
     val searchShort: String,
     val thinkingShort: String,
+    val contextInjectionLabel: String,
+    val contextInjectionHint: String,
     val regionLabel: String,
     val regionPlaceholder: String,
 ) {
@@ -250,6 +252,8 @@ private val ZhCN = AppStrings(
     modeSelectTitle = "选择模式",
     searchShort = "搜索",
     thinkingShort = "思考",
+    contextInjectionLabel = "自动注入环境信息",
+    contextInjectionHint = "在 system 末尾附带当前时间、地区与客户端信息（DS 网页版模式始终开启）",
     regionLabel = "地区",
     regionPlaceholder = "跟随设备地区，可手动填写城市名",
 )
@@ -371,6 +375,8 @@ private val ZhTW = AppStrings(
     modeSelectTitle = "選擇模式",
     searchShort = "搜尋",
     thinkingShort = "思考",
+    contextInjectionLabel = "自動注入環境資訊",
+    contextInjectionHint = "在 system 末尾附帶當前時間、地區與客戶端資訊（DS 網頁版模式始終開啟）",
     regionLabel = "地區",
     regionPlaceholder = "跟隨裝置地區，可手動填寫城市名",
 )
@@ -492,6 +498,8 @@ private val EnUS = AppStrings(
     modeSelectTitle = "Choose a mode",
     searchShort = "Search",
     thinkingShort = "Think",
+    contextInjectionLabel = "Auto-inject context info",
+    contextInjectionHint = "Append current time, region and client info to the system prompt (always on for DS Web mode)",
     regionLabel = "Region",
     regionPlaceholder = "Follows device; tap to enter a city",
 )

@@ -43,7 +43,7 @@ class SettingsStore @Inject constructor(
     private val currentConfigIdKey = longPreferencesKey("current_config_id")
     private val firstLaunchKey = booleanPreferencesKey("is_first_launch")
     private val defaultModeIdKey = stringPreferencesKey("default_mode_id")
-    private val regionOverrideKey = stringPreferencesKey("region_override")
+    private val contextInjectionKey = booleanPreferencesKey("context_injection_enabled")
 
     override fun observeSettings(): Flow<AppSettings> = context.settingsDataStore.data.map { prefs ->
         val language = AppLanguage.fromTag(prefs[languageKey])
@@ -63,7 +63,7 @@ class SettingsStore @Inject constructor(
             maxOutputTokens = prefs[maxOutputKey] ?: AppSettings.DEFAULT_MAX_OUTPUT_TOKENS,
             autoCompressEnabled = prefs[autoCompressKey] ?: true,
             defaultModeId = prefs[defaultModeIdKey] ?: "off",
-            regionOverride = prefs[regionOverrideKey] ?: "",
+            contextInjectionEnabled = prefs[contextInjectionKey] ?: true,
         )
     }
 
@@ -111,8 +111,8 @@ class SettingsStore @Inject constructor(
         context.settingsDataStore.edit { it[defaultModeIdKey] = modeId }
     }
 
-    override suspend fun setRegionOverride(value: String) {
-        context.settingsDataStore.edit { it[regionOverrideKey] = value }
+    override suspend fun setContextInjectionEnabled(enabled: Boolean) {
+        context.settingsDataStore.edit { it[contextInjectionKey] = enabled }
     }
 
     override fun observeModeUserPrompt(modeId: String): Flow<String?> =
