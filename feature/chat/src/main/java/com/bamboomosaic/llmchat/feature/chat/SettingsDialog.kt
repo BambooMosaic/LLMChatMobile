@@ -855,6 +855,7 @@ private fun rememberVersionName(): String {
 private fun AboutContent(versionName: String) {
     val s = LocalAppStrings.current
     val context = LocalContext.current
+    var showCredits by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -895,7 +896,15 @@ private fun AboutContent(versionName: String) {
                 runCatching { context.startActivity(intent) }
             },
         )
+        Spacer(Modifier.height(12.dp))
+        TextButton(onClick = { showCredits = true }) {
+            Text(s.creditsButton)
+        }
         Spacer(Modifier.height(8.dp))
+    }
+
+    if (showCredits) {
+        CreditsDialog(onDismiss = { showCredits = false })
     }
 }
 
@@ -904,4 +913,50 @@ private fun AboutContent(versionName: String) {
 private fun AboutPage() {
     val versionName = rememberVersionName()
     AboutContent(versionName)
+}
+
+/** 开发者名单弹窗。 */
+@Composable
+private fun CreditsDialog(onDismiss: () -> Unit) {
+    val s = LocalAppStrings.current
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(24.dp),
+            color = MaterialTheme.colorScheme.surface,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+        ) {
+            Column(modifier = Modifier.padding(20.dp)) {
+                Text(s.creditsTitle, style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.height(12.dp))
+                val entries = listOf(
+                    s.creditsDev to "BambooMosaic",
+                    s.creditsPlan to "BambooMosaic",
+                    s.creditsMainCode to "DeepSeek-Flash；DeepSeek-V4-pro；GLM-5.3-Flash；Hy4",
+                    s.creditsImpl to "DeepSeek-Flash；DeepSeek-V4-pro；GLM-5.3-Flash",
+                    s.creditsUiDesign to "BambooMosaic；DeepSeek-Flash",
+                    s.creditsMentor to "DeepSeek网页版",
+                    s.creditsGithub to "BambooMosaic",
+                )
+                entries.forEach { (role, names) ->
+                    Text(
+                        text = role,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = names,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                }
+                Spacer(Modifier.height(4.dp))
+                Button(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
+                    Text("OK")
+                }
+            }
+        }
+    }
 }
