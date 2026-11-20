@@ -49,6 +49,7 @@ fun ModeEditorDialog(
 ) {
     val s = LocalAppStrings.current
     var selectedId by remember { mutableStateOf(initialModeId) }
+    var dropdownOpen by remember { mutableStateOf(false) }
 
     // 两个面板的数据互相隔离：角色卡表单 vs 自由输入
     var cardName by remember { mutableStateOf("") }
@@ -91,40 +92,73 @@ fun ModeEditorDialog(
                 Text(s.modeSelectTitle, style = MaterialTheme.typography.titleMedium)
 
                 Spacer(Modifier.height(12.dp))
-                // 圆角直排单选列表（radio + 标题 + 副标题）
+                // 折叠下拉触发框（显示当前选中模式）
                 Surface(
-                    shape = RoundedCornerShape(16.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { dropdownOpen = !dropdownOpen },
                 ) {
-                    Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                selected.modeName + if (selected.modeId == ModeConfig.LEGACY) "（不推荐）" else "",
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                            Text(
+                                text = selected.description,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Text(
+                            text = if (dropdownOpen) "▾" else "▸",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+                // 独立弹出菜单（锚定触发框下方，radio + 标题 + 副标题，圆角）
+                androidx.compose.foundation.layout.Box {
+                    androidx.compose.material3.DropdownMenu(
+                        expanded = dropdownOpen,
+                        onDismissRequest = { dropdownOpen = false },
+                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
                         ChatModes.all.forEach { mode ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { selectedId = mode.modeId }
-                                    .padding(horizontal = 8.dp, vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                RadioButton(
-                                    selected = selectedId == mode.modeId,
-                                    onClick = { selectedId = mode.modeId },
-                                    colors = RadioButtonDefaults.colors(
-                                        selectedColor = MaterialTheme.colorScheme.primary,
-                                    ),
-                                )
-                                Column {
-                                    Text(
-                                        text = mode.modeName + if (mode.modeId == ModeConfig.LEGACY) "（不推荐）" else "",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                    )
-                                    Text(
-                                        text = mode.description,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
-                            }
+                            androidx.compose.material3.DropdownMenuItem(
+                                text = {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        androidx.compose.material3.RadioButton(
+                                            selected = selectedId == mode.modeId,
+                                            onClick = { selectedId = mode.modeId },
+                                            colors = RadioButtonDefaults.colors(
+                                                selectedColor = MaterialTheme.colorScheme.primary,
+                                            ),
+                                        )
+                                        Column {
+                                            Text(
+                                                text = mode.modeName + if (mode.modeId == ModeConfig.LEGACY) "（不推荐）" else "",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                            )
+                                            Text(
+                                                text = mode.description,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            )
+                                        }
+                                    }
+                                },
+                                onClick = {
+                                    selectedId = mode.modeId
+                                    dropdownOpen = false
+                                },
+                            )
                         }
                     }
                 }

@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -44,6 +45,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
@@ -265,7 +267,7 @@ fun ChatInputBar(
                             expanded = modelMenuExpanded,
                             onDismissRequest = { modelMenuExpanded = false },
                             shape = RoundedCornerShape(16.dp),
-                            modifier = Modifier.width(540.dp), // 约半个屏宽（1080 屏）
+                            modifier = Modifier.widthIn(max = LocalConfiguration.current.screenWidthDp.dp / 2), // 半屏宽
                         ) {
                             // 双行条目：上行=模型名+价格标签，下行=配置名
                             modelConfigs.forEach { config ->
