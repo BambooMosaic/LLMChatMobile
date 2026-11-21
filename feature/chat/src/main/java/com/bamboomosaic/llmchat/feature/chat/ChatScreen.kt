@@ -142,17 +142,18 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
     var autoScrolledOnce by remember(currentId) { mutableStateOf(false) }
     LaunchedEffect(messages.size, lastTextLength, reasoningLength) {
         if (messages.isEmpty()) return@LaunchedEffect
+        // 用户手势滚动进行中：绝不强制滚动（修复长对话回看时页面被拉回抖动）
+        if (listState.isScrollInProgress) return@LaunchedEffect
         val visible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
         // 锚点在 messages.size 位置，接近它即视为在底部
         val nearBottom = visible >= messages.size - 2
         if (!autoScrolledOnce || nearBottom) {
-            // 单条消息可能极长（思考 + 正文），高度需要多帧才测量完。
-            // 首次进入会话要多试几帧才能真的到底；流式增量每次只多一点点，2 帧足够。
-            val attempts = if (autoScrolledOnce) 2 else 8
-            repeat(attempts) {
-                withFrameNanos { }
-                listState.scrollToItem(messages.size, BOTTOM_SCROLL_OFFSET)
-            }
+            // 单条消息可能极长（思考 + 正文），高度需要时间测量。
+            // 等待布局稳定后一次性滚动；期间若用户开始滑动则放弃。
+            withFrameNanos { }
+            withFrameNanos { }
+            if (listState.isScrollInProgress) return@LaunchedEffect
+            listState.scrollToItem(messages.size, BOTTOM_SCROLL_OFFSET)
             autoScrolledOnce = true
         }
     }
