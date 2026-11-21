@@ -215,13 +215,13 @@ private fun CodeBlockWithCopy(model: MarkdownComponentModel, fence: Boolean) {
             .padding(vertical = 6.dp),
     ) {
         Column {
-            // 顶部栏：语言标签 + 复制按钮（深灰/浅灰底）
+            // 顶部栏：语言标签 + 复制按钮（深灰/浅灰底），单行紧凑高度
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .height(30.dp)
                     .background(headerBackground)
-                    .padding(start = 12.dp, end = 4.dp, top = 0.dp, bottom = 0.dp),
-                    .height(IntrinsicSize.Min),
+                    .padding(start = 12.dp, end = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
@@ -231,19 +231,15 @@ private fun CodeBlockWithCopy(model: MarkdownComponentModel, fence: Boolean) {
                     maxLines = 1,
                 )
                 Spacer(Modifier.weight(1f))
-                TextButton(
-                    onClick = {
+                Text(
+                    text = if (copied) s.copied else s.copy,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (copied) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.clickable {
                         clipboard.setText(AnnotatedString(codeText))
                         copied = true
                     },
-                    modifier = Modifier.height(28.dp),
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                ) {
-                    Text(
-                        text = if (copied) s.copied else s.copy,
-                        style = MaterialTheme.typography.labelSmall,
-                    )
-                }
+                )
             }
             // 高亮正文：底色与全局背景一致，普通 Text 直接折行
             Text(
