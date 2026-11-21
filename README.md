@@ -10,7 +10,7 @@
 
 **第 1 步：安装应用**
 
-1. 从本仓库的 Release 页面下载最新的 `LLMChat_beta0.4.0_android_release.apk`。
+1. [点击下载最新安装包](https://github.com/BambooMosaic/LLMChatMobile/releases/latest)——进入 Release 页下载 `LLMChat_betaX.X.X_android_release.apk`（文件名里的版本号会随更新变化，认准 Latest 标记即可）。
 2. 把 APK 传到你的安卓手机（微信文件传输助手、数据线、网盘都行）。
 3. 在手机文件管理器里点击这个 APK 安装。
 4. 首次安装系统会提示「是否允许安装未知来源应用」，点允许即可。
