@@ -221,7 +221,7 @@ private fun CodeBlockWithCopy(model: MarkdownComponentModel, fence: Boolean) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(18.dp)
+                    .height(28.dp)
                     .background(headerBackground)
                     .padding(start = 10.dp, end = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
