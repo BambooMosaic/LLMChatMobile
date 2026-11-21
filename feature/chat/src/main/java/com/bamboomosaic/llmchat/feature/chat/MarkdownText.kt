@@ -76,6 +76,9 @@ fun MarkdownText(
         // 会被误渲染为巨型代码块（超高 item 导致列表滚动二次测量跳变）。
         table = { model -> BorderedTable(model) },
     )
+    // 注：0.33+ 的库版本默认异步解析（item 首次组合显示 Loading 占位，解析完成后内容
+    // 撑高 → LazyColumn 高度剧变 → 滚动补偿 → 上跳抖动），故固定使用 0.32.0（同步解析，
+    // 首次组合即完整渲染，item 高度一次到位，滚动稳定）。
     Markdown(
         content = content,
         colors = markdownColor(),

@@ -50,6 +50,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
@@ -140,10 +141,27 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
     val lastTextLength = messages.lastOrNull()?.text?.length ?: 0
     val reasoningLength = messages.lastOrNull()?.reasoning?.length ?: 0
     var autoScrolledOnce by remember(currentId) { mutableStateOf(false) }
+    // 记录用户上滑脱离底部的状态：一旦离开底部，自动滚动彻底停用，
+    // 直到用户重新滑回底部附近才恢复（修复长对话回看被拉回的抖动）。
+    var userScrolledUp by remember(currentId) { mutableStateOf(false) }
+    // 用户手势滚动监听：滑动方向向上（远离底部）时标记脱离底部
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.isScrollInProgress to listState.firstVisibleItemIndex }
+            .collect { (scrolling, _) ->
+                if (scrolling) {
+                    val visible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+                    if (visible < messages.size - 2) userScrolledUp = true
+                    // 用户主动滑回底部附近时解除锁定
+                    if (visible >= messages.size) userScrolledUp = false
+                }
+            }
+    }
     LaunchedEffect(messages.size, lastTextLength, reasoningLength) {
         if (messages.isEmpty()) return@LaunchedEffect
-        // 用户手势滚动进行中：绝不强制滚动（修复长对话回看时页面被拉回抖动）
+        // 用户手势滚动进行中：绝不强制滚动
         if (listState.isScrollInProgress) return@LaunchedEffect
+        // 用户已上滑脱离底部：彻底停用自动滚动（流式增量也不跟随）
+        if (userScrolledUp) return@LaunchedEffect
         val visible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
         // 锚点在 messages.size 位置，接近它即视为在底部
         val nearBottom = visible >= messages.size - 2
