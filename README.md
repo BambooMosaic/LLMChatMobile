@@ -31,7 +31,7 @@ API Key 仅保存在本机 DataStore，**不会上传任何服务器**；应用�
 | 当前版本 | beta0.4.2 |
 | 技术栈 | Kotlin + Jetpack Compose + Hilt + Room + OkHttp (SSE) |
 | 架构 | 多模块（app / core:domain / core:data / core:network / feature:chat） |
-| 最低支持 | Android 8.0（API 26） |
+| 最低支持 | Android 7.0（API 24） |
 | 许可证 | MIT |
 
 ## 使用教程（给第一次使用的朋友）
