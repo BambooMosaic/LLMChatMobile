@@ -44,6 +44,8 @@ fun ModeEditorDialog(
     initialUserPrompt: String?,
     /** 底部按钮文字：true=创建对话（新建场景），false=确定（编辑场景）。 */
     createMode: Boolean,
+    /** 当前应用语言（模式文案三语）。 */
+    uiLanguage: com.bamboomosaic.llmchat.core.domain.AppLanguage,
     onConfirm: (modeId: String, userPrompt: String?, temperature: Float?, topP: Float?) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -60,7 +62,7 @@ fun ModeEditorDialog(
     var customTemp by remember { mutableStateOf(ChatModes.CUSTOM_DEFAULT_TEMPERATURE.toString()) }
     var customTopP by remember { mutableStateOf(ChatModes.CUSTOM_DEFAULT_TOP_P.toString()) }
 
-    val selected = ChatModes.find(selectedId)
+    val selected = ChatModes.find(selectedId, uiLanguage)
     val isRoleplay = selected.modeId == ModeConfig.ROLEPLAY
 
     // 最终提交的用户提示词：角色卡拼接 / 自由输入
@@ -106,11 +108,14 @@ fun ModeEditorDialog(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                selected.modeName + if (selected.modeId == ModeConfig.LEGACY) "（不推荐）" else "",
+                                selected.localized(uiLanguage).modeName +
+                                    if (selected.modeId == ModeConfig.LEGACY) {
+                                        if (uiLanguage == com.bamboomosaic.llmchat.core.domain.AppLanguage.ENGLISH) " (not recommended)" else "（不推荐）"
+                                    } else "",
                                 style = MaterialTheme.typography.bodyMedium,
                             )
                             Text(
-                                text = selected.description,
+                                text = selected.localized(uiLanguage).description,
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -144,11 +149,14 @@ fun ModeEditorDialog(
                                         )
                                         Column {
                                             Text(
-                                                text = mode.modeName + if (mode.modeId == ModeConfig.LEGACY) "（不推荐）" else "",
+                                                text = mode.localized(uiLanguage).modeName +
+                                        if (mode.modeId == ModeConfig.LEGACY) {
+                                            if (uiLanguage == com.bamboomosaic.llmchat.core.domain.AppLanguage.ENGLISH) " (not recommended)" else "（不推荐）"
+                                        } else "",
                                                 style = MaterialTheme.typography.bodyMedium,
                                             )
                                             Text(
-                                                text = mode.description,
+                                                text = mode.localized(uiLanguage).description,
                                                 style = MaterialTheme.typography.labelSmall,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             )
@@ -173,12 +181,12 @@ fun ModeEditorDialog(
                         FilterChipCompact(
                             selected = useRoleCard,
                             onClick = { useRoleCard = true },
-                            label = "使用角色卡",
+                            label = if (uiLanguage == com.bamboomosaic.llmchat.core.domain.AppLanguage.ENGLISH) "Use role card" else "使用角色卡",
                         )
                         FilterChipCompact(
                             selected = !useRoleCard,
                             onClick = { useRoleCard = false },
-                            label = "我要自己配置",
+                            label = if (uiLanguage == com.bamboomosaic.llmchat.core.domain.AppLanguage.ENGLISH) "Configure myself" else "我要自己配置",
                         )
                     }
                     if (useRoleCard) {
@@ -186,7 +194,7 @@ fun ModeEditorDialog(
                         OutlinedTextField(
                             value = cardName,
                             onValueChange = { cardName = it },
-                            label = { Text("角色名") },
+                            label = { Text(if (uiLanguage == com.bamboomosaic.llmchat.core.domain.AppLanguage.ENGLISH) "Character name" else "角色名") },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth(),
                         )
@@ -194,8 +202,8 @@ fun ModeEditorDialog(
                         OutlinedTextField(
                             value = cardInfo,
                             onValueChange = { cardInfo = it },
-                            label = { Text("角色信息") },
-                            placeholder = { Text("性格、说话风格、背景故事、口头禅等") },
+                            label = { Text(if (uiLanguage == com.bamboomosaic.llmchat.core.domain.AppLanguage.ENGLISH) "Character info" else "角色信息") },
+                            placeholder = { Text(if (uiLanguage == com.bamboomosaic.llmchat.core.domain.AppLanguage.ENGLISH) "Personality, speaking style, backstory, catchphrases..." else "性格、说话风格、背景故事、口头禅等") },
                             minLines = 8,
                             modifier = Modifier.fillMaxWidth(),
                         )
@@ -205,7 +213,7 @@ fun ModeEditorDialog(
                             value = freePrompt,
                             onValueChange = { freePrompt = it },
                             label = { Text(s.modeUserPromptLabel) },
-                            placeholder = { Text(selected.userPromptPlaceholder) },
+                            placeholder = { Text(selected.localized(uiLanguage).userPromptPlaceholder) },
                             minLines = 4,
                             modifier = Modifier.fillMaxWidth(),
                         )
@@ -216,7 +224,7 @@ fun ModeEditorDialog(
                         value = freePrompt,
                         onValueChange = { freePrompt = it },
                         label = { Text(s.modeUserPromptLabel) },
-                        placeholder = { Text(selected.userPromptPlaceholder) },
+                        placeholder = { Text(selected.localized(uiLanguage).userPromptPlaceholder) },
                         minLines = 4,
                         modifier = Modifier.fillMaxWidth(),
                     )
@@ -260,7 +268,7 @@ fun ModeEditorDialog(
                     },
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text(if (createMode) s.createConversation else "确定")
+                    Text(if (createMode) s.createConversation else if (uiLanguage == com.bamboomosaic.llmchat.core.domain.AppLanguage.ENGLISH) "OK" else "确定")
                 }
             }
         }

@@ -302,8 +302,8 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
                 onOpenApiSettings = { showSettings = true },
                 // 正式会话读库；临时会话读内存草稿
                 modeName = com.bamboomosaic.llmchat.core.domain.ChatModes.find(
-                    effectiveModeId,
-                ).modeName,
+                    effectiveModeId, settings.language,
+                ).localized(settings.language).modeName,
                 modeLocked = messages.any { it.role == MessageRole.ASSISTANT && it.dbId > 0 },
                 onOpenModeEditor = { if (!messages.any { m -> m.role == MessageRole.ASSISTANT && m.dbId > 0 }) showModeEditor = true },
                 isGenerating = isGenerating,
@@ -334,6 +334,7 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
             onSetModel = viewModel::setModel,
             onSetDefaultModeId = viewModel::setDefaultModeId,
             onSetContextInjectionEnabled = viewModel::setContextInjectionEnabled,
+            onSetTokenSavingLevel = viewModel::setTokenSavingLevel,
             onSetThemeMode = viewModel::setThemeMode,
             onSetLanguage = viewModel::setLanguage,
             onSetAutoCompressEnabled = viewModel::setAutoCompressEnabled,
@@ -349,6 +350,7 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
             initialModeId = com.bamboomosaic.llmchat.core.domain.ModeConfig.CHAT,
             initialUserPrompt = null,
             createMode = true,
+            uiLanguage = settings.language,
             onConfirm = { modeId, userPrompt, temp, topp ->
                 viewModel.newConversation()
                 viewModel.createConversationWithMode(modeId, userPrompt, temp, topp)
@@ -365,6 +367,7 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
             initialModeId = effectiveModeId,
             initialUserPrompt = effectiveUserPrompt,
             createMode = false,
+            uiLanguage = settings.language,
             onConfirm = { modeId, userPrompt, temp, topp ->
                 viewModel.updateConversationMode(modeId, userPrompt, temp, topp)
                 showModeEditor = false

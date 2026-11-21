@@ -275,6 +275,7 @@ class ChatViewModel @Inject constructor(
             userTextForTitle = text,
             userImages = images,
             persistUserMessage = true,
+            modeId = effectiveModeId.value,
             // 普通发送：用户消息在本流中持久化，versionKey 取该消息 dbId
             versionKeyOf = {
                 conversationRepository.getMessages(conversationId)
@@ -320,6 +321,7 @@ class ChatViewModel @Inject constructor(
             currentSettings = currentSettings,
             userTextForTitle = lastUser.text,
             persistUserMessage = false,
+            modeId = effectiveModeId.value,
             // 重新生成：versionKey 复用原助手消息的版本组
             versionKeyOf = {
                 val dbId = lastAssistant.dbId
@@ -421,6 +423,7 @@ class ChatViewModel @Inject constructor(
             currentSettings = currentSettings,
             userTextForTitle = newText,
             persistUserMessage = true,
+            modeId = effectiveModeId.value,
             versionKeyOf = {
                 conversationRepository.getMessages(conversationId)
                     .lastOrNull { it.role == MessageRole.USER }?.id ?: 0L
@@ -448,14 +451,14 @@ class ChatViewModel @Inject constructor(
         val conversationId = _currentConversationId.value
         // 直接查库：会话列表 Flow 可能有刷新延迟（新建后立刻发送的场景）
         val conversation = conversationRepository.getConversationById(conversationId)
-        val mode = ChatModes.find(conversation?.modeId ?: ModeConfig.CUSTOM)
+        val mode = ChatModes.find(conversation?.modeId ?: ModeConfig.CUSTOM, currentSettings.language)
         // 自定义模式参数：会话冗余值优先，否则用模式默认
         val temperature = conversation?.effectiveTemperature
             ?: (if (mode.modeId == ModeConfig.CUSTOM) mode.temperature else mode.temperature)
         val topP = conversation?.effectiveTopP ?: mode.topP
         // 截断上限 = 最大上下文的 30%（字符数近似）
         val maxChars = (currentSettings.maxContextTokens * 30 / 100).coerceAtLeast(500)
-        val sp = SystemPromptBuilder.build(mode, conversation?.userPrompt, maxChars = maxChars)
+        val sp = SystemPromptBuilder.build(mode, conversation?.userPrompt, maxChars = maxChars, language = currentSettings.language)
         // 环境上下文注入：ds_web 强制开启；其他模式跟随「自动注入环境信息」开关
         val shouldInject = mode.injectContext || currentSettings.contextInjectionEnabled
         val systemText = if (shouldInject) {
@@ -465,10 +468,20 @@ class ChatViewModel @Inject constructor(
             sp.prompt
         }
         val withSystem = listOf(ChatMessage(MessageRole.SYSTEM, systemText)) + history
-        val compressed = if (currentSettings.autoCompressEnabled) {
+        // 省 Token 档位：质量/中等/最大 → 压缩阈值（所有模式生效）
+        val compressLimitK = when (currentSettings.tokenSavingLevel) {
+            1 -> 100_000
+            2 -> 50_000
+            3 -> 20_000
+            else -> 0
+        }
+        // 档位启用时无视全局自动压缩开关，按阈值压缩
+        val compressed = if (compressLimitK > 0 || currentSettings.autoCompressEnabled) {
             contextWindowRepository.compress(
                 withSystem,
-                ContextWindow(maxTokens = currentSettings.maxContextTokens),
+                ContextWindow(
+                    maxTokens = if (compressLimitK > 0) compressLimitK else currentSettings.maxContextTokens,
+                ),
             )
         } else {
             withSystem
@@ -484,6 +497,8 @@ class ChatViewModel @Inject constructor(
         userTextForTitle: String,
         userImages: List<String> = emptyList(),
         persistUserMessage: Boolean,
+        /** 当前会话模式 ID（省 Token 档位豁免判断用）。 */
+        modeId: String = ModeConfig.CUSTOM,
         /** 多版本上下文：触发本次回复的用户消息 dbId（0 = 普通新消息，持久化后再取 id）。 */
         versionKeyOf: suspend () -> Long = { 0L },
     ) {
@@ -495,7 +510,7 @@ class ChatViewModel @Inject constructor(
             }
             streamInternal(
                 conversationId, bundle.messages, currentSettings, userTextForTitle,
-                userImages, persistUserMessage, bundle.temperature, bundle.topP, versionKeyOf,
+                userImages, persistUserMessage, bundle.temperature, bundle.topP, modeId, versionKeyOf,
             )
         }
     }
@@ -513,6 +528,7 @@ class ChatViewModel @Inject constructor(
         persistUserMessage: Boolean,
         temperature: Float?,
         topP: Float?,
+        modeId: String = ModeConfig.CUSTOM,
         versionKeyOf: suspend () -> Long = { 0L },
     ) {
         // 流式渲染节流：正文很长时每个 chunk 都重建列表 + 重新排版会明显闪烁，
@@ -570,7 +586,7 @@ class ChatViewModel @Inject constructor(
                 messages = compressed,
                 model = currentConfig.value?.model ?: currentSettings.model,
                 thinkingEnabled = currentSettings.thinkingEnabled,
-                maxTokens = currentSettings.maxOutputTokens.takeIf { it > 0 },
+                maxTokens = effectiveMaxOutputTokens(currentSettings, modeId),
                 onReasoning = { chunk ->
                     // 回调在 OkHttp 线程，StateFlow 的 update 是线程安全的
                     reasoningState.update { it + chunk }
@@ -722,7 +738,7 @@ class ChatViewModel @Inject constructor(
      * [userPrompt] 缓存到模式模板记忆（下次新建同模式自动回填）。
      */
     fun createConversationWithMode(modeId: String, userPrompt: String?, temperature: Float? = null, topP: Float? = null) {
-        val mode = ChatModes.find(modeId)
+        val mode = ChatModes.find(modeId, settings.value.language)
         val userPromptTrimmed = userPrompt?.trim()?.takeIf { it.isNotBlank() }
         // 模式绑定模型：当前配置不含绑定模型时，自动切换到含该模型的配置
         mode.bindModel?.let { bind ->
@@ -1025,6 +1041,36 @@ class ChatViewModel @Inject constructor(
 
     fun setContextInjectionEnabled(enabled: Boolean) {
         viewModelScope.launch { settingsRepository.setContextInjectionEnabled(enabled) }
+    }
+
+    fun setTokenSavingLevel(level: Int) {
+        viewModelScope.launch { settingsRepository.setTokenSavingLevel(level) }
+    }
+
+    /**
+     * 实际生效的单次输出上限。
+     * 省 Token 档位：1=质量 16384 / 2=中等 8192 / 3=最大 4096；
+     * 豁免模式（代码开发 / 创意写作 / Legacy）不受档位限制，回退到全局配置值。
+     * 0 或豁免时用 maxOutputTokens（0 = 不限制）。
+     */
+    private fun effectiveMaxOutputTokens(settings: AppSettings, modeId: String): Int? {
+        val exempt = modeId == ModeConfig.CODE ||
+            modeId == ModeConfig.CREATIVE ||
+            modeId == ModeConfig.LEGACY
+        if (!exempt) {
+            val cap = when (settings.tokenSavingLevel) {
+                1 -> 16384
+                2 -> 8192
+                3 -> 4096
+                else -> 0
+            }
+            if (cap > 0) {
+                // 档位上限与用户全局上限取较小值（都设置时以更严格者为准）
+                val userCap = settings.maxOutputTokens.takeIf { it > 0 }
+                return minOf(cap, userCap ?: cap)
+            }
+        }
+        return settings.maxOutputTokens.takeIf { it > 0 }
     }
 
     /** 模式模板记忆：保存/清除某模式的用户提示词缓存。 */

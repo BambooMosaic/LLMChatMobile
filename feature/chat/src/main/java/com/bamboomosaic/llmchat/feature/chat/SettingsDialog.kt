@@ -2,6 +2,7 @@ package com.bamboomosaic.llmchat.feature.chat
 
 import kotlinx.coroutines.launch
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,6 +17,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -73,6 +76,7 @@ fun SettingsDialog(
     onSetModel: (String) -> Unit,
     onSetDefaultModeId: (String) -> Unit,
     onSetContextInjectionEnabled: (Boolean) -> Unit,
+    onSetTokenSavingLevel: (Int) -> Unit,
     onSetThemeMode: (ThemeMode) -> Unit,
     onSetLanguage: (AppLanguage) -> Unit,
     onSetAutoCompressEnabled: (Boolean) -> Unit,
@@ -165,6 +169,7 @@ fun SettingsDialog(
                             settings = settings,
                             onSetDefaultModeId = onSetDefaultModeId,
                             onSetContextInjectionEnabled = onSetContextInjectionEnabled,
+                            onSetTokenSavingLevel = onSetTokenSavingLevel,
                             onSetAutoCompressEnabled = onSetAutoCompressEnabled,
                         )
 
@@ -658,6 +663,7 @@ private fun OtherPage(
     settings: AppSettings,
     onSetDefaultModeId: (String) -> Unit,
     onSetContextInjectionEnabled: (Boolean) -> Unit,
+    onSetTokenSavingLevel: (Int) -> Unit,
     onSetAutoCompressEnabled: (Boolean) -> Unit,
 ) {
     val s = LocalAppStrings.current
@@ -675,6 +681,52 @@ private fun OtherPage(
     }
     Text(
         text = s.contextInjectionHint,
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+
+    Spacer(Modifier.height(16.dp))
+    // 省 Token 档位：横向滑动 4 档选择器（关/质量/中等/最大）
+    Text(s.tokenSavingLabel, style = MaterialTheme.typography.bodyLarge)
+    Spacer(Modifier.height(8.dp))
+    val savingLevels = listOf(
+        Triple(0, s.tokenSavingOff, s.tokenSavingOffHint),
+        Triple(1, s.tokenSavingQuality, s.tokenSavingQualityHint),
+        Triple(2, s.tokenSavingMedium, s.tokenSavingMediumHint),
+        Triple(3, s.tokenSavingMax, s.tokenSavingMaxHint),
+    )
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+    ) {
+        savingLevels.forEach { (level, label, _) ->
+            val selected = settings.tokenSavingLevel == level
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(
+                        if (selected) MaterialTheme.colorScheme.primary
+                        else Color.Transparent,
+                    )
+                    .clickable { onSetTokenSavingLevel(level) }
+                    .padding(vertical = 8.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = if (selected) MaterialTheme.colorScheme.onPrimary
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+    Spacer(Modifier.height(4.dp))
+    Text(
+        text = savingLevels.firstOrNull { it.first == settings.tokenSavingLevel }?.third.orEmpty(),
         style = MaterialTheme.typography.labelSmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
@@ -700,13 +752,13 @@ private fun OtherPage(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = settings.defaultModeId.takeIf { it != "off" }
-                        ?.let { id -> ChatModes.find(id).modeName }
+                        ?.let { id -> ChatModes.find(id, settings.language).localized(settings.language).modeName }
                         ?: s.defaultModeOff,
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 currentDefaultMode?.let {
                     Text(
-                        text = it.description,
+                        text = it.localized(settings.language).description,
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -744,15 +796,18 @@ private fun OtherPage(
                 },
             )
             ChatModes.all.forEach { mode ->
+                val loc = mode.localized(settings.language)
                 DropdownMenuItem(
                     text = {
                         Column {
                             Text(
-                                text = mode.modeName + if (mode.modeId == com.bamboomosaic.llmchat.core.domain.ModeConfig.LEGACY) "（不推荐）" else "",
+                                text = loc.modeName + if (mode.modeId == com.bamboomosaic.llmchat.core.domain.ModeConfig.LEGACY) {
+                                    if (settings.language == com.bamboomosaic.llmchat.core.domain.AppLanguage.ENGLISH) " (not recommended)" else "（不推荐）"
+                                } else "",
                                 style = MaterialTheme.typography.bodyMedium,
                             )
                             Text(
-                                text = mode.description,
+                                text = loc.description,
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )

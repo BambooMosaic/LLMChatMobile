@@ -106,6 +106,8 @@ data class AppSettings(
     val defaultModeId: String = "off",
     /** 自动注入环境信息开关（ds_web 强制开启，无视此开关）。 */
     val contextInjectionEnabled: Boolean = true,
+    /** 省 Token 档位：0=关 1=质量 2=中等 3=最大。 */
+    val tokenSavingLevel: Int = 0,
 ) {
     companion object {
         const val DEFAULT_MODEL = "deepseek-flash"
@@ -156,6 +158,9 @@ interface SettingsRepository {
 
     /** 自动注入环境信息开关。 */
     suspend fun setContextInjectionEnabled(enabled: Boolean)
+
+    /** 省 Token 档位（0-3）。 */
+    suspend fun setTokenSavingLevel(level: Int)
 
     /** 模式模板记忆：每个模式下用户最后一次填写的用户提示词。 */
     fun observeModeUserPrompt(modeId: String): kotlinx.coroutines.flow.Flow<String?>

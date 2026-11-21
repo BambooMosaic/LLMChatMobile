@@ -30,6 +30,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.buildAnnotatedString
@@ -199,43 +200,58 @@ private fun CodeBlockWithCopy(model: MarkdownComponentModel, fence: Boolean) {
         builder.code(codeText).build()
     }
 
+    // 16 轮重制：圆角 10dp 细边框；顶部栏深灰/浅灰底；代码区底色与全局背景一致；语法高亮保留
+    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val containerBorder = if (isDark) Color(0xFF3C3C3C) else Color(0xFFDDDDDD)
+    val headerBackground = if (isDark) Color(0xFF2B2B2B) else Color(0xFFEFEFEF)
+    val codeBackground = MaterialTheme.colorScheme.background
+
     Surface(
-        shape = RoundedCornerShape(8.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant,
+        shape = RoundedCornerShape(10.dp),
+        color = codeBackground,
+        border = androidx.compose.foundation.BorderStroke(1.dp, containerBorder),
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 6.dp),
     ) {
         Column {
+            // 顶部栏：语言标签 + 复制按钮（深灰/浅灰底）
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 12.dp, end = 4.dp),
+                    .background(headerBackground)
+                    .padding(start = 12.dp, end = 4.dp, top = 0.dp, bottom = 0.dp),
+                    .height(IntrinsicSize.Min),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = "code",
+                    text = fenceLanguage(model, fence)?.ifBlank { "code" } ?: "code",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
                 )
                 Spacer(Modifier.weight(1f))
-                TextButton(onClick = {
-                    clipboard.setText(AnnotatedString(codeText))
-                    copied = true
-                }) {
+                TextButton(
+                    onClick = {
+                        clipboard.setText(AnnotatedString(codeText))
+                        copied = true
+                    },
+                    modifier = Modifier.height(28.dp),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                ) {
                     Text(
                         text = if (copied) s.copied else s.copy,
                         style = MaterialTheme.typography.labelSmall,
                     )
                 }
             }
-            // 高亮正文：普通 Text 直接折行（Text 默认 Unlimited 行数 + 按宽度换行）
+            // 高亮正文：底色与全局背景一致，普通 Text 直接折行
             Text(
                 text = buildHighlightedCode(codeText, highlights),
                 style = codeTextStyle(),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 12.dp, end = 12.dp, bottom = 10.dp),
+                    .padding(start = 12.dp, end = 12.dp, bottom = 10.dp, top = 8.dp),
             )
         }
     }
