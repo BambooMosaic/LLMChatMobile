@@ -242,7 +242,13 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
                     .fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                itemsIndexed(messages) { index, msg ->
+                itemsIndexed(
+                    messages,
+                    key = { itemIndex, msg ->
+                        // 稳定 key：已持久化用 dbId+version；流式中的消息（dbId=0）在列表尾部，用 role+序号区分
+                        if (msg.dbId > 0) "m-${msg.dbId}-v${msg.version}" else "live-$itemIndex-${msg.role}"
+                    },
+                ) { index, msg ->
                     val isNewTurn = msg.role == MessageRole.USER && index > 0
                     Spacer(Modifier.height(if (isNewTurn) TurnSpacing else if (index > 0) MessageSpacing else 0.dp))
                     MessageBubble(
@@ -816,7 +822,16 @@ private fun ImageMessageContent(base64: String) {
             android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
         }.getOrNull()
     }
-    if (bitmap == null) return
+    // 解码期间显示等尺寸占位，避免 item 高度从 0 跳到 160dp 造成列表二次测量抖动
+    if (bitmap == null) {
+        Box(
+            modifier = Modifier
+                .size(160.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.15f)),
+        )
+        return
+    }
 
     Image(
         bitmap = bitmap.asImageBitmap(),

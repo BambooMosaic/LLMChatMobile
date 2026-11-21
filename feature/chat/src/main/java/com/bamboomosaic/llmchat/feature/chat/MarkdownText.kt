@@ -72,7 +72,8 @@ fun MarkdownText(
 ) {
     val components = markdownComponents(
         codeFence = { model -> CodeBlockWithCopy(model, fence = true) },
-        codeBlock = { model -> CodeBlockWithCopy(model, fence = false) },
+        // codeBlock（缩进代码块）不注册：AI 回复中带缩进的编号列表等普通文本
+        // 会被误渲染为巨型代码块（超高 item 导致列表滚动二次测量跳变）。
         table = { model -> BorderedTable(model) },
     )
     Markdown(
