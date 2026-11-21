@@ -295,6 +295,15 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
             }
 
             if (error != null) {
+                val err = error!! // 委托属性不能 smart cast，显式断言（17 轮已知坑）
+                val guide = when (err.kind) {
+                    com.bamboomosaic.llmchat.core.domain.ApiError.Kind.AUTH -> s.errGuideAuth
+                    com.bamboomosaic.llmchat.core.domain.ApiError.Kind.INSUFFICIENT_BALANCE -> s.errGuideBalance
+                    com.bamboomosaic.llmchat.core.domain.ApiError.Kind.RATE_LIMIT -> s.errGuideRateLimit
+                    com.bamboomosaic.llmchat.core.domain.ApiError.Kind.TIMEOUT -> s.errGuideTimeout
+                    com.bamboomosaic.llmchat.core.domain.ApiError.Kind.NETWORK -> s.errGuideNetwork
+                    com.bamboomosaic.llmchat.core.domain.ApiError.Kind.UNKNOWN -> s.errGuideUnknown
+                }
                 Surface(
                     color = MaterialTheme.colorScheme.errorContainer,
                     modifier = Modifier
@@ -302,7 +311,8 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
                         .padding(horizontal = 16.dp, vertical = 4.dp),
                 ) {
                     Text(
-                        text = "${s.requestFailed}：$error",
+                        // 17 轮：错误码 + 对应解决指引（同一气泡内换行追加）
+                        text = "${s.requestFailed}：${err.raw}\n$guide",
                         color = MaterialTheme.colorScheme.onErrorContainer,
                         style = MaterialTheme.typography.labelMedium,
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
@@ -376,6 +386,8 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
             initialUserPrompt = null,
             createMode = true,
             uiLanguage = settings.language,
+            roleplayParenRule = settings.roleplayParenRule,
+            onRoleplayParenRuleChange = viewModel::setRoleplayParenRule,
             onConfirm = { modeId, userPrompt, temp, topp ->
                 viewModel.newConversation()
                 viewModel.createConversationWithMode(modeId, userPrompt, temp, topp)
@@ -393,6 +405,8 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
             initialUserPrompt = effectiveUserPrompt,
             createMode = false,
             uiLanguage = settings.language,
+            roleplayParenRule = settings.roleplayParenRule,
+            onRoleplayParenRuleChange = viewModel::setRoleplayParenRule,
             onConfirm = { modeId, userPrompt, temp, topp ->
                 viewModel.updateConversationMode(modeId, userPrompt, temp, topp)
                 showModeEditor = false

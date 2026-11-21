@@ -23,6 +23,8 @@ object SystemPromptBuilder {
         userPrompt: String?,
         maxChars: Int? = null,
         language: AppLanguage = AppLanguage.SIMPLIFIED_CHINESE,
+        /** 角色扮演模式：是否追加括号描写规则（默认开）。 */
+        roleplayParenRule: Boolean = true,
     ): Result {
         val m = mode.localized(language)
         val zh = language == AppLanguage.SIMPLIFIED_CHINESE
@@ -41,6 +43,14 @@ object SystemPromptBuilder {
             appendLine(header3)
             appendLine()
             appendLine(m.builtinPrompt)
+            // 17 轮：角色扮演模式括号描写规则按开关条件追加
+            if (mode.modeId == ModeConfig.ROLEPLAY && roleplayParenRule) {
+                appendLine(
+                    if (en) "Wrap actions, expressions and scene descriptions uniformly in parentheses (（）)."
+                    else if (tw) "動作、神態、環境描寫統一用（）包裹。"
+                    else "动作、神态、环境描写统一用（）包裹。"
+                )
+            }
         }
 
         val user = userPrompt?.trim().orEmpty()

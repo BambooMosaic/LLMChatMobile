@@ -45,6 +45,7 @@ class SettingsStore @Inject constructor(
     private val defaultModeIdKey = stringPreferencesKey("default_mode_id")
     private val contextInjectionKey = booleanPreferencesKey("context_injection_enabled")
     private val tokenSavingKey = intPreferencesKey("token_saving_level")
+    private val roleplayParenKey = booleanPreferencesKey("roleplay_paren_rule")
 
     override fun observeSettings(): Flow<AppSettings> = context.settingsDataStore.data.map { prefs ->
         val language = AppLanguage.fromTag(prefs[languageKey])
@@ -66,6 +67,7 @@ class SettingsStore @Inject constructor(
             defaultModeId = prefs[defaultModeIdKey] ?: "off",
             contextInjectionEnabled = prefs[contextInjectionKey] ?: true,
             tokenSavingLevel = prefs[tokenSavingKey] ?: 0,
+            roleplayParenRule = prefs[roleplayParenKey] ?: true,
         )
     }
 
@@ -119,6 +121,10 @@ class SettingsStore @Inject constructor(
 
     override suspend fun setTokenSavingLevel(level: Int) {
         context.settingsDataStore.edit { it[tokenSavingKey] = level.coerceIn(0, 3) }
+    }
+
+    override suspend fun setRoleplayParenRule(enabled: Boolean) {
+        context.settingsDataStore.edit { it[roleplayParenKey] = enabled }
     }
 
     override fun observeModeUserPrompt(modeId: String): Flow<String?> =

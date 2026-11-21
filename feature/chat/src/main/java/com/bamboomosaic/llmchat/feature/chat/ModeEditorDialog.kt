@@ -46,6 +46,10 @@ fun ModeEditorDialog(
     createMode: Boolean,
     /** 当前应用语言（模式文案三语）。 */
     uiLanguage: com.bamboomosaic.llmchat.core.domain.AppLanguage,
+    /** 角色扮演模式：括号描写规则开关当前值。 */
+    roleplayParenRule: Boolean = true,
+    /** 括号规则开关变化回调。 */
+    onRoleplayParenRuleChange: (Boolean) -> Unit = {},
     onConfirm: (modeId: String, userPrompt: String?, temperature: Float?, topP: Float?) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -187,6 +191,23 @@ fun ModeEditorDialog(
                             selected = !useRoleCard,
                             onClick = { useRoleCard = false },
                             label = if (uiLanguage == com.bamboomosaic.llmchat.core.domain.AppLanguage.ENGLISH) "Configure myself" else "我要自己配置",
+                        )
+                    }
+                    // 17 轮：括号描写规则开关（仅角色扮演模式显示，默认开，DataStore 持久化）
+                    Spacer(Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = s.roleplayParenLabel,
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.weight(1f),
+                        )
+                        androidx.compose.material3.Switch(
+                            checked = roleplayParenRule,
+                            onCheckedChange = { onRoleplayParenRuleChange(it) },
                         )
                     }
                     if (useRoleCard) {

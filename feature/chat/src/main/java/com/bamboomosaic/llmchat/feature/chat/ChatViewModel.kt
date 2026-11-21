@@ -10,6 +10,7 @@ import com.bamboomosaic.llmchat.core.domain.DailyTokenStats
 import com.bamboomosaic.llmchat.core.domain.HourlyTokenStats
 import com.bamboomosaic.llmchat.core.domain.ChatMessage
 import com.bamboomosaic.llmchat.core.domain.ChatModes
+import com.bamboomosaic.llmchat.core.domain.ApiError
 import com.bamboomosaic.llmchat.core.domain.ModeConfig
 import com.bamboomosaic.llmchat.core.domain.SystemPromptBuilder
 import com.bamboomosaic.llmchat.core.domain.ChatRepository
@@ -171,8 +172,8 @@ class ChatViewModel @Inject constructor(
     private val _messages = MutableStateFlow<List<UiMessage>>(emptyList())
     val messages: StateFlow<List<UiMessage>> = _messages.asStateFlow()
 
-    private val _error = MutableStateFlow<String?>(null)
-    val error: StateFlow<String?> = _error.asStateFlow()
+    private val _error = MutableStateFlow<ApiError?>(null)
+    val error: StateFlow<ApiError?> = _error.asStateFlow()
 
     val settings: StateFlow<AppSettings> = settingsRepository
         .observeSettings()
@@ -601,7 +602,7 @@ class ChatViewModel @Inject constructor(
                     render(force = false)
                 },
             )
-                .catch { e -> _error.value = e.message ?: "Unknown error" }
+                .catch { e -> _error.value = ApiError.from(e.message) }
                 .collect { chunk ->
                     accumulated += chunk
                     render(force = false)
@@ -630,7 +631,7 @@ class ChatViewModel @Inject constructor(
                 savedVersion = saved.version
             } else if (_error.value == null) {
                 // 请求成功（可能消耗了 token）但没有任何正文：给出明确原因，而不是留一个空白气泡
-                _error.value = emptyResponseHint(currentSettings)
+                _error.value = ApiError(ApiError.Kind.UNKNOWN, emptyResponseHint(currentSettings))
             }
 
             // 本轮消耗：流结束后读取该会话最近一条 usage
@@ -1045,6 +1046,10 @@ class ChatViewModel @Inject constructor(
 
     fun setTokenSavingLevel(level: Int) {
         viewModelScope.launch { settingsRepository.setTokenSavingLevel(level) }
+    }
+
+    fun setRoleplayParenRule(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setRoleplayParenRule(enabled) }
     }
 
     /**

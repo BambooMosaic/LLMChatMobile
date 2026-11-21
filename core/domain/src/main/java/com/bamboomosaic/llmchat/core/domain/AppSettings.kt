@@ -108,6 +108,8 @@ data class AppSettings(
     val contextInjectionEnabled: Boolean = true,
     /** 省 Token 档位：0=关 1=质量 2=中等 3=最大。 */
     val tokenSavingLevel: Int = 0,
+    /** 角色扮演模式：动作神态环境描写统一用（）包裹。 */
+    val roleplayParenRule: Boolean = true,
 ) {
     companion object {
         const val DEFAULT_MODEL = "deepseek-flash"
@@ -161,6 +163,9 @@ interface SettingsRepository {
 
     /** 省 Token 档位（0-3）。 */
     suspend fun setTokenSavingLevel(level: Int)
+
+    /** 角色扮演模式括号规则开关。 */
+    suspend fun setRoleplayParenRule(enabled: Boolean)
 
     /** 模式模板记忆：每个模式下用户最后一次填写的用户提示词。 */
     fun observeModeUserPrompt(modeId: String): kotlinx.coroutines.flow.Flow<String?>
