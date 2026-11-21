@@ -1,6 +1,7 @@
 package com.bamboomosaic.llmchat.feature.chat
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import kotlinx.coroutines.delay
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
@@ -38,6 +39,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.bamboomosaic.llmchat.feature.chat.i18n.LocalAppStrings
 import com.mikepenz.markdown.compose.components.MarkdownComponentModel
 import com.mikepenz.markdown.compose.components.markdownComponents
@@ -219,21 +221,21 @@ private fun CodeBlockWithCopy(model: MarkdownComponentModel, fence: Boolean) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(30.dp)
+                    .height(18.dp)
                     .background(headerBackground)
-                    .padding(start = 12.dp, end = 8.dp),
+                    .padding(start = 10.dp, end = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
                     text = fenceLanguage(model, fence)?.ifBlank { "code" } ?: "code",
-                    style = MaterialTheme.typography.labelSmall,
+                    style = MaterialTheme.typography.labelSmall.copy(lineHeight = 13.sp),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                 )
                 Spacer(Modifier.weight(1f))
                 Text(
                     text = if (copied) s.copied else s.copy,
-                    style = MaterialTheme.typography.labelSmall,
+                    style = MaterialTheme.typography.labelSmall.copy(lineHeight = 13.sp),
                     color = if (copied) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.clickable {
                         clipboard.setText(AnnotatedString(codeText))
@@ -247,7 +249,7 @@ private fun CodeBlockWithCopy(model: MarkdownComponentModel, fence: Boolean) {
                 style = codeTextStyle(),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 12.dp, end = 12.dp, bottom = 10.dp, top = 8.dp),
+                    .padding(start = 12.dp, end = 12.dp, bottom = 8.dp, top = 4.dp),
             )
         }
     }
