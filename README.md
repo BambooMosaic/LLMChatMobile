@@ -42,7 +42,9 @@ LLMChatMobile 本身不提供 AI 服务，你需要一个 API Key。下面以 De
 
 ## 预览
 
-![聊天界面](screenshots/chat.png)
+| 聊天界面 | Markdown 渲染 |
+|---|---|
+| ![聊天界面](screenshots/chat.png) | ![Markdown 渲染](screenshots/markdown.png) |
 
 ## 开发记录
 
