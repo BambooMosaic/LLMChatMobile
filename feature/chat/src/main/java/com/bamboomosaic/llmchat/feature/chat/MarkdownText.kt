@@ -30,6 +30,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -284,63 +286,60 @@ private fun buildHighlightedCode(code: String, highlights: Highlights): Annotate
     }
 
 /**
- * 带网格线的表格：整体按最宽行的内容自然宽度撑开（IntrinsicSize.Max），
- * 各列在行间对齐，超宽单元格按列宽自动换行；外层横向滚动适配宽表格。
- * 20 轮修复：修复列宽互相挤压导致内容截断、`<br>` 被当作原始文本的问题。
+ * 20 轮重做：适合聊天的撑满式表格——无外框无竖线，行间横线，表头分隔加粗。
+ * 列宽按各列内容的自然宽度加权分配（窄列自动窄、长文本列自动宽且换行），
+ * 全表撑满消息宽度，无横向滚动。
  */
 @Composable
 private fun BorderedTable(model: MarkdownComponentModel) {
-    val borderColor = MaterialTheme.colorScheme.outlineVariant
     val rows = remember(model.node, model.content) { parseTableRows(model) }
     if (rows.isEmpty()) return
     val columnCount = rows.maxOf { it.size }
+    val borderColor = MaterialTheme.colorScheme.outlineVariant
+    val cellStyle = MaterialTheme.typography.bodySmall
+    val density = LocalDensity.current
+    val textMeasurer = rememberTextMeasurer()
 
-    Surface(
-        shape = RoundedCornerShape(8.dp),
-        color = MaterialTheme.colorScheme.surface,
-        border = androidx.compose.foundation.BorderStroke(1.dp, borderColor),
+    // 每列权重 = 列内最长单行的自然宽度（限制在 52~320dp），窄列自动窄、宽列自动宽
+    val columnWeights = remember(rows, cellStyle) {
+        val minPx = with(density) { 52.dp.toPx() }
+        val maxPx = with(density) { 320.dp.toPx() }
+        (0 until columnCount).map { col ->
+            val natural = rows.maxOf { row ->
+                row.getOrElse(col) { "" }.split('\n')
+                    .maxOfOrNull { line ->
+                        if (line.isBlank()) 0f
+                        else textMeasurer.measure(line, cellStyle, maxLines = 1)
+                            .size.width.toFloat()
+                    } ?: 0f
+            }.coerceAtLeast(0f)
+            natural.coerceIn(minPx, maxPx)
+        }
+    }
+
+    Column(
         modifier = Modifier
-            .padding(vertical = 6.dp)
-            .horizontalScroll(rememberScrollState()),
+            .fillMaxWidth()
+            .padding(vertical = 6.dp),
     ) {
-        // IntrinsicSize.Max：以最宽行为准撑开整表，所有行的列边界对齐
-        Column(
-            modifier = Modifier
-                .widthIn(min = 280.dp)
-                .width(IntrinsicSize.Max),
-        ) {
-            rows.forEachIndexed { rowIndex, row ->
-                Row(
-                    modifier = Modifier
-                        .width(IntrinsicSize.Max)
-                        .height(IntrinsicSize.Min),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    (0 until columnCount).forEach { col ->
-                        if (col > 0) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxHeight()
-                                    .width(1.dp)
-                                    .background(borderColor),
-                            )
-                        }
-                        Text(
-                            text = row.getOrElse(col) { "" },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier
-                                .weight(1f, fill = false)
-                                .padding(horizontal = 10.dp, vertical = 8.dp),
-                        )
-                    }
-                }
-                if (rowIndex < rows.lastIndex) {
-                    HorizontalDivider(
-                        color = if (rowIndex == 0) borderColor else borderColor.copy(alpha = 0.5f),
-                        thickness = if (rowIndex == 0) 1.dp else 0.5.dp,
+        rows.forEachIndexed { rowIndex, row ->
+            Row(modifier = Modifier.fillMaxWidth()) {
+                (0 until columnCount).forEach { col ->
+                    Text(
+                        text = row.getOrElse(col) { "" },
+                        style = cellStyle,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier
+                            .weight(columnWeights.getOrElse(col) { 1f })
+                            .padding(horizontal = 8.dp, vertical = 10.dp),
                     )
                 }
+            }
+            if (rowIndex < rows.lastIndex) {
+                HorizontalDivider(
+                    color = if (rowIndex == 0) borderColor else borderColor.copy(alpha = 0.5f),
+                    thickness = if (rowIndex == 0) 1.dp else 0.5.dp,
+                )
             }
         }
     }
