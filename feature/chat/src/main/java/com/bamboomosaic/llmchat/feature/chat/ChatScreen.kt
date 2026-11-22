@@ -188,6 +188,7 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
     // 21 轮：上下文占用（环形按钮 + 统计面板）
     val contextUsage by viewModel.contextUsage.collectAsState()
     var showContextPanel by remember { mutableStateOf(false) }
+    var showCompressConfirm by remember { mutableStateOf(false) }
     LaunchedEffect(messages.size, currentId) { viewModel.refreshContextUsage() }
 
     // 20 轮：平板/横屏（宽屏）侧边栏常驻展开，与聊天内容并排；手机保持抽屉交互
@@ -551,8 +552,37 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
         ContextPanelDialog(
             usage = contextUsage,
             sessionTotals = sessionTotals,
-            onManualCompress = viewModel::manualCompress,
+            onManualCompress = {
+                showContextPanel = false
+                showCompressConfirm = true
+            },
             onDismiss = { showContextPanel = false },
+        )
+    }
+
+    // 21 轮：手动压缩确认弹窗（摘要替换旧消息，不可逆）
+    if (showCompressConfirm) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showCompressConfirm = false },
+            title = { Text(s.manualCompressButton) },
+            text = {
+                Text(
+                    text = if (settings.language == com.bamboomosaic.llmchat.core.domain.AppLanguage.ENGLISH)
+                        "Earlier messages will be replaced with an AI-written summary (last 4 kept). Details cannot be recovered. Continue?"
+                    else "将把较早的对话压缩为一条 AI 摘要（保留最近 4 条消息），原细节不可回溯。继续？",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showCompressConfirm = false
+                    viewModel.compressContextManually()
+                }) { Text(if (settings.language == com.bamboomosaic.llmchat.core.domain.AppLanguage.ENGLISH) "Continue" else "继续") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCompressConfirm = false }) {
+                    Text(s.cancel)
+                }
+            },
         )
     }
 

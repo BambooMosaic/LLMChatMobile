@@ -25,6 +25,8 @@ object SystemPromptBuilder {
         language: AppLanguage = AppLanguage.SIMPLIFIED_CHINESE,
         /** 角色扮演模式：是否追加括号描写规则（默认开）。 */
         roleplayParenRule: Boolean = true,
+        /** 21 轮：手动压缩生成的历史对话摘要（非空时注入，含 Legacy / 省钱单层路径）。 */
+        historySummary: String? = null,
     ): Result {
         val m = mode.localized(language)
         val zh = language == AppLanguage.SIMPLIFIED_CHINESE
@@ -51,7 +53,8 @@ object SystemPromptBuilder {
         // Legacy / 省钱模式：完全跳过双层拼接与安全隔离，提示词原样发送
         // （省钱模式的 userPrompt 即「你最多输出 X 个字符 [用户补充：Y]」单层模板）
         if (mode.modeId == ModeConfig.LEGACY || mode.modeId == ModeConfig.SAVING) {
-            return Result(prompt = user)
+            if (historySummary.isNullOrBlank()) return Result(prompt = user)
+            return Result(prompt = "【历史对话摘要】\n$historySummary\n\n$user")
         }
 
         // 18 轮修复：括号描写规则由模式层迁移到用户层——开关开启时追加，关闭时不追加

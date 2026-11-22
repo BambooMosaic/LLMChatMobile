@@ -164,6 +164,10 @@ class ConversationRepositoryImpl @Inject constructor(
         )
     }
 
+    override suspend fun deleteMessagesExceptLast(conversationId: String, keep: Int) {
+        dao.deleteMessagesExceptLast(conversationId, keep)
+    }
+
     private fun ConversationEntity.toDomain() = Conversation(
         id = id,
         title = title,

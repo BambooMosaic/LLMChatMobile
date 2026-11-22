@@ -498,11 +498,12 @@ class ChatViewModel @Inject constructor(
         // 截断上限 = 最大上下文的 30%（字符数近似）
         val maxChars = (currentSettings.maxContextTokens * 30 / 100).coerceAtLeast(500)
         // 18 轮修复：必须把括号规则开关传入拼装管道，否则参数默认 true，开关关了也不生效
-        val sp = SystemPromptBuilder.build(
-            mode, conversation?.userPrompt, maxChars = maxChars,
-            language = currentSettings.language,
-            roleplayParenRule = currentSettings.roleplayParenRule,
-        )
+            val sp = SystemPromptBuilder.build(
+                mode, conversation?.userPrompt, maxChars = maxChars,
+                language = currentSettings.language,
+                roleplayParenRule = currentSettings.roleplayParenRule,
+                historySummary = conversation?.systemPrompt,
+            )
         // 环境上下文注入：ds_web 强制开启；其他模式跟随「自动注入环境信息」开关；
         // 21 轮：终极档一律不注入环境信息
         val shouldInject = (mode.injectContext || currentSettings.contextInjectionEnabled) &&
@@ -1339,15 +1340,93 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    /** 21 轮：手动压缩（占位——自动压缩已按档位阈值运行，持久化压缩待后续版本）。 */
-    fun manualCompress() {
-        showAppToast(
-            when (settings.value.language) {
-                AppLanguage.TRADITIONAL_CHINESE -> "手动压缩将在后续版本提供，当前已按档位自动压缩"
-                AppLanguage.ENGLISH -> "Manual compression arrives in a future release — tier-based auto compression is active"
-                else -> "手动压缩将在后续版本提供，当前已按档位自动压缩"
-            },
-        )
+    /** 21 轮：手动压缩系统提示词（按语言）。 */
+    private fun compressSystemPrompt(settings: AppSettings): String = when (settings.language) {
+        AppLanguage.TRADITIONAL_CHINESE ->
+            "你是对话压缩器。把用户给出的对话历史压缩成简洁摘要：保留关键事实、已做的决定、未完成任务与用户偏好；不超过 400 字；只输出摘要本身。"
+        AppLanguage.ENGLISH ->
+            "You are a conversation compactor. Summarize the provided chat history concisely: keep key facts, decisions, open tasks and user preferences; at most 400 words; output only the summary."
+        else ->
+            "你是对话压缩器。把用户给出的对话历史压缩成简洁摘要：保留关键事实、已做的决定、未完成任务与用户偏好；不超过 400 字；只输出摘要本身。"
+    }
+
+    /** 21 轮：手动压缩——用当前模型把较早对话压成摘要存入会话，再物理删除旧消息（保留最近 4 条）。 */
+    fun compressContextManually() {
+        viewModelScope.launch {
+            val id = _currentConversationId.value
+            val msgs = conversationRepository.getMessages(id)
+            if (msgs.size <= 6) {
+                showAppToast(
+                    when (settings.value.language) {
+                        AppLanguage.TRADITIONAL_CHINESE -> "对话较短，无需压缩"
+                        AppLanguage.ENGLISH -> "This chat is too short to compress"
+                        else -> "对话较短，无需压缩"
+                    },
+                )
+                return@launch
+            }
+            val keep = 4
+            val old = msgs.dropLast(keep)
+            val historyText = old.joinToString("\n") { m ->
+                (if (m.role == MessageRole.USER) "用户" else "AI") + "：" + m.content.take(400)
+            }.take(6000)
+            showAppToast(
+                when (settings.value.language) {
+                    AppLanguage.TRADITIONAL_CHINESE -> "正在压缩对话…"
+                    AppLanguage.ENGLISH -> "Compressing conversation…"
+                    else -> "正在压缩对话…"
+                },
+            )
+            val summary = StringBuilder()
+            runCatching {
+                chatRepository.sendChatStream(
+                    sessionId = id,
+                    messages = listOf(
+                        ChatMessage(MessageRole.SYSTEM, compressSystemPrompt(settings.value)),
+                        ChatMessage(MessageRole.USER, historyText),
+                    ),
+                    model = currentConfig.value?.model ?: settings.value.model,
+                    thinkingEnabled = false,
+                    maxTokens = 512,
+                ).collect { chunk -> summary.append(chunk) }
+            }.onFailure {
+                showAppToast(
+                    when (settings.value.language) {
+                        AppLanguage.TRADITIONAL_CHINESE -> "压缩失败，请稍后重试"
+                        AppLanguage.ENGLISH -> "Compression failed — try again later"
+                        else -> "压缩失败，请稍后重试"
+                    },
+                )
+                return@launch
+            }
+            val summaryText = summary.toString().trim()
+            if (summaryText.isBlank()) {
+                showAppToast(
+                    when (settings.value.language) {
+                        AppLanguage.TRADITIONAL_CHINESE -> "压缩失败，请稍后重试"
+                        AppLanguage.ENGLISH -> "Compression failed — try again later"
+                        else -> "压缩失败，请稍后重试"
+                    },
+                )
+                return@launch
+            }
+            // 摘要写入会话独立提示词列（双层架构下已废弃的旧字段，正好复用）
+            val prev = conversationRepository.getConversationById(id)?.systemPrompt.orEmpty()
+            conversationRepository.setSystemPrompt(
+                id,
+                (if (prev.isBlank()) "" else "$prev\n") + summaryText.take(4000),
+            )
+            conversationRepository.deleteMessagesExceptLast(id, keep)
+            _messages.value = loadLatestMessages(id)
+            refreshContextUsage()
+            showAppToast(
+                when (settings.value.language) {
+                    AppLanguage.TRADITIONAL_CHINESE -> "压缩完成，较早对话已转为摘要"
+                    AppLanguage.ENGLISH -> "Compressed — earlier messages are now a summary"
+                    else -> "压缩完成，较早对话已转为摘要"
+                },
+            )
+        }
     }
 
     /** 模式模板记忆：保存/清除某模式的用户提示词缓存。 */

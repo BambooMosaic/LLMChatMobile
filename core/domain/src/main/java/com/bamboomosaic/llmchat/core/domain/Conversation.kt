@@ -100,4 +100,7 @@ interface ConversationRepository {
         temperature: Float?,
         topP: Float?,
     )
+
+    /** 21 轮：手动压缩——删除会话中除最近 keep 条外的全部消息（不可逆，配合摘要使用）。 */
+    suspend fun deleteMessagesExceptLast(conversationId: String, keep: Int)
 }

@@ -24,17 +24,19 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import kotlin.math.roundToInt
+import kotlin.math.floor
 
 /**
- * 21 轮：离散档位滑块——支持拖动与点击，档位切换带滑动动画；
- * 文字标签排在小滑块下方，左右两端分别对齐。
- * [activeColor] 可传入警示色（终极档特效）。
+ * 21 轮：离散档位滑块（等间隔）。
+ * - 每档占用等宽单元格，圆点停在单元格中心，进度条从第一档（如「关」）中心延申到圆点
+ * - 圆点、进度条、下方标签三者共用同一坐标系，严格对齐
+ * - 支持拖动与点按，档位切换带滑动动画
+ * [activeColor] 可传警示色（终极档特效）。
  */
 @Composable
 fun LevelSlider(
@@ -46,49 +48,51 @@ fun LevelSlider(
     trackColor: Color = MaterialTheme.colorScheme.surfaceVariant,
 ) {
     Column(modifier) {
-        BoxWithConstraints(Modifier.fillMaxWidth()) {
-            val travel: Dp = maxWidth - 20.dp
-            val animated = animateFloatAsState(
-                targetValue = selectedIndex / (levels.size - 1).coerceAtLeast(1).toFloat(),
+        BoxWithConstraints(Modifier.fillMaxWidth().height(32.dp)) {
+            val stopCount = levels.size.coerceAtLeast(2)
+            val cell = maxWidth / stopCount
+            val animatedIndex by animateFloatAsState(
+                targetValue = selectedIndex.toFloat(),
                 animationSpec = tween(200),
                 label = "levelThumb",
             )
-            fun indexAt(x: Dp): Int {
-                val fraction = (x / (maxWidth.coerceAtLeast(1.dp))).coerceIn(0f, 1f)
-                return (fraction * (levels.size - 1)).roundToInt().coerceIn(0, levels.size - 1)
-            }
-            // 轨道
+            fun indexAt(x: Dp): Int =
+                floor((x / cell).coerceIn(0f, stopCount.toFloat() - 0.01f)).toInt()
+
+            // 轨道：从第一档中心到最后档中心
             Box(
                 Modifier
-                    .fillMaxWidth()
+                    .align(Alignment.CenterStart)
+                    .offset(x = cell / 2)
+                    .width(maxWidth - cell)
                     .height(6.dp)
-                    .align(Alignment.Center)
                     .clip(RoundedCornerShape(3.dp))
                     .background(trackColor),
             )
-            // 已选中填充段
+            // 进度：从第一档中心延申到当前档中心（关=第一档时宽度为 0）
             Box(
                 Modifier
-                    .width((travel * animated.value) + 20.dp)
+                    .align(Alignment.CenterStart)
+                    .offset(x = cell / 2)
+                    .width(cell * animatedIndex)
                     .height(6.dp)
-                    .align(Alignment.Center)
                     .clip(RoundedCornerShape(3.dp))
                     .background(activeColor),
             )
-            // 滑块圆点
+            // 圆点：压在轨道上，位于当前档中心
             Box(
                 Modifier
-                    .offset(x = travel * animated.value)
-                    .size(20.dp)
                     .align(Alignment.CenterStart)
+                    .offset(x = cell * animatedIndex)
+                    .size(20.dp)
                     .clip(CircleShape)
                     .background(activeColor),
             )
-            // 点击选择
+            // 点按选择
             Box(
                 Modifier
                     .matchParentSize()
-                    .pointerInput(levels.size) {
+                    .pointerInput(stopCount) {
                         detectTapGestures { offset -> onSelect(indexAt(offset.x.toDp())) }
                     },
             )
@@ -96,7 +100,7 @@ fun LevelSlider(
             Box(
                 Modifier
                     .matchParentSize()
-                    .pointerInput(levels.size) {
+                    .pointerInput(stopCount) {
                         detectHorizontalDragGestures { change, _ ->
                             change.consume()
                             onSelect(indexAt(change.position.x.toDp()))
@@ -104,18 +108,14 @@ fun LevelSlider(
                     },
             )
         }
-        Row(Modifier.fillMaxWidth().padding(top = 6.dp)) {
+        Row(Modifier.fillMaxWidth()) {
             levels.forEachIndexed { i, label ->
                 Text(
                     text = label,
                     style = MaterialTheme.typography.labelSmall,
                     color = if (i == selectedIndex) activeColor
                     else MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = when (i) {
-                        0 -> androidx.compose.ui.text.style.TextAlign.Start
-                        levels.size - 1 -> androidx.compose.ui.text.style.TextAlign.End
-                        else -> androidx.compose.ui.text.style.TextAlign.Center
-                    },
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                     modifier = Modifier
                         .weight(1f)
                         .clickable { onSelect(i) },

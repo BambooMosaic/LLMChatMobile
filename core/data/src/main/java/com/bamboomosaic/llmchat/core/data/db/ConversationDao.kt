@@ -42,6 +42,17 @@ interface ConversationDao {
     @Query("DELETE FROM messages WHERE conversationId = :conversationId")
     suspend fun deleteMessages(conversationId: String)
 
+    /** 21 轮：手动压缩——删除会话中除最近 keep 条外的全部消息（不可逆）。 */
+    @Query(
+        """
+        DELETE FROM messages WHERE conversationId = :conversationId AND id NOT IN (
+            SELECT id FROM messages WHERE conversationId = :conversationId
+            ORDER BY id DESC LIMIT :keep
+        )
+        """,
+    )
+    suspend fun deleteMessagesExceptLast(conversationId: String, keep: Int)
+
     @Query("DELETE FROM conversations WHERE id = :conversationId")
     suspend fun deleteConversation(conversationId: String)
 
