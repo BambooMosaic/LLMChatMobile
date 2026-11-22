@@ -39,3 +39,4 @@ keystore.properties
 outputs/
 screenshots/*.tmp
 k9.sql
+交接文档_*.md
