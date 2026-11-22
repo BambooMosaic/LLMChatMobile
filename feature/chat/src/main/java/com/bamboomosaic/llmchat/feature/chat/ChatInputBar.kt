@@ -132,7 +132,7 @@ fun ChatInputBar(
         }
     }
 
-    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp)) {
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp)) {
         // 外层大圆角容器：包裹上层输入框 + 下层功能栏
         Surface(
             shape = RoundedCornerShape(20.dp),
@@ -212,7 +212,7 @@ fun ChatInputBar(
                                 // 默认三行文本高度，内容增多时向上扩展（有上限）
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .heightIn(min = 112.dp, max = 220.dp)
+                                    .heightIn(min = 84.dp, max = 165.dp)
                                     .padding(end = 52.dp),
                             )
                         }
@@ -228,7 +228,7 @@ fun ChatInputBar(
                                 .align(Alignment.BottomEnd)
                                 .pressScale(sendInteraction, 0.92f)
                                 .padding(end = 2.dp, bottom = 2.dp)
-                                .size(48.dp),
+                                .size(40.dp),
                             colors = if (isGenerating) {
                                 androidx.compose.material3.IconButtonDefaults.filledIconButtonColors(
                                     containerColor = MaterialTheme.colorScheme.error,
@@ -257,7 +257,7 @@ fun ChatInputBar(
                     Box {
                         TextButton(
                             onClick = { modelMenuExpanded = true },
-                            modifier = Modifier.height(30.dp),
+                            modifier = Modifier.height(24.dp),
                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
                         ) {
                             Text(
@@ -334,7 +334,7 @@ fun ChatInputBar(
                                 contentColor = if (modeLocked) MaterialTheme.colorScheme.onSurfaceVariant
                                 else MaterialTheme.colorScheme.primary,
                             ),
-                            modifier = Modifier.height(30.dp),
+                            modifier = Modifier.height(24.dp),
                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
                         ) {
                             Text(
@@ -374,7 +374,7 @@ fun ChatInputBar(
                     Box {
                         TextButton(
                             onClick = { uploadMenuExpanded = true },
-                            modifier = Modifier.height(30.dp),
+                            modifier = Modifier.height(24.dp),
                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
                         ) {
                             Text("📎", style = MaterialTheme.typography.titleMedium)
