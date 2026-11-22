@@ -93,5 +93,7 @@ class TokenUsageRepositoryImpl @Inject constructor(
         promptTokens = promptTokens,
         completionTokens = completionTokens,
         cacheHitTokens = cacheHitTokens,
+        searchTokens = searchTokens,
+        reasoningTokens = reasoningTokens,
     )
 }

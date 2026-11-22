@@ -66,6 +66,7 @@ class ChatRepositoryImpl @Inject constructor(
                                 completionTokens = event.completionTokens,
                                 timestamp = System.currentTimeMillis(),
                                 cacheHitTokens = event.cacheHitTokens,
+                                reasoningTokens = event.reasoningTokens,
                             ),
                         )
                     }
@@ -120,6 +121,10 @@ class ChatRepositoryImpl @Inject constructor(
                         promptTokens = event.promptTokens,
                         completionTokens = event.completionTokens,
                         timestamp = System.currentTimeMillis(),
+                        cacheHitTokens = event.cacheHitTokens,
+                        reasoningTokens = event.reasoningTokens,
+                        // 搜索代理轮次打标，供上下文面板分项统计联网搜索 token
+                        isSearch = true,
                     ),
                 )
                 is SseEvent.Reasoning -> Unit

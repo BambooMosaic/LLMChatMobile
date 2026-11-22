@@ -13,7 +13,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ApiConfigEntity::class,
     ],
     views = [ModelStatsView::class],
-    version = 10,
+    version = 11,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -121,6 +121,17 @@ abstract class AppDatabase : RoomDatabase() {
         val MIGRATION_9_10 = object : Migration(9, 10) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE token_usage_records ADD COLUMN cacheHitTokens INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        /**
+         * v10 -> v11：用量记录增加深度思考 token 列（usage.completion_tokens_details.reasoning_tokens）
+         * 与联网搜索标记列（搜索代理轮次），供上下文面板按会话分项统计。
+         */
+        val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE token_usage_records ADD COLUMN reasoningTokens INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE token_usage_records ADD COLUMN isSearch INTEGER NOT NULL DEFAULT 0")
             }
         }
     }

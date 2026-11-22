@@ -32,7 +32,8 @@ import com.bamboomosaic.llmchat.core.domain.TokenTotals
 import com.bamboomosaic.llmchat.feature.chat.i18n.LocalAppStrings
 
 /**
- * 21 轮：上下文统计圆角弹窗——本对话命中/输入/输出、容量占比、四分项条形、手动压缩入口。
+ * 21 轮：上下文统计圆角弹窗——本对话命中/输入/输出/联网搜索/深度思考、容量占比、三分项条形、手动压缩入口。
+ * 22 轮：容量分项移除联网搜索（搜索内容不进上下文）；token 行增加联网搜索/深度思考分项。
  */
 @Composable
 fun ContextPanelDialog(
@@ -42,13 +43,12 @@ fun ContextPanelDialog(
     onDismiss: () -> Unit,
 ) {
     val s = LocalAppStrings.current
+    // 22 轮：联网搜索内容不进上下文，容量分项只剩三项（系统提示词/消息/深度思考）
     val segSystem = Color(0xFF2E2660)
-    val segSearch = Color(0xFF5A46C8)
     val segMessages = Color(0xFF9B8CFF)
     val segReasoning = Color(0xFFD9CCFF)
     val totalSeg = listOf(
         Triple(s.segSystem, usage.systemChars, segSystem),
-        Triple(s.segSearch, usage.searchChars, segSearch),
         Triple(s.segMessages, usage.messageChars, segMessages),
         Triple(s.segReasoning, usage.reasoningChars, segReasoning),
     )
@@ -72,7 +72,7 @@ fun ContextPanelDialog(
                 Spacer(Modifier.height(16.dp))
                 Text(s.contextCapacity, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.height(4.dp))
-                // 容量占用条：四分项（系统提示词 / 联网搜索 / 消息 / 深度思考）
+                // 容量占用条：三分项（系统提示词 / 消息 / 深度思考）
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -117,10 +117,18 @@ fun ContextPanelDialog(
                 Spacer(Modifier.height(16.dp))
                 HorizontalDivider()
                 Spacer(Modifier.height(12.dp))
-                Text(s.tokenCacheHit + " / " + s.inputTokens + " / " + s.outputTokens, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                // 22 轮：会话 token 行扩为五项（缓存命中/输入/输出/联网搜索/深度思考）
+                Text(
+                    text = s.tokenCacheHit + " / " + s.inputTokens + " / " + s.outputTokens +
+                        " / " + s.segSearch + " / " + s.segReasoning,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    text = "${formatCount(sessionTotals.cacheHitTokens)} / ${formatCount(sessionTotals.promptTokens)} / ${formatCount(sessionTotals.completionTokens)}",
+                    text = "${formatCount(sessionTotals.cacheHitTokens)} / ${formatCount(sessionTotals.promptTokens)} / " +
+                        "${formatCount(sessionTotals.completionTokens)} / ${formatCount(sessionTotals.searchTokens)} / " +
+                        "${formatCount(sessionTotals.reasoningTokens)}",
                     style = MaterialTheme.typography.bodyMedium,
                 )
 

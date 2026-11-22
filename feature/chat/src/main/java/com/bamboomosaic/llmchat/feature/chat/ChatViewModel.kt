@@ -1154,8 +1154,9 @@ class ChatViewModel @Inject constructor(
     }
 
     /**
-     * 20 轮：后台下载最新发布版 APK（DownloadManager，通知栏可见进度）。
-     * 点击立即反馈；取直链失败回退浏览器打开 Releases 页手动下载。
+     * 22 轮：取最新发布版 APK 直链后直接跳浏览器下载。
+     * 系统下载器在部分机型/网络下无法连 GitHub（一直 0 进度），浏览器下载更可靠。
+     * 取直链失败回退浏览器打开 Releases 页手动下载。
      */
     fun downloadLatestApk() {
         showAppToast(
@@ -1167,36 +1168,10 @@ class ChatViewModel @Inject constructor(
         )
         viewModelScope.launch {
             val url = runCatching { chatRepository.latestApkDownloadUrl() }.getOrNull()
-            if (url.isNullOrBlank()) {
-                openInBrowser("https://github.com/BambooMosaic/LLMChatMobile/releases/latest")
-                return@launch
-            }
-            val enqueued = runCatching {
-                val dm = appContext.getSystemService(Context.DOWNLOAD_SERVICE)
-                    as android.app.DownloadManager
-                val request = android.app.DownloadManager.Request(android.net.Uri.parse(url))
-                    .setTitle("LLMChat 最新安装包")
-                    .setDescription("LLMChatMobile")
-                    .setNotificationVisibility(
-                        android.app.DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED,
-                    )
-                    .setDestinationInExternalPublicDir(
-                        android.os.Environment.DIRECTORY_DOWNLOADS,
-                        url.substringAfterLast('/'),
-                    )
-                dm.enqueue(request)
-            }.isSuccess
-            if (enqueued) {
-                showAppToast(
-                    when (settings.value.language) {
-                        AppLanguage.TRADITIONAL_CHINESE -> "已開始後台下載，可在通知欄查看進度"
-                        AppLanguage.ENGLISH -> "Download started — see the notification shade"
-                        else -> "已开始后台下载，可在通知栏查看进度"
-                    },
-                )
-            } else {
-                openInBrowser("https://github.com/BambooMosaic/LLMChatMobile/releases/latest")
-            }
+            openInBrowser(
+                url?.takeIf { it.isNotBlank() }
+                    ?: "https://github.com/BambooMosaic/LLMChatMobile/releases/latest",
+            )
         }
     }
 
@@ -1277,15 +1252,14 @@ class ChatViewModel @Inject constructor(
         settings.tokenSavingLevel == 4 ||
             (settings.tokenSavingLevel == 3 && modeId != ModeConfig.DS_WEB && modeId != ModeConfig.LEGACY)
 
-    /** 21 轮：上下文占用估算（字符数近似，与压缩逻辑同口径）。 */
+    /** 21 轮：上下文占用估算（字符数近似，与压缩逻辑同口径）。22 轮起联网搜索内容不进上下文，不再分项统计。 */
     data class ContextUsage(
         val systemChars: Long = 0,
         val messageChars: Long = 0,
         val reasoningChars: Long = 0,
-        val searchChars: Long = 0,
         val capacityTokens: Long = 0,
     ) {
-        val usedChars: Long get() = systemChars + messageChars + reasoningChars + searchChars
+        val usedChars: Long get() = systemChars + messageChars + reasoningChars
         val fraction: Float
             get() = if (capacityTokens <= 0) 0f else (usedChars.toFloat() / capacityTokens).coerceIn(0f, 1f)
     }
@@ -1320,7 +1294,6 @@ class ChatViewModel @Inject constructor(
             var systemChars = 0L
             var messageChars = 0L
             var reasoningChars = 0L
-            var searchChars = 0L
             bundle.messages.forEach { m ->
                 if (m.role == MessageRole.SYSTEM) {
                     systemChars += m.content.length.toLong()
@@ -1328,13 +1301,11 @@ class ChatViewModel @Inject constructor(
                     messageChars += m.content.length.toLong()
                     reasoningChars += (m.reasoning?.length ?: 0).toLong()
                 }
-                searchChars += (m.searchPages ?: 0) * 500L // 联网搜索内容未落库，按网页数估算
             }
             _contextUsage.value = ContextUsage(
                 systemChars = systemChars,
                 messageChars = messageChars,
                 reasoningChars = reasoningChars,
-                searchChars = searchChars,
                 capacityTokens = capacity,
             )
         }

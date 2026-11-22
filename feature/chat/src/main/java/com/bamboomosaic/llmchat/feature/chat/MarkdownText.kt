@@ -304,14 +304,15 @@ private fun BorderedTable(model: MarkdownComponentModel) {
         val availablePx = with(density) { maxWidth.toPx() }
         val minPx = with(density) { 52.dp.toPx() }
         val maxPx = with(density) { 320.dp.toPx() }
-        // 每列自然宽度 = 列内最长单行的像素宽（52~320dp 截断）
+        // 每列自然宽度 = 列内最长单行的像素宽（52~320dp 截断）；测量时去掉 ** 标记，避免宽度虚高
         val naturals = remember(rows, availablePx) {
             (0 until columnCount).map { col ->
                 rows.maxOf { row ->
                     row.getOrElse(col) { "" }.split('\n')
                         .maxOfOrNull { line ->
-                            if (line.isBlank()) 0f
-                            else textMeasurer.measure(line, cellStyle, maxLines = 1)
+                            val plain = line.replace("**", "")
+                            if (plain.isBlank()) 0f
+                            else textMeasurer.measure(plain, cellStyle, maxLines = 1)
                                 .size.width.toFloat()
                         } ?: 0f
                 }.coerceIn(minPx, maxPx)
@@ -334,7 +335,7 @@ private fun BorderedTable(model: MarkdownComponentModel) {
                 Row(modifier = if (scrollable) Modifier else Modifier.fillMaxWidth()) {
                     (0 until columnCount).forEach { col ->
                         Text(
-                            text = row.getOrElse(col) { "" },
+                            text = parseCellText(row.getOrElse(col) { "" }),
                             style = cellStyle,
                             color = MaterialTheme.colorScheme.onSurface,
                             modifier =
@@ -379,5 +380,30 @@ private fun parseTableRows(model: MarkdownComponentModel): List<List<String>> {
             .filter { it.isNotEmpty() }
     } catch (e: Exception) {
         emptyList()
+    }
+}
+
+/**
+ * 22 轮：单元格内联样式——解析 **加粗**（其余语法不展开，保持纯文本行为）。
+ * 未闭合的 ** 原样保留；连续段落中的成对 ** 交替生效。
+ */
+private fun parseCellText(text: String): AnnotatedString = buildAnnotatedString {
+    var cursor = 0
+    while (cursor < text.length) {
+        val start = text.indexOf("**", cursor)
+        if (start < 0) {
+            append(text.substring(cursor))
+            break
+        }
+        val end = text.indexOf("**", start + 2)
+        if (end < 0) {
+            append(text.substring(cursor))
+            break
+        }
+        append(text.substring(cursor, start))
+        pushStyle(SpanStyle(fontWeight = FontWeight.Bold))
+        append(text.substring(start + 2, end))
+        pop()
+        cursor = end + 2
     }
 }

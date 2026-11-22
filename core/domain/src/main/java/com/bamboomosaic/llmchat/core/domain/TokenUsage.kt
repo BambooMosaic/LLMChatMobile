@@ -39,11 +39,15 @@ data class HourlyTokenStats(
     val outputTokens: Long = 0,
 )
 
-/** 输入/输出/总计/缓存命中 token 汇总。 */
+/** 输入/输出/总计/缓存命中/联网搜索/深度思考 token 汇总。 */
 data class TokenTotals(
     val promptTokens: Long = 0,
     val completionTokens: Long = 0,
     val cacheHitTokens: Long = 0,
+    /** 22 轮：搜索代理轮次消耗的 token 合计（联网搜索分项）。 */
+    val searchTokens: Long = 0,
+    /** 22 轮：深度思考消耗的 token 合计（reasoning_tokens 明细，已含在输出内）。 */
+    val reasoningTokens: Long = 0,
 ) {
     val total: Long get() = promptTokens + completionTokens
 }

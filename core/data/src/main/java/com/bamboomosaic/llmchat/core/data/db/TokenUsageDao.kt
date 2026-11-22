@@ -7,11 +7,13 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import kotlinx.coroutines.flow.Flow
 
-/** SUM 聚合结果（输入/输出/缓存命中分开），仅用于查询映射。 */
+/** SUM 聚合结果（输入/输出/缓存命中/联网搜索/深度思考分开），仅用于查询映射。 */
 data class TokenTotalsRow(
     @ColumnInfo(name = "promptTokens") val promptTokens: Long,
     @ColumnInfo(name = "completionTokens") val completionTokens: Long,
     @ColumnInfo(name = "cacheHitTokens") val cacheHitTokens: Long,
+    @ColumnInfo(name = "searchTokens") val searchTokens: Long = 0,
+    @ColumnInfo(name = "reasoningTokens") val reasoningTokens: Long = 0,
 )
 
 /** 按本地 3 小时时段聚合的 token 消耗（近 1 天柱状图数据源，三色分段）。 */
@@ -56,24 +58,28 @@ interface TokenUsageDao {
     )
     fun observeSessionTotal(sessionId: String): Flow<Long>
 
-    /** 某会话输入/输出/缓存命中明细。 */
+    /** 某会话输入/输出/缓存命中/联网搜索/深度思考明细。 */
     @Query(
         """
         SELECT COALESCE(SUM(promptTokens), 0) AS promptTokens,
                COALESCE(SUM(completionTokens), 0) AS completionTokens,
-               COALESCE(SUM(cacheHitTokens), 0) AS cacheHitTokens
+               COALESCE(SUM(cacheHitTokens), 0) AS cacheHitTokens,
+               COALESCE(SUM(CASE WHEN isSearch = 1 THEN promptTokens + completionTokens ELSE 0 END), 0) AS searchTokens,
+               COALESCE(SUM(reasoningTokens), 0) AS reasoningTokens
         FROM token_usage_records
         WHERE sessionId = :sessionId
         """,
     )
     fun observeSessionTotals(sessionId: String): Flow<TokenTotalsRow>
 
-    /** 全应用输入/输出/缓存命中累计（跨会话）。 */
+    /** 全应用输入/输出/缓存命中/联网搜索/深度思考累计（跨会话）。 */
     @Query(
         """
         SELECT COALESCE(SUM(promptTokens), 0) AS promptTokens,
                COALESCE(SUM(completionTokens), 0) AS completionTokens,
-               COALESCE(SUM(cacheHitTokens), 0) AS cacheHitTokens
+               COALESCE(SUM(cacheHitTokens), 0) AS cacheHitTokens,
+               COALESCE(SUM(CASE WHEN isSearch = 1 THEN promptTokens + completionTokens ELSE 0 END), 0) AS searchTokens,
+               COALESCE(SUM(reasoningTokens), 0) AS reasoningTokens
         FROM token_usage_records
         """,
     )

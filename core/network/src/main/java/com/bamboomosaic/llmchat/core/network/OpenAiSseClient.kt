@@ -41,6 +41,8 @@ sealed interface SseEvent {
         val completionTokens: Long,
         /** 20 轮：prompt 中命中缓存的 token 数（DeepSeek 系返回；其他模型为 0）。 */
         val cacheHitTokens: Long = 0,
+        /** 22 轮：深度思考消耗的 token 数（completion_tokens_details.reasoning_tokens；无则为 0）。 */
+        val reasoningTokens: Long = 0,
     ) : SseEvent
 }
 
@@ -103,6 +105,13 @@ private data class DeltaDto(
         // DeepSeek 系：缓存命中与未命中拆分（其他厂商无此字段，默认 0）
         @SerialName("prompt_cache_hit_tokens") val cacheHitTokens: Long = 0,
         @SerialName("prompt_cache_miss_tokens") val cacheMissTokens: Long = 0,
+        // 22 轮：深度思考 token 明细（OpenAI/DeepSeek 系返回，其他厂商无此字段）
+        @SerialName("completion_tokens_details") val completionTokensDetails: CompletionDetailsDto? = null,
+    )
+
+    @Serializable
+    private data class CompletionDetailsDto(
+        @SerialName("reasoning_tokens") val reasoningTokens: Long = 0,
     )
 
 /** 非流式响应（服务端忽略 stream 参数时的兜底格式）。 */
@@ -235,6 +244,7 @@ class OpenAiSseClient(
                                         completionTokens = usage.completionTokens,
                                         // DeepSeek：prompt = cacheHit + cacheMiss；输入取未命中部分
                                         cacheHitTokens = usage.cacheHitTokens,
+                                        reasoningTokens = usage.completionTokensDetails?.reasoningTokens ?: 0,
                                     ),
                                 ).isSuccess
                                 if (!sent) break@loop
