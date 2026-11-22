@@ -36,7 +36,12 @@ sealed interface SseEvent {
 
     /** 联网搜索：一次搜索类工具调用完成，携带本次返回的网页结果条数。 */
     data class SearchCompleted(val pageCount: Int) : SseEvent
-    data class Usage(val promptTokens: Long, val completionTokens: Long) : SseEvent
+    data class Usage(
+        val promptTokens: Long,
+        val completionTokens: Long,
+        /** 20 轮：prompt 中命中缓存的 token 数（DeepSeek 系返回；其他模型为 0）。 */
+        val cacheHitTokens: Long = 0,
+    ) : SseEvent
 }
 
 @Serializable
@@ -91,11 +96,14 @@ private data class DeltaDto(
     @SerialName("reasoning_content") val reasoningContent: String? = null,
 )
 
-@Serializable
-private data class UsageDto(
-    @SerialName("prompt_tokens") val promptTokens: Long = 0,
-    @SerialName("completion_tokens") val completionTokens: Long = 0,
-)
+    @Serializable
+    private data class UsageDto(
+        @SerialName("prompt_tokens") val promptTokens: Long = 0,
+        @SerialName("completion_tokens") val completionTokens: Long = 0,
+        // DeepSeek 系：缓存命中与未命中拆分（其他厂商无此字段，默认 0）
+        @SerialName("prompt_cache_hit_tokens") val cacheHitTokens: Long = 0,
+        @SerialName("prompt_cache_miss_tokens") val cacheMissTokens: Long = 0,
+    )
 
 /** 非流式响应（服务端忽略 stream 参数时的兜底格式）。 */
 @Serializable
@@ -225,6 +233,8 @@ class OpenAiSseClient(
                                     SseEvent.Usage(
                                         promptTokens = usage.promptTokens,
                                         completionTokens = usage.completionTokens,
+                                        // DeepSeek：prompt = cacheHit + cacheMiss；输入取未命中部分
+                                        cacheHitTokens = usage.cacheHitTokens,
                                     ),
                                 ).isSuccess
                                 if (!sent) break@loop

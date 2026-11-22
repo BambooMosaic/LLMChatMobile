@@ -13,7 +13,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ApiConfigEntity::class,
     ],
     views = [ModelStatsView::class],
-    version = 9,
+    version = 10,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -111,6 +111,16 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE messages ADD COLUMN version INTEGER NOT NULL DEFAULT 1")
                 db.execSQL("ALTER TABLE messages ADD COLUMN versionKey INTEGER")
                 db.execSQL("ALTER TABLE messages ADD COLUMN usageId INTEGER")
+            }
+        }
+
+        /**
+         * v9 -> v10：用量记录增加缓存命中列（DeepSeek 系 usage 返回 prompt_cache_hit_tokens），
+         * 用于缓存命中统计与三色柱状图。
+         */
+        val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE token_usage_records ADD COLUMN cacheHitTokens INTEGER NOT NULL DEFAULT 0")
             }
         }
     }

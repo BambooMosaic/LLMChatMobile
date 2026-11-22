@@ -112,12 +112,16 @@ data class AppSettings(
     val roleplayParenRule: Boolean = true,
     /** 用户称呼（可选）；非空时注入环境上下文，DS 网页版模式除外。 */
     val userNickname: String = "",
+    /** 20 轮：聊天页面自定义背景图（应用内文件路径；空 = 默认背景）。 */
+    val backgroundImageUri: String = "",
+    /** 20 轮：UI 配色预设 ID（default / ocean / forest / ember）。 */
+    val colorPreset: String = "default",
 ) {
     companion object {
         const val DEFAULT_MODEL = "deepseek-flash"
         const val DEFAULT_BASE_URL = "https://api.deepseek.com"
         const val DEFAULT_API_KEY = ""
-        const val DEFAULT_MAX_CONTEXT_TOKENS = 80000
+        const val DEFAULT_MAX_CONTEXT_TOKENS = 1_000_000
         const val DEFAULT_MAX_OUTPUT_TOKENS = 4096
         const val DEFAULT_MODE_OFF = "off"
 
@@ -171,6 +175,12 @@ interface SettingsRepository {
 
     /** 用户称呼（可选，留空不注入）。 */
     suspend fun setUserNickname(value: String)
+
+    /** 20 轮：聊天页自定义背景图（应用内路径；空串 = 使用默认背景）。 */
+    suspend fun setBackgroundImageUri(value: String)
+
+    /** 20 轮：UI 配色预设 ID。 */
+    suspend fun setColorPreset(value: String)
 
     /** 模式模板记忆：每个模式下用户最后一次填写的用户提示词。 */
     fun observeModeUserPrompt(modeId: String): kotlinx.coroutines.flow.Flow<String?>

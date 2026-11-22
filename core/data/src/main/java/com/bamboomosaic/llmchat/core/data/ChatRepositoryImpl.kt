@@ -65,6 +65,7 @@ class ChatRepositoryImpl @Inject constructor(
                                 promptTokens = event.promptTokens,
                                 completionTokens = event.completionTokens,
                                 timestamp = System.currentTimeMillis(),
+                                cacheHitTokens = event.cacheHitTokens,
                             ),
                         )
                     }

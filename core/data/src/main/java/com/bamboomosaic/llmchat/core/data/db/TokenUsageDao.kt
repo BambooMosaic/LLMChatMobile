@@ -7,22 +7,29 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import kotlinx.coroutines.flow.Flow
 
-/** SUM 聚合结果（输入/输出分开），仅用于查询映射。 */
+/** SUM 聚合结果（输入/输出/缓存命中分开），仅用于查询映射。 */
 data class TokenTotalsRow(
     @ColumnInfo(name = "promptTokens") val promptTokens: Long,
     @ColumnInfo(name = "completionTokens") val completionTokens: Long,
+    @ColumnInfo(name = "cacheHitTokens") val cacheHitTokens: Long,
 )
 
-/** 按本地 3 小时时段聚合的 token 消耗（近 1 天柱状图数据源）。 */
+/** 按本地 3 小时时段聚合的 token 消耗（近 1 天柱状图数据源，三色分段）。 */
 data class HourlyTokenRow(
     @ColumnInfo(name = "hour") val hour: Int,
     @ColumnInfo(name = "tokens") val tokens: Long,
+    @ColumnInfo(name = "cacheHitTokens") val cacheHitTokens: Long,
+    @ColumnInfo(name = "inputTokens") val inputTokens: Long,
+    @ColumnInfo(name = "outputTokens") val outputTokens: Long,
 )
 
-/** 按本地日期聚合的每日 token 消耗（柱状图数据源）。 */
+/** 按本地日期聚合的每日 token 消耗（柱状图数据源，三色分段）。 */
 data class DailyTokenRow(
     @ColumnInfo(name = "day") val day: String,
     @ColumnInfo(name = "tokens") val tokens: Long,
+    @ColumnInfo(name = "cacheHitTokens") val cacheHitTokens: Long,
+    @ColumnInfo(name = "inputTokens") val inputTokens: Long,
+    @ColumnInfo(name = "outputTokens") val outputTokens: Long,
 )
 
 @Dao
@@ -49,22 +56,24 @@ interface TokenUsageDao {
     )
     fun observeSessionTotal(sessionId: String): Flow<Long>
 
-    /** 某会话输入/输出明细。 */
+    /** 某会话输入/输出/缓存命中明细。 */
     @Query(
         """
         SELECT COALESCE(SUM(promptTokens), 0) AS promptTokens,
-               COALESCE(SUM(completionTokens), 0) AS completionTokens
+               COALESCE(SUM(completionTokens), 0) AS completionTokens,
+               COALESCE(SUM(cacheHitTokens), 0) AS cacheHitTokens
         FROM token_usage_records
         WHERE sessionId = :sessionId
         """,
     )
     fun observeSessionTotals(sessionId: String): Flow<TokenTotalsRow>
 
-    /** 全应用输入/输出累计（跨会话）。 */
+    /** 全应用输入/输出/缓存命中累计（跨会话）。 */
     @Query(
         """
         SELECT COALESCE(SUM(promptTokens), 0) AS promptTokens,
-               COALESCE(SUM(completionTokens), 0) AS completionTokens
+               COALESCE(SUM(completionTokens), 0) AS completionTokens,
+               COALESCE(SUM(cacheHitTokens), 0) AS cacheHitTokens
         FROM token_usage_records
         """,
     )
@@ -85,11 +94,14 @@ interface TokenUsageDao {
     @Query("SELECT * FROM token_stats_models ORDER BY model")
     fun observeModelStats(): Flow<List<ModelStatsView>>
 
-    /** 从 [since]（epoch millis）起，按本地日期聚合每日 token 消耗。 */
+    /** 从 [since]（epoch millis）起，按本地日期聚合每日 token 消耗（三色分段）。 */
     @Query(
         """
         SELECT date(timestamp / 1000, 'unixepoch', 'localtime') AS day,
-               SUM(promptTokens + completionTokens) AS tokens
+               SUM(promptTokens + completionTokens) AS tokens,
+               SUM(cacheHitTokens) AS cacheHitTokens,
+               SUM(promptTokens - cacheHitTokens) AS inputTokens,
+               SUM(completionTokens) AS outputTokens
         FROM token_usage_records
         WHERE timestamp >= :since
         GROUP BY day
@@ -98,11 +110,14 @@ interface TokenUsageDao {
     )
     fun observeDailyTotals(since: Long): Flow<List<DailyTokenRow>>
 
-    /** 从 [since] 起按本地 3 小时时段聚合（hour = 0/3/6/.../21）。 */
+    /** 从 [since] 起按本地 3 小时时段聚合（hour = 0/3/6/.../21，三色分段）。 */
     @Query(
         """
         SELECT (CAST(strftime('%H', timestamp / 1000, 'unixepoch', 'localtime') AS INTEGER) / 3) * 3 AS hour,
-               SUM(promptTokens + completionTokens) AS tokens
+               SUM(promptTokens + completionTokens) AS tokens,
+               SUM(cacheHitTokens) AS cacheHitTokens,
+               SUM(promptTokens - cacheHitTokens) AS inputTokens,
+               SUM(completionTokens) AS outputTokens
         FROM token_usage_records
         WHERE timestamp >= :since
         GROUP BY hour

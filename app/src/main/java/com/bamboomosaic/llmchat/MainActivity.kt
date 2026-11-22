@@ -65,7 +65,7 @@ class MainActivity : ComponentActivity() {
             val isFirstLaunch by settingsRepository.observeFirstLaunch().collectAsState(initial = true)
 
             CompositionLocalProvider(LocalAppStrings provides stringsFor(settings.language)) {
-                LLMChatTheme(darkTheme = isDark) {
+                LLMChatTheme(darkTheme = isDark, colorPreset = settings.colorPreset) {
                     when {
                         showSplash -> SplashScreen(onFinished = { showSplash = false })
                         isFirstLaunch -> OnboardingScreen(

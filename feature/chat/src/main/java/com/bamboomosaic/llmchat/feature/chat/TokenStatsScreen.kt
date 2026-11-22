@@ -11,7 +11,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
@@ -22,6 +25,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.bamboomosaic.llmchat.core.domain.DailyTokenStats
@@ -71,11 +75,12 @@ fun TokenStatsScreen(
                     .verticalScroll(rememberScrollState())
                     .padding(horizontal = 16.dp, vertical = 8.dp),
             ) {
-                // 顶部三张累计卡片
+                // 顶部四张累计卡片（21 轮：新增缓存命中）
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
+                    TokenCard(label = s.tokenCacheHit, value = totals.cacheHitTokens, modifier = Modifier.weight(1f))
                     TokenCard(label = s.inputTokens, value = totals.promptTokens, modifier = Modifier.weight(1f))
                     TokenCard(label = s.outputTokens, value = totals.completionTokens, modifier = Modifier.weight(1f))
                     TokenCard(label = s.totalTokens, value = totals.total, modifier = Modifier.weight(1f))
@@ -98,6 +103,17 @@ fun TokenStatsScreen(
                     TokenHourlyBarChart(stats = hourlyStats, modifier = Modifier.fillMaxWidth())
                 } else {
                     TokenBarChart(stats = dailyStats, days = days, modifier = Modifier.fillMaxWidth())
+                }
+
+                // 21 轮：三色图例（缓存命中 / 输入 / 输出）
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    LegendDot(color = Color(0xFFD9CCFF), label = s.tokenCacheHit)
+                    LegendDot(color = Color(0xFF9B8CFF), label = s.inputTokens)
+                    LegendDot(color = Color(0xFF5A46C8), label = s.outputTokens)
                 }
                 Spacer(Modifier.height(8.dp))
             }
@@ -155,7 +171,7 @@ private fun PeriodButton(
     }
 }
 
-/** Compose 原生柱状图：按天数铺满柱子，高度按最大值归一化。 */
+/** Compose 原生柱状图：按天数铺满柱子，高度按最大值归一化；21 轮起三色分段（缓存命中/输入/输出）。 */
 @Composable
 private fun TokenBarChart(
     stats: List<DailyTokenStats>,
@@ -163,7 +179,7 @@ private fun TokenBarChart(
     modifier: Modifier = Modifier,
 ) {
     // SQLite 返回 yyyy-MM-dd，这里统一取 MM-dd 作为 key，与下方标签格式一致
-    val byDate = stats.associate { it.date.takeLast(5) to it.tokens }
+    val byDate = stats.associate { it.date.takeLast(5) to it }
     // 生成连续日期序列（最近 days 天，MM-dd），缺失的补 0
     val cal = java.util.Calendar.getInstance()
     cal.set(java.util.Calendar.HOUR_OF_DAY, 0)
@@ -176,9 +192,12 @@ private fun TokenBarChart(
         c.add(java.util.Calendar.DAY_OF_MONTH, -(days - 1 - i))
         labels.add(String.format("%02d-%02d", c.get(java.util.Calendar.MONTH) + 1, c.get(java.util.Calendar.DAY_OF_MONTH)))
     }
-    val values = labels.map { byDate[it] ?: 0L }
-    val maxValue = values.maxOrNull() ?: 0L
-    val barColor = MaterialTheme.colorScheme.primary
+    val items = labels.map { label -> byDate[label] ?: DailyTokenStats(date = label, tokens = 0) }
+    val maxValue = items.maxOf { it.tokens } ?: 0L
+    val cacheColor = Color(0xFFD9CCFF)
+    val inputColor = Color(0xFF9B8CFF)
+    val outputColor = Color(0xFF5A46C8)
+    val emptyColor = MaterialTheme.colorScheme.surfaceVariant
     val chartHeight = 120.dp
 
     Row(
@@ -186,8 +205,8 @@ private fun TokenBarChart(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.Bottom,
     ) {
-        labels.forEachIndexed { index, label ->
-            val value = values[index]
+        items.forEachIndexed { index, stat ->
+            val value = stat.tokens
             val fraction = if (maxValue > 0) max(0.03f, value.toFloat() / maxValue.toFloat()) else 0f
             Column(
                 modifier = Modifier.weight(1f),
@@ -202,24 +221,52 @@ private fun TokenBarChart(
                     maxLines = 1,
                 )
                 Spacer(Modifier.height(4.dp))
-                // 柱子：固定高度容器，底部对齐，按比例从底部画
+                // 三色分段柱（自下而上：缓存命中 / 输入 / 输出）
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(chartHeight),
                     contentAlignment = Alignment.BottomCenter,
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(chartHeight * fraction)
-                            .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
-                            .background(if (value > 0) barColor else MaterialTheme.colorScheme.surfaceVariant),
-                    )
+                    if (value <= 0) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(chartHeight * fraction)
+                                .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
+                                .background(emptyColor),
+                        )
+                    } else {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(chartHeight * fraction),
+                        ) {
+                            val totalF = value.toFloat().coerceAtLeast(1f)
+                            Box(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .height((chartHeight * fraction * (stat.outputTokens / totalF)))
+                                    .background(outputColor),
+                            )
+                            Box(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .height((chartHeight * fraction * (stat.inputTokens / totalF)))
+                                    .background(inputColor),
+                            )
+                            Box(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f)
+                                    .background(cacheColor),
+                            )
+                        }
+                    }
                 }
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    text = label,
+                    text = labels[index],
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
@@ -230,17 +277,39 @@ private fun TokenBarChart(
     }
 }
 
-/** 近 1 天的 3 小时分段柱状图：8 根柱子（00/03/.../21）。 */
+/** 图例：彩色圆点 + 文本。 */
+@Composable
+private fun LegendDot(color: Color, label: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            modifier = Modifier
+                .size(8.dp)
+                .clip(CircleShape)
+                .background(color),
+        )
+        Spacer(Modifier.width(4.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/** 近 1 天的 3 小时分段柱状图：8 根柱子（00/03/.../21），21 轮起三色分段。 */
 @Composable
 private fun TokenHourlyBarChart(
     stats: List<HourlyTokenStats>,
     modifier: Modifier = Modifier,
 ) {
-    val byHour = stats.associate { it.hour to it.tokens }
+    val byHour = stats.associate { it.hour to it }
     val hours = (0..21 step 3).toList()
-    val values = hours.map { byHour[it] ?: 0L }
-    val maxValue = values.maxOrNull() ?: 0L
-    val barColor = MaterialTheme.colorScheme.primary
+    val items = hours.map { hour -> byHour[hour] ?: HourlyTokenStats(hour = hour, tokens = 0) }
+    val maxValue = items.maxOf { it.tokens } ?: 0L
+    val cacheColor = Color(0xFFD9CCFF)
+    val inputColor = Color(0xFF9B8CFF)
+    val outputColor = Color(0xFF5A46C8)
+    val emptyColor = MaterialTheme.colorScheme.surfaceVariant
     val chartHeight = 120.dp
 
     Row(
@@ -248,8 +317,8 @@ private fun TokenHourlyBarChart(
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalAlignment = Alignment.Bottom,
     ) {
-        hours.forEachIndexed { index, hour ->
-            val value = values[index]
+        items.forEachIndexed { index, stat ->
+            val value = stat.tokens
             val fraction = if (maxValue > 0) max(0.03f, value.toFloat() / maxValue.toFloat()) else 0f
             Column(
                 modifier = Modifier.weight(1f),
@@ -269,17 +338,45 @@ private fun TokenHourlyBarChart(
                         .height(chartHeight),
                     contentAlignment = Alignment.BottomCenter,
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(chartHeight * fraction)
-                            .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
-                            .background(if (value > 0) barColor else MaterialTheme.colorScheme.surfaceVariant),
-                    )
+                    if (value <= 0) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(chartHeight * fraction)
+                                .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
+                                .background(emptyColor),
+                        )
+                    } else {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(chartHeight * fraction),
+                        ) {
+                            val totalF = value.toFloat().coerceAtLeast(1f)
+                            Box(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .height((chartHeight * fraction * (stat.outputTokens / totalF)))
+                                    .background(outputColor),
+                            )
+                            Box(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .height((chartHeight * fraction * (stat.inputTokens / totalF)))
+                                    .background(inputColor),
+                            )
+                            Box(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f)
+                                    .background(cacheColor),
+                            )
+                        }
+                    }
                 }
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    text = String.format("%02d", hour),
+                    text = String.format("%02d", stat.hour),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
@@ -290,7 +387,7 @@ private fun TokenHourlyBarChart(
     }
 }
 
-private fun formatCount(value: Long): String = when {
+internal fun formatCount(value: Long): String = when {
     value >= 1_000_000 -> String.format("%.1fM", value / 1_000_000f)
     value >= 1_000 -> String.format("%.1fK", value / 1_000f)
     else -> value.toString()

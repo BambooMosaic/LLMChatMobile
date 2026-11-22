@@ -8,6 +8,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.clickable
@@ -184,6 +185,11 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
         }
     }
 
+    // 21 轮：上下文占用（环形按钮 + 统计面板）
+    val contextUsage by viewModel.contextUsage.collectAsState()
+    var showContextPanel by remember { mutableStateOf(false) }
+    LaunchedEffect(messages.size, currentId) { viewModel.refreshContextUsage() }
+
     // 20 轮：平板/横屏（宽屏）侧边栏常驻展开，与聊天内容并排；手机保持抽屉交互
     val wideScreen = LocalConfiguration.current.screenWidthDp >= 600
     val closeDrawer: () -> Unit = { scope.launch { drawerState.close() } }
@@ -227,14 +233,37 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
         )
     }
     val chatBody: @Composable (Boolean) -> Unit = { permanentDrawer ->
-        // 必须自己绘制背景：否则 ModalNavigationDrawer 内容区透明，会露出窗口背景（浅色主题下是白色）
+        // 必须自己绘制背景：否则内容区透明会露出窗口背景（浅色主题下是白色）
         // imePadding：Android 15 强制 edge-to-edge 后窗口不再 resize，不加会被键盘挡住输入栏/发送按钮
-        Column(
+        // 21 轮：支持自定义背景图（缩放居中 + 可读性遮罩），未设置时用默认纯色
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background)
                 .imePadding(),
         ) {
+            if (settings.backgroundImageUri.isNotBlank()) {
+                val bgBitmap = remember(settings.backgroundImageUri) {
+                    runCatching { android.graphics.BitmapFactory.decodeFile(settings.backgroundImageUri) }
+                        .getOrNull()
+                }
+                if (bgBitmap != null) {
+                    androidx.compose.foundation.Image(
+                        bitmap = bgBitmap.asImageBitmap(),
+                        contentDescription = null,
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(MaterialTheme.colorScheme.background.copy(alpha = 0.72f)),
+                    )
+                }
+            }
+            Column(
+                modifier = Modifier.fillMaxSize(),
+            ) {
             TopAppBar(
                 colors = androidx.compose.material3.TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface,
@@ -254,6 +283,38 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
                     )
                 },
                 actions = {
+                    // 21 轮：环形上下文进度按钮（替换原 Token 文本），点击打开统计面板
+                    val ringTrack = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
+                    val ringPrimary = MaterialTheme.colorScheme.primary
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .padding(4.dp)
+                            .clip(androidx.compose.foundation.shape.CircleShape)
+                            .clickable {
+                                viewModel.refreshContextUsage()
+                                showContextPanel = true
+                            },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Canvas(modifier = Modifier.fillMaxSize()) {
+                            val stroke = 2.5.dp.toPx()
+                            drawArc(
+                                color = ringTrack,
+                                startAngle = -90f,
+                                sweepAngle = 360f,
+                                useCenter = false,
+                                style = androidx.compose.ui.graphics.drawscope.Stroke(width = stroke),
+                            )
+                            drawArc(
+                                color = ringPrimary,
+                                startAngle = -90f,
+                                sweepAngle = 360f * contextUsage.fraction,
+                                useCenter = false,
+                                style = androidx.compose.ui.graphics.drawscope.Stroke(width = stroke),
+                            )
+                        }
+                    }
                     Text(
                         text = s.sessionTokensText(sessionTotals.total),
                         style = MaterialTheme.typography.labelMedium,
@@ -370,6 +431,7 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
                     input = ""
                 },
             )
+            }
         }
     }
 
@@ -407,6 +469,8 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
             onSetSearchEnabled = viewModel::setSearchEnabled,
             onSetUserNickname = viewModel::setUserNickname,
             onDownloadLatest = viewModel::downloadLatestApk,
+            onSetColorPreset = viewModel::setColorPreset,
+            onSetBackgroundImage = viewModel::setBackgroundImage,
             onSetThemeMode = viewModel::setThemeMode,
             onSetLanguage = viewModel::setLanguage,
             onSetAutoCompressEnabled = viewModel::setAutoCompressEnabled,
@@ -424,6 +488,7 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
             createMode = true,
             uiLanguage = settings.language,
             roleplayParenRule = settings.roleplayParenRule,
+            tokenSavingLevel = settings.tokenSavingLevel,
             onRoleplayParenRuleChange = viewModel::setRoleplayParenRule,
             onConfirm = { modeId, userPrompt, temp, topp, imported ->
                 viewModel.newConversation()
@@ -454,6 +519,7 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
             createMode = false,
             uiLanguage = settings.language,
             roleplayParenRule = settings.roleplayParenRule,
+            tokenSavingLevel = settings.tokenSavingLevel,
             onRoleplayParenRuleChange = viewModel::setRoleplayParenRule,
             onConfirm = { modeId, userPrompt, temp, topp, _ ->
                 viewModel.updateConversationMode(modeId, userPrompt, temp, topp)
@@ -477,6 +543,16 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
                 .map { ChatMessage(it.role, it.text, reasoning = it.reasoning.takeIf { r -> r.isNotBlank() }) },
             roleplayParenRule = settings.roleplayParenRule,
             onDismiss = { showModePreview = false },
+        )
+    }
+
+    // 21 轮：上下文统计面板
+    if (showContextPanel) {
+        ContextPanelDialog(
+            usage = contextUsage,
+            sessionTotals = sessionTotals,
+            onManualCompress = viewModel::manualCompress,
+            onDismiss = { showContextPanel = false },
         )
     }
 

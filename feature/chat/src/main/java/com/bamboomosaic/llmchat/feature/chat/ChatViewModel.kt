@@ -254,6 +254,13 @@ class ChatViewModel @Inject constructor(
         val images = _pendingImages.value
         if (text.isBlank() && images.isEmpty()) return
         _error.value = null
+        // 21 轮：终极档只能向省钱模式对话发送消息
+        if (settings.value.tokenSavingLevel == 4 && effectiveModeId.value != ModeConfig.SAVING) {
+            _error.value = ApiError(ApiError.Kind.UNKNOWN, ultimateTierHint(settings.value))
+            return
+        }
+        // 21 轮：终极档输入上限 1024 字符
+        val outgoingText = if (settings.value.tokenSavingLevel == 4) text.take(1024) else text
 
         val conversationId = _currentConversationId.value
         val currentSettings = settings.value
@@ -261,10 +268,10 @@ class ChatViewModel @Inject constructor(
         val history = _messages.value
             .filter { !it.isStreaming }
             .map { ChatMessage(it.role, it.text, images = it.images) }
-        val outgoing = history + ChatMessage(MessageRole.USER, text, images = images)
+        val outgoing = history + ChatMessage(MessageRole.USER, outgoingText, images = images)
 
         _messages.update {
-            it + UiMessage(MessageRole.USER, text, images = images) +
+            it + UiMessage(MessageRole.USER, outgoingText, images = images) +
                 UiMessage(MessageRole.ASSISTANT, "", isStreaming = true)
         }
         _isGenerating.value = true
@@ -274,7 +281,7 @@ class ChatViewModel @Inject constructor(
             conversationId = conversationId,
             history = outgoing,
             currentSettings = currentSettings,
-            userTextForTitle = text,
+            userTextForTitle = outgoingText,
             userImages = images,
             persistUserMessage = true,
             modeId = effectiveModeId.value,
@@ -316,6 +323,11 @@ class ChatViewModel @Inject constructor(
     fun regenerateLast() {
         if (_isGenerating.value) return
         _error.value = null
+        // 21 轮：终极档只能向省钱模式对话发送消息
+        if (settings.value.tokenSavingLevel == 4 && effectiveModeId.value != ModeConfig.SAVING) {
+            _error.value = ApiError(ApiError.Kind.UNKNOWN, ultimateTierHint(settings.value))
+            return
+        }
         val conversationId = _currentConversationId.value
         val currentSettings = settings.value
 
@@ -491,8 +503,10 @@ class ChatViewModel @Inject constructor(
             language = currentSettings.language,
             roleplayParenRule = currentSettings.roleplayParenRule,
         )
-        // 环境上下文注入：ds_web 强制开启；其他模式跟随「自动注入环境信息」开关
-        val shouldInject = mode.injectContext || currentSettings.contextInjectionEnabled
+        // 环境上下文注入：ds_web 强制开启；其他模式跟随「自动注入环境信息」开关；
+        // 21 轮：终极档一律不注入环境信息
+        val shouldInject = (mode.injectContext || currentSettings.contextInjectionEnabled) &&
+            currentSettings.tokenSavingLevel != 4
         // 19 轮：用户称呼注入——DS 网页版提示词固定单句，不注入称呼
         val nickname = if (mode.modeId == ModeConfig.DS_WEB) "" else currentSettings.userNickname
         val systemText = buildString {
@@ -514,21 +528,21 @@ class ChatViewModel @Inject constructor(
             }
         }
         val withSystem = listOf(ChatMessage(MessageRole.SYSTEM, systemText)) + history
-        // 省 Token 档位：质量/中等/最大 → 压缩阈值（所有模式生效）
-        val compressLimitK = when (currentSettings.tokenSavingLevel) {
-            1 -> 100_000
+        // 21 轮：省 Token 档位压缩阈值（1→120k 2→50k 3→30k 4→10k）。
+        // DS 网页版 / Legacy 豁免档位压缩（终极档除外，强制 10k）；未开档位时跟随全局自动压缩开关。
+        val isTierExemptMode = mode.modeId == ModeConfig.DS_WEB || mode.modeId == ModeConfig.LEGACY
+        val savingLevel = currentSettings.tokenSavingLevel
+        val tierApplies = savingLevel in 1..4 && !(isTierExemptMode && savingLevel != 4)
+        val compressLimitK = if (tierApplies) when (savingLevel) {
+            1 -> 120_000
             2 -> 50_000
-            3 -> 20_000
-            else -> 0
-        }
-        // 档位启用时无视全局自动压缩开关，按阈值压缩
-        val compressed = if (compressLimitK > 0 || currentSettings.autoCompressEnabled) {
-            contextWindowRepository.compress(
-                withSystem,
-                ContextWindow(
-                    maxTokens = if (compressLimitK > 0) compressLimitK else currentSettings.maxContextTokens,
-                ),
-            )
+            3 -> 30_000
+            else -> 10_000
+        } else 0
+        val compressed = if (compressLimitK > 0) {
+            contextWindowRepository.compress(withSystem, ContextWindow(maxTokens = compressLimitK))
+        } else if (currentSettings.autoCompressEnabled) {
+            contextWindowRepository.compress(withSystem, ContextWindow(maxTokens = currentSettings.maxContextTokens))
         } else {
             withSystem
         }
@@ -673,14 +687,14 @@ class ChatViewModel @Inject constructor(
                 sessionId = conversationId,
                 messages = bundle.messages,
                 model = currentConfig.value?.model ?: currentSettings.model,
-                thinkingEnabled = currentSettings.thinkingEnabled,
                 maxTokens = effectiveMaxOutputTokens(currentSettings, modeId),
                 onReasoning = { chunk ->
                     // 回调在 OkHttp 线程，StateFlow 的 update 是线程安全的
                     reasoningState.update { it + chunk }
                     render(force = false)
                 },
-                searchEnabled = currentSettings.searchEnabled,
+                searchEnabled = currentSettings.searchEnabled && !tierDisablesFeatures(currentSettings, modeId),
+                thinkingEnabled = currentSettings.thinkingEnabled && !tierDisablesFeatures(currentSettings, modeId),
                 temperature = bundle.temperature,
                 topP = bundle.topP,
                 onSearchPages = { count ->
@@ -1128,6 +1142,16 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch { settingsRepository.setUserNickname(value) }
     }
 
+    /** 20 轮：聊天页自定义背景图（应用内路径；空串 = 默认背景）。 */
+    fun setBackgroundImage(path: String) {
+        viewModelScope.launch { settingsRepository.setBackgroundImageUri(path) }
+    }
+
+    /** 20 轮：UI 配色预设（default / ocean / forest / ember）。 */
+    fun setColorPreset(preset: String) {
+        viewModelScope.launch { settingsRepository.setColorPreset(preset) }
+    }
+
     /**
      * 20 轮：后台下载最新发布版 APK（DownloadManager，通知栏可见进度）。
      * 点击立即反馈；取直链失败回退浏览器打开 Releases 页手动下载。
@@ -1215,24 +1239,115 @@ class ChatViewModel @Inject constructor(
      * 豁免模式（代码开发 / 创意写作 / Legacy）不受档位限制，回退到全局配置值。
      * 0 或豁免时用 maxOutputTokens（0 = 不限制）。
      */
+    /**
+     * 21 轮：省 Token 档位下的单次输出上限。
+     * - 终极档（4）：所有模式（含 Legacy / DS 网页版）强制 64
+     * - 1~3 档：创意写作 / 代码开发 / Legacy / DS 网页版豁免，其余按档位上限
+     * - 省钱模式：自带字符上限模板，不走档位
+     * - 档位上限与用户全局上限取较小值（都设置时以更严格者为准）
+     */
     private fun effectiveMaxOutputTokens(settings: AppSettings, modeId: String): Int? {
+        if (modeId == ModeConfig.SAVING) return null
+        val userCap = settings.maxOutputTokens.takeIf { it > 0 }
+        fun capped(value: Int): Int = minOf(value, userCap ?: value)
+        if (settings.tokenSavingLevel == 4) return capped(64)
         val exempt = modeId == ModeConfig.CODE ||
             modeId == ModeConfig.CREATIVE ||
-            modeId == ModeConfig.LEGACY
-        if (!exempt) {
-            val cap = when (settings.tokenSavingLevel) {
-                1 -> 16384
-                2 -> 8192
-                3 -> 4096
-                else -> 0
-            }
-            if (cap > 0) {
-                // 档位上限与用户全局上限取较小值（都设置时以更严格者为准）
-                val userCap = settings.maxOutputTokens.takeIf { it > 0 }
-                return minOf(cap, userCap ?: cap)
-            }
+            modeId == ModeConfig.LEGACY ||
+            modeId == ModeConfig.DS_WEB
+        if (exempt) return userCap
+        return when (settings.tokenSavingLevel) {
+            1 -> capped(4096)
+            2 -> capped(1024)
+            3 -> capped(256)
+            else -> userCap
         }
-        return settings.maxOutputTokens.takeIf { it > 0 }
+    }
+
+    /** 21 轮：终极档模式门禁提示。 */
+    private fun ultimateTierHint(settings: AppSettings): String = when (settings.language) {
+        AppLanguage.TRADITIONAL_CHINESE -> "终极档已开启：只能在省钱模式对话中发送消息"
+        AppLanguage.ENGLISH -> "Ultimate tier is on — messages are only allowed in Economy mode chats"
+        else -> "终极档已开启：只能在省钱模式对话中发送消息"
+    }
+
+    /** 21 轮：终极档（所有模式）与 3/最大档（DS 网页版、Legacy 除外）强制关闭联网搜索与深度思考。 */
+    private fun tierDisablesFeatures(settings: AppSettings, modeId: String): Boolean =
+        settings.tokenSavingLevel == 4 ||
+            (settings.tokenSavingLevel == 3 && modeId != ModeConfig.DS_WEB && modeId != ModeConfig.LEGACY)
+
+    /** 21 轮：上下文占用估算（字符数近似，与压缩逻辑同口径）。 */
+    data class ContextUsage(
+        val systemChars: Long = 0,
+        val messageChars: Long = 0,
+        val reasoningChars: Long = 0,
+        val searchChars: Long = 0,
+        val capacityTokens: Long = 0,
+    ) {
+        val usedChars: Long get() = systemChars + messageChars + reasoningChars + searchChars
+        val fraction: Float
+            get() = if (capacityTokens <= 0) 0f else (usedChars.toFloat() / capacityTokens).coerceIn(0f, 1f)
+    }
+
+    private val _contextUsage = MutableStateFlow(ContextUsage())
+    val contextUsage: StateFlow<ContextUsage> = _contextUsage.asStateFlow()
+
+    /** 按当前会话重新估算上下文占用（消息变化与打开面板时调用）。 */
+    fun refreshContextUsage() {
+        viewModelScope.launch {
+            val currentSettings = settings.value
+            val history = _messages.value
+                .filter { !it.isStreaming }
+                .map {
+                    ChatMessage(
+                        it.role,
+                        it.text,
+                        reasoning = it.reasoning.takeIf { r -> r.isNotBlank() },
+                    )
+                }
+            val capacity = (currentConfig.value?.maxContextTokens?.takeIf { it > 0 }
+                ?: currentSettings.maxContextTokens).toLong()
+            if (history.isEmpty()) {
+                _contextUsage.value = ContextUsage(capacityTokens = capacity)
+                return@launch
+            }
+            val bundle = runCatching { buildRequestBundle(currentSettings, history) }.getOrNull()
+            if (bundle == null) {
+                _contextUsage.value = ContextUsage(capacityTokens = capacity)
+                return@launch
+            }
+            var systemChars = 0L
+            var messageChars = 0L
+            var reasoningChars = 0L
+            var searchChars = 0L
+            bundle.messages.forEach { m ->
+                if (m.role == MessageRole.SYSTEM) {
+                    systemChars += m.content.length.toLong()
+                } else {
+                    messageChars += m.content.length.toLong()
+                    reasoningChars += (m.reasoning?.length ?: 0).toLong()
+                }
+                searchChars += (m.searchPages ?: 0) * 500L // 联网搜索内容未落库，按网页数估算
+            }
+            _contextUsage.value = ContextUsage(
+                systemChars = systemChars,
+                messageChars = messageChars,
+                reasoningChars = reasoningChars,
+                searchChars = searchChars,
+                capacityTokens = capacity,
+            )
+        }
+    }
+
+    /** 21 轮：手动压缩（占位——自动压缩已按档位阈值运行，持久化压缩待后续版本）。 */
+    fun manualCompress() {
+        showAppToast(
+            when (settings.value.language) {
+                AppLanguage.TRADITIONAL_CHINESE -> "手动压缩将在后续版本提供，当前已按档位自动压缩"
+                AppLanguage.ENGLISH -> "Manual compression arrives in a future release — tier-based auto compression is active"
+                else -> "手动压缩将在后续版本提供，当前已按档位自动压缩"
+            },
+        )
     }
 
     /** 模式模板记忆：保存/清除某模式的用户提示词缓存。 */

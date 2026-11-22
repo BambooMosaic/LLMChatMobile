@@ -9,6 +9,8 @@ data class TokenUsageRecord(
     val promptTokens: Long,
     val completionTokens: Long,
     val timestamp: Long,
+    /** 20 轮：prompt 中命中缓存的 token 数（非 DeepSeek 系模型为 0）。 */
+    val cacheHitTokens: Long = 0,
 )
 
 /** 按 model 聚合后的统计（来自 token_stats_models 表）。 */
@@ -19,22 +21,29 @@ data class ModelTokenStats(
     val requestCount: Long,
 )
 
-/** 某一天（本地时区 yyyy-MM-dd）的 token 消耗，用于柱状图。 */
+/** 某一天（本地时区 yyyy-MM-dd）的 token 消耗，用于柱状图（三色分段：缓存命中/输入/输出）。 */
 data class DailyTokenStats(
     val date: String,
     val tokens: Long,
+    val cacheHitTokens: Long = 0,
+    val inputTokens: Long = 0,
+    val outputTokens: Long = 0,
 )
 
-/** 某 3 小时时段（本地时区起始小时 0/3/6/.../21）的 token 消耗。 */
+/** 某 3 小时时段（本地时区起始小时 0/3/6/.../21）的 token 消耗，用于柱状图。 */
 data class HourlyTokenStats(
     val hour: Int,
     val tokens: Long,
+    val cacheHitTokens: Long = 0,
+    val inputTokens: Long = 0,
+    val outputTokens: Long = 0,
 )
 
-/** 输入/输出/总计三项 token 汇总。 */
+/** 输入/输出/总计/缓存命中 token 汇总。 */
 data class TokenTotals(
     val promptTokens: Long = 0,
     val completionTokens: Long = 0,
+    val cacheHitTokens: Long = 0,
 ) {
     val total: Long get() = promptTokens + completionTokens
 }

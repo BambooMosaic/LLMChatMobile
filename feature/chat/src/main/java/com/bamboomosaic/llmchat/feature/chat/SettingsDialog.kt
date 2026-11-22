@@ -9,6 +9,7 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -89,6 +90,8 @@ fun SettingsDialog(
     onSetSearchEnabled: (Boolean) -> Unit,
     onSetUserNickname: (String) -> Unit,
     onDownloadLatest: () -> Unit,
+    onSetColorPreset: (String) -> Unit,
+    onSetBackgroundImage: (String) -> Unit,
     onSetThemeMode: (ThemeMode) -> Unit,
     onSetLanguage: (AppLanguage) -> Unit,
     onSetAutoCompressEnabled: (Boolean) -> Unit,
@@ -142,10 +145,14 @@ fun SettingsDialog(
                 onSetUserNickname = onSetUserNickname,
             )
 
-            SettingsPage.APPEARANCE -> AppearancePage(
-                themeMode = settings.themeMode,
-                onSetThemeMode = onSetThemeMode,
-            )
+                        SettingsPage.APPEARANCE -> AppearancePage(
+                            themeMode = settings.themeMode,
+                            onSetThemeMode = onSetThemeMode,
+                            colorPreset = settings.colorPreset,
+                            onSetColorPreset = onSetColorPreset,
+                            backgroundImageUri = settings.backgroundImageUri,
+                            onSetBackgroundImage = onSetBackgroundImage,
+                        )
 
             SettingsPage.LANGUAGE -> LanguagePage(
                 language = settings.language,
@@ -797,49 +804,34 @@ private fun OtherPage(
     )
 
     Spacer(Modifier.height(16.dp))
-    // 省 Token 档位：横向滑动 4 档选择器（关/质量/中等/最大）
+    // 21 轮：省 Token 档位改为 5 档可滑动滑块（终极档警示特效）
     Text(s.tokenSavingLabel, style = MaterialTheme.typography.bodyLarge)
     Spacer(Modifier.height(8.dp))
     val savingLevels = listOf(
-        Triple(0, s.tokenSavingOff, s.tokenSavingOffHint),
-        Triple(1, s.tokenSavingQuality, s.tokenSavingQualityHint),
-        Triple(2, s.tokenSavingMedium, s.tokenSavingMediumHint),
-        Triple(3, s.tokenSavingMax, s.tokenSavingMaxHint),
+        s.tokenSavingOff,
+        s.tokenSavingQuality,
+        s.tokenSavingMedium,
+        s.tokenSavingMax,
+        s.tokenSavingUltimate,
     )
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
-    ) {
-        savingLevels.forEach { (level, label, _) ->
-            val selected = settings.tokenSavingLevel == level
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(
-                        if (selected) MaterialTheme.colorScheme.primary
-                        else Color.Transparent,
-                    )
-                    .clickable { onSetTokenSavingLevel(level) }
-                    .padding(vertical = 8.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = if (selected) MaterialTheme.colorScheme.onPrimary
-                    else MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-    }
+    val ultimateActive = settings.tokenSavingLevel == 4
+    LevelSlider(
+        levels = savingLevels,
+        selectedIndex = settings.tokenSavingLevel,
+        onSelect = { onSetTokenSavingLevel(it) },
+        activeColor = if (ultimateActive) MaterialTheme.colorScheme.error
+        else MaterialTheme.colorScheme.primary,
+        trackColor = if (ultimateActive) MaterialTheme.colorScheme.error.copy(alpha = 0.15f)
+        else MaterialTheme.colorScheme.surfaceVariant,
+    )
     Spacer(Modifier.height(4.dp))
     Text(
-        text = savingLevels.firstOrNull { it.first == settings.tokenSavingLevel }?.third.orEmpty(),
+        text = if (ultimateActive) s.tokenSavingUltimateWarning
+        else listOf(s.tokenSavingOffHint, s.tokenSavingQualityHint, s.tokenSavingMediumHint, s.tokenSavingMaxHint)
+            .getOrNull(settings.tokenSavingLevel).orEmpty(),
         style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        color = if (ultimateActive) MaterialTheme.colorScheme.error
+        else MaterialTheme.colorScheme.onSurfaceVariant,
     )
 
     Spacer(Modifier.height(16.dp))
@@ -991,6 +983,10 @@ private fun PreferencesPage(
 private fun AppearancePage(
     themeMode: ThemeMode,
     onSetThemeMode: (ThemeMode) -> Unit,
+    colorPreset: String,
+    onSetColorPreset: (String) -> Unit,
+    backgroundImageUri: String,
+    onSetBackgroundImage: (String) -> Unit,
 ) {
     val s = LocalAppStrings.current
     val options = listOf(
@@ -1009,6 +1005,90 @@ private fun AppearancePage(
             RadioButton(selected = themeMode == mode, onClick = { onSetThemeMode(mode) })
             Spacer(Modifier.width(8.dp))
             Text(label, style = MaterialTheme.typography.bodyLarge)
+        }
+    }
+
+    Spacer(Modifier.height(16.dp))
+    // 21 轮：UI 配色预设（按当前深浅分组，避开主紫色系）
+    Text(s.colorPresetLabel, style = MaterialTheme.typography.bodyLarge)
+    Spacer(Modifier.height(8.dp))
+    val isLightGroup = themeMode == ThemeMode.LIGHT ||
+        (themeMode == ThemeMode.SYSTEM && !androidx.compose.foundation.isSystemInDarkTheme())
+    val presets = if (isLightGroup) {
+        listOf(
+            Triple("default", s.presetDefault, Color(0xFFF2F2F2)),
+            Triple("blue", s.presetBlue, Color(0xFFDCEAFB)),
+            Triple("green", s.presetGreen, Color(0xFFD8F0EB)),
+            Triple("warm", s.presetWarm, Color(0xFFF5E9D5)),
+        )
+    } else {
+        listOf(
+            Triple("default", s.presetDefault, Color(0xFF272727)),
+            Triple("blue", s.presetBlue, Color(0xFF16213A)),
+            Triple("green", s.presetGreen, Color(0xFF16241C)),
+            Triple("warm", s.presetWarm, Color(0xFF2A2016)),
+        )
+    }
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        presets.forEach { (id, label, swatch) ->
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(10.dp))
+                    .clickable { onSetColorPreset(id) }
+                    .padding(4.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(36.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(swatch)
+                        .border(
+                            width = if (colorPreset == id) 2.dp else 1.dp,
+                            color = if (colorPreset == id) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.outlineVariant,
+                            shape = RoundedCornerShape(8.dp),
+                        ),
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(label, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+            }
+        }
+    }
+
+    Spacer(Modifier.height(16.dp))
+    // 21 轮：聊天背景图（复制到应用私有目录持久化；清除即恢复默认背景）
+    Text(s.backgroundLabel, style = MaterialTheme.typography.bodyLarge)
+    Spacer(Modifier.height(8.dp))
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val pickImage = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.GetContent(),
+    ) { uri ->
+        if (uri != null) {
+            runCatching {
+                val dest = java.io.File(context.filesDir, "chat_background.jpg")
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    dest.outputStream().use { output -> input.copyTo(output) }
+                }
+                onSetBackgroundImage(dest.absolutePath)
+            }
+        }
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        androidx.compose.material3.Button(
+            onClick = { pickImage.launch("image/*") },
+        ) {
+            Text(s.pickImage)
+        }
+        if (backgroundImageUri.isNotBlank()) {
+            androidx.compose.material3.OutlinedButton(onClick = { onSetBackgroundImage("") }) {
+                Text(s.clearImage)
+            }
         }
     }
 }

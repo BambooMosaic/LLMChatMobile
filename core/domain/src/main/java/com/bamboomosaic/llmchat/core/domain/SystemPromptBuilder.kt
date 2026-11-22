@@ -48,8 +48,9 @@ object SystemPromptBuilder {
 
         val user = userPrompt?.trim().orEmpty()
 
-        // Legacy 模式：完全跳过双层拼接与安全隔离，用户提示词原样发送
-        if (mode.modeId == ModeConfig.LEGACY) {
+        // Legacy / 省钱模式：完全跳过双层拼接与安全隔离，提示词原样发送
+        // （省钱模式的 userPrompt 即「你最多输出 X 个字符 [用户补充：Y]」单层模板）
+        if (mode.modeId == ModeConfig.LEGACY || mode.modeId == ModeConfig.SAVING) {
             return Result(prompt = user)
         }
 

@@ -47,6 +47,8 @@ class SettingsStore @Inject constructor(
     private val tokenSavingKey = intPreferencesKey("token_saving_level")
     private val roleplayParenKey = booleanPreferencesKey("roleplay_paren_rule")
     private val userNicknameKey = stringPreferencesKey("user_nickname")
+    private val backgroundImageUriKey = stringPreferencesKey("background_image_uri")
+    private val colorPresetKey = stringPreferencesKey("color_preset")
 
     override fun observeSettings(): Flow<AppSettings> = context.settingsDataStore.data.map { prefs ->
         val language = AppLanguage.fromTag(prefs[languageKey])
@@ -70,6 +72,8 @@ class SettingsStore @Inject constructor(
             tokenSavingLevel = prefs[tokenSavingKey] ?: 0,
             roleplayParenRule = prefs[roleplayParenKey] ?: true,
             userNickname = prefs[userNicknameKey] ?: "",
+            backgroundImageUri = prefs[backgroundImageUriKey] ?: "",
+            colorPreset = prefs[colorPresetKey] ?: "default",
         )
     }
 
@@ -122,7 +126,7 @@ class SettingsStore @Inject constructor(
     }
 
     override suspend fun setTokenSavingLevel(level: Int) {
-        context.settingsDataStore.edit { it[tokenSavingKey] = level.coerceIn(0, 3) }
+        context.settingsDataStore.edit { it[tokenSavingKey] = level.coerceIn(0, 4) }
     }
 
     override suspend fun setRoleplayParenRule(enabled: Boolean) {
@@ -131,6 +135,14 @@ class SettingsStore @Inject constructor(
 
     override suspend fun setUserNickname(value: String) {
         context.settingsDataStore.edit { it[userNicknameKey] = value.trim() }
+    }
+
+    override suspend fun setBackgroundImageUri(value: String) {
+        context.settingsDataStore.edit { it[backgroundImageUriKey] = value }
+    }
+
+    override suspend fun setColorPreset(value: String) {
+        context.settingsDataStore.edit { it[colorPresetKey] = value }
     }
 
     override fun observeModeUserPrompt(modeId: String): Flow<String?> =

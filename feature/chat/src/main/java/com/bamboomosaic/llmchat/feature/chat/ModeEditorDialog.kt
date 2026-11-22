@@ -52,6 +52,8 @@ fun ModeEditorDialog(
     uiLanguage: com.bamboomosaic.llmchat.core.domain.AppLanguage,
     /** 角色扮演模式：括号描写规则开关当前值。 */
     roleplayParenRule: Boolean = true,
+    /** 21 轮：省 Token 档位当前值（省钱模式字符区间随终极档锁定）。 */
+    tokenSavingLevel: Int = 0,
     /** 括号规则开关变化回调。 */
     onRoleplayParenRuleChange: (Boolean) -> Unit = {},
     onConfirm: (modeId: String, userPrompt: String?, temperature: Float?, topP: Float?, importedMessages: List<ImportedMessage>?) -> Unit,
@@ -75,16 +77,34 @@ fun ModeEditorDialog(
     var customTopP by remember { mutableStateOf(ChatModes.CUSTOM_DEFAULT_TOP_P.toString()) }
     // 19 轮：导入的模式 JSON 中携带的对话记录，确定时一并还原
     var importedMessages by remember { mutableStateOf<List<ImportedMessage>?>(null) }
+    // 21 轮：提问模式 / 省钱模式面板状态（从已保存提示词解析回显）
+    val parsedAsk = remember(initialPrompt) { parseAskPrompt(initialPrompt) }
+    val parsedSaving = remember(initialPrompt) { parseSavingPrompt(initialPrompt) }
+    var askTopic by remember { mutableStateOf(parsedAsk?.first ?: "") }
+    var askDetail by remember { mutableStateOf(parsedAsk?.second ?: 1) }
+    var savingMaxChars by remember { mutableStateOf(parsedSaving?.first?.toString() ?: "256") }
+    var savingExtra by remember { mutableStateOf(parsedSaving?.second ?: "") }
 
     val selected = ChatModes.find(selectedId, uiLanguage)
     val isRoleplay = selected.modeId == ModeConfig.ROLEPLAY
+    val isAsk = selected.modeId == ModeConfig.ASK
+    val isSaving = selected.modeId == ModeConfig.SAVING
 
-    // 最终提交的用户提示词：角色卡拼接 / 自由输入
+    // 最终提交的用户提示词：角色卡拼接 / 提问模板 / 省钱模板 / 自由输入
     val effectiveUserPrompt = when {
         isRoleplay && useRoleCard -> {
             val name = cardName.trim()
             val info = cardInfo.trim()
             if (name.isEmpty() && info.isEmpty()) "" else "角色名：$name\n角色设定：\n$info"
+        }
+        selected.modeId == ModeConfig.ASK -> {
+            val t = askTopic.trim()
+            if (t.isEmpty()) "" else composeAskPrompt(t, askDetail)
+        }
+        selected.modeId == ModeConfig.SAVING -> {
+            val n = (savingMaxChars.toIntOrNull() ?: 256)
+                .coerceIn(16, if (tokenSavingLevel == 4) 64 else 1024)
+            composeSavingPrompt(n, savingExtra)
         }
         else -> freePrompt.trim()
     }
@@ -317,17 +337,60 @@ fun ModeEditorDialog(
                             modifier = Modifier.fillMaxWidth(),
                         )
                     }
-                } else {
-                    Spacer(Modifier.height(12.dp))
-                    OutlinedTextField(
-                        value = freePrompt,
-                        onValueChange = { freePrompt = it },
-                        label = { Text(s.modeUserPromptLabel) },
-                        placeholder = { Text(selected.localized(uiLanguage).userPromptPlaceholder) },
-                        minLines = 4,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
+                    } else if (isAsk) {
+                        // 21 轮：提问模式——主题 + 理由详细程度滑块（不允许自由提示词）
+                        Spacer(Modifier.height(12.dp))
+                        OutlinedTextField(
+                            value = askTopic,
+                            onValueChange = { askTopic = it },
+                            label = { Text(if (uiLanguage == com.bamboomosaic.llmchat.core.domain.AppLanguage.ENGLISH) "Question topic" else "提问主题") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            text = if (uiLanguage == com.bamboomosaic.llmchat.core.domain.AppLanguage.ENGLISH) "Reasoning detail" else "回答理由详细程度",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        LevelSlider(
+                            levels = listOf(
+                                if (uiLanguage == com.bamboomosaic.llmchat.core.domain.AppLanguage.ENGLISH) "Off" else "禁用",
+                                if (uiLanguage == com.bamboomosaic.llmchat.core.domain.AppLanguage.ENGLISH) "Brief" else "简单",
+                                if (uiLanguage == com.bamboomosaic.llmchat.core.domain.AppLanguage.ENGLISH) "Detailed" else "详细",
+                            ),
+                            selectedIndex = askDetail,
+                            onSelect = { askDetail = it },
+                        )
+                    } else if (isSaving) {
+                        // 21 轮：省钱模式——最大输出字符（终极档锁定 16~64）+ 补充信息（≤256 字）
+                        val hiLimit = if (tokenSavingLevel == 4) 64 else 1024
+                        Spacer(Modifier.height(12.dp))
+                        OutlinedTextField(
+                            value = savingMaxChars,
+                            onValueChange = { savingMaxChars = it.filter { c -> c.isDigit() }.take(4) },
+                            label = { Text(if (uiLanguage == com.bamboomosaic.llmchat.core.domain.AppLanguage.ENGLISH) "Max output characters (16~$hiLimit)" else "最多输出字符（16~$hiLimit）") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = savingExtra,
+                            onValueChange = { savingExtra = it.take(256) },
+                            label = { Text(if (uiLanguage == com.bamboomosaic.llmchat.core.domain.AppLanguage.ENGLISH) "Extra info (optional, max 256 chars)" else "补充信息（可选，最多256字）") },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    } else {
+                        Spacer(Modifier.height(12.dp))
+                        OutlinedTextField(
+                            value = freePrompt,
+                            onValueChange = { freePrompt = it },
+                            label = { Text(s.modeUserPromptLabel) },
+                            placeholder = { Text(selected.localized(uiLanguage).userPromptPlaceholder) },
+                            minLines = 4,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
 
                 } // allowUserPrompt 收口
 
@@ -407,3 +470,34 @@ data class ImportedMessage(
     val text: String,
     val reasoning: String?,
 )
+
+/** 21 轮：拼装提问模式的用户层提示词（detail：0 禁用 / 1 简要 / 2 详细）。 */
+private fun composeAskPrompt(topic: String, detail: Int): String = when (detail) {
+    1 -> "提问主题：$topic\n回答要求：先给答案，并简要说明理由。"
+    2 -> "提问主题：$topic\n回答要求：先给答案，再详细展开理由与依据。"
+    else -> "提问主题：$topic"
+}
+
+/** 21 轮：解析提问模式提示词（非提问格式返回 null）。 */
+private fun parseAskPrompt(text: String): Pair<String, Int>? {
+    if (!text.startsWith("提问主题：")) return null
+    val topic = text.removePrefix("提问主题：").substringBefore('\n').trim()
+    val detail = when {
+        text.contains("详细展开理由") -> 2
+        text.contains("简要说明理由") -> 1
+        else -> 0
+    }
+    return topic to detail
+}
+
+/** 21 轮：拼装省钱模式单层提示词模板。 */
+private fun composeSavingPrompt(maxChars: Int, extra: String): String =
+    "你最多输出 $maxChars 个字符" + (if (extra.isNotBlank()) "\n用户补充：${extra.trim()}" else "")
+
+/** 21 轮：解析省钱模式模板（返回 字符数 to 补充信息；非省钱格式返回 null）。 */
+private fun parseSavingPrompt(text: String): Pair<Int, String>? {
+    if (!text.startsWith("你最多输出")) return null
+    val chars = Regex("\\d+").find(text.substringBefore("个字符"))?.value?.toIntOrNull() ?: return null
+    val extra = text.substringAfter("用户补充：", "").trim()
+    return chars to extra
+}

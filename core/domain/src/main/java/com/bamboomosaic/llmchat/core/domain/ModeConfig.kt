@@ -29,12 +29,14 @@ data class ModeConfig(
 
     companion object {
         const val CHAT = "chat"
+        const val ASK = "ask"
         const val WORK = "work"
         const val CODE = "code"
         const val ROLEPLAY = "roleplay"
         const val CREATIVE = "creative"
         const val CUSTOM = "custom"
         const val LEGACY = "legacy"
+        const val SAVING = "saving"
         const val DS_WEB = "ds_web"
     }
 }
@@ -80,6 +82,18 @@ object ChatModes {
                 builtinPrompt = "回答简洁自然，按需分段；支持多领域问答、翻译、简单规划；" +
                     "语言口语化，不强行堆砌格式；不主动超长篇输出。",
                 userPromptPlaceholder = "可选：补充你的偏好，如回复语言、称呼等",
+            ),
+        ),
+        ModeConfig(
+            modeId = ModeConfig.ASK,
+            temperature = 0.6f,
+            topP = 0.8f,
+            strings = ModeStrings(
+                modeName = "提问模式",
+                description = "向AI提出问题/对比内容，AI给你解答并说明理由",
+                builtinPrompt = "用户会给出提问主题。请先给出明确结论或答案，再清晰说明理由与依据；" +
+                    "理由按重要性排列；表达专业、不回避问题。",
+                userPromptPlaceholder = "输入提问主题（必填）",
             ),
         ),
         ModeConfig(
@@ -141,6 +155,17 @@ object ChatModes {
                 description = "全部参数、提示词自己掌控，自由度最高",
                 builtinPrompt = "你是乐于助人的 AI 助手。请遵守基本的安全与合规底线，不输出违法、有害内容。",
                 userPromptPlaceholder = "请输入你的自定义提示词（角色卡、规则等）",
+            ),
+        ),
+        ModeConfig(
+            modeId = ModeConfig.SAVING,
+            temperature = CUSTOM_DEFAULT_TEMPERATURE,
+            topP = CUSTOM_DEFAULT_TOP_P,
+            strings = ModeStrings(
+                modeName = "省钱模式",
+                description = "不浪费任何token",
+                builtinPrompt = "",
+                userPromptPlaceholder = "补充信息（可选，最多256字）",
             ),
         ),
         ModeConfig(
@@ -231,11 +256,24 @@ object ChatModes {
             builtinPrompt = "你是樂於助人的 AI 助手。請遵守基本的安全與合規底線，不輸出違法、有害內容。",
             userPromptPlaceholder = "請輸入你的自訂提示詞（角色卡、規則等）",
         )
+        ModeConfig.ASK -> ModeStrings(
+            modeName = "提問模式",
+            description = "向AI提出問題/對比內容，AI給你解答並說明理由",
+            builtinPrompt = "用戶會給出提問主題。請先給出明確結論或答案，再清晰說明理由與依據；" +
+                "理由按重要性排列；表達專業、不迴避問題。",
+            userPromptPlaceholder = "輸入提問主題（必填）",
+        )
         ModeConfig.DS_WEB -> ModeStrings(
             modeName = "DS 網頁版",
             description = "模擬 DeepSeek 官方網頁版對話體驗",
             builtinPrompt = "該助手為 DeepSeek，由深度求索公司創造。",
             userPromptPlaceholder = "",
+        )
+        ModeConfig.SAVING -> ModeStrings(
+            modeName = "省錢模式",
+            description = "不浪費任何token",
+            builtinPrompt = "",
+            userPromptPlaceholder = "補充信息（可選，最多256字）",
         )
         ModeConfig.LEGACY -> ModeStrings(
             modeName = "Legacy 模式",
@@ -293,11 +331,25 @@ object ChatModes {
                 "guidelines; do not produce illegal or harmful content.",
             userPromptPlaceholder = "Enter your custom prompt (character cards, rules, etc.)",
         )
+        ModeConfig.ASK -> ModeStrings(
+            modeName = "Ask",
+            description = "Ask questions or compare options — get answers with reasoning",
+            builtinPrompt = "The user provides a topic. Give a clear, direct conclusion or answer first, " +
+                "then explain the reasoning and evidence clearly; order reasons by importance; " +
+                "stay professional and address the question head-on.",
+            userPromptPlaceholder = "Enter your question topic (required)",
+        )
         ModeConfig.DS_WEB -> ModeStrings(
             modeName = "DS Web",
             description = "Replicates the DeepSeek official web chat experience",
             builtinPrompt = "该助手为 DeepSeek，由深度求索公司创造。",
             userPromptPlaceholder = "",
+        )
+        ModeConfig.SAVING -> ModeStrings(
+            modeName = "Economy",
+            description = "Never waste a single token",
+            builtinPrompt = "",
+            userPromptPlaceholder = "Extra info (optional, max 256 chars)",
         )
         ModeConfig.LEGACY -> ModeStrings(
             modeName = "Legacy",

@@ -35,6 +35,7 @@ class TokenUsageRepositoryImpl @Inject constructor(
                 promptTokens = it.promptTokens,
                 completionTokens = it.completionTokens,
                 timestamp = it.timestamp,
+                cacheHitTokens = it.cacheHitTokens,
             )
         }
 
@@ -46,6 +47,7 @@ class TokenUsageRepositoryImpl @Inject constructor(
                 promptTokens = it.promptTokens,
                 completionTokens = it.completionTokens,
                 timestamp = it.timestamp,
+                cacheHitTokens = it.cacheHitTokens,
             )
         }
 
@@ -71,12 +73,25 @@ class TokenUsageRepositoryImpl @Inject constructor(
             list.map { it.toDomain() }
         }
 
-    private fun DailyTokenRow.toDomain() = DailyTokenStats(date = day, tokens = tokens)
+    private fun DailyTokenRow.toDomain() = DailyTokenStats(
+        date = day,
+        tokens = tokens,
+        cacheHitTokens = cacheHitTokens,
+        inputTokens = inputTokens,
+        outputTokens = outputTokens,
+    )
 
-    private fun HourlyTokenRow.toDomain() = HourlyTokenStats(hour = hour, tokens = tokens)
+    private fun HourlyTokenRow.toDomain() = HourlyTokenStats(
+        hour = hour,
+        tokens = tokens,
+        cacheHitTokens = cacheHitTokens,
+        inputTokens = inputTokens,
+        outputTokens = outputTokens,
+    )
 
     private fun TokenTotalsRow.toDomain() = TokenTotals(
         promptTokens = promptTokens,
         completionTokens = completionTokens,
+        cacheHitTokens = cacheHitTokens,
     )
 }
