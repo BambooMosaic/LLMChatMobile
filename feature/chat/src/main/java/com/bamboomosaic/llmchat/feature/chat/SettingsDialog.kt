@@ -2,6 +2,12 @@ package com.bamboomosaic.llmchat.feature.chat
 
 import kotlinx.coroutines.launch
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -61,7 +67,7 @@ import com.bamboomosaic.llmchat.core.domain.Providers
 import com.bamboomosaic.llmchat.core.domain.ThemeMode
 import com.bamboomosaic.llmchat.feature.chat.i18n.LocalAppStrings
 
-private enum class SettingsPage { HOME, API, APPEARANCE, LANGUAGE, OTHER, ARCHIVED, ABOUT }
+private enum class SettingsPage { HOME, API, PREFERENCES, APPEARANCE, LANGUAGE, OTHER, ARCHIVED, ABOUT }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -82,6 +88,7 @@ fun SettingsDialog(
     onSetTokenSavingLevel: (Int) -> Unit,
     onSetSearchEnabled: (Boolean) -> Unit,
     onSetUserNickname: (String) -> Unit,
+    onDownloadLatest: () -> Unit,
     onSetThemeMode: (ThemeMode) -> Unit,
     onSetLanguage: (AppLanguage) -> Unit,
     onSetAutoCompressEnabled: (Boolean) -> Unit,
@@ -99,20 +106,22 @@ fun SettingsDialog(
         SettingsPage.API -> s.apiConfig
         SettingsPage.APPEARANCE -> s.appearance
         SettingsPage.LANGUAGE -> s.languageSetting
+        SettingsPage.PREFERENCES -> s.preferencesSetting
         SettingsPage.OTHER -> s.otherSettings
         SettingsPage.ARCHIVED -> s.archivedConversations
         SettingsPage.ABOUT -> s.about
     }
 
-    // 20 轮：页面内容统一抽出，单栏/双栏共用同一份 when
-    val pageContent: @Composable () -> Unit = {
-        when (page) {
+    // 20 轮：页面内容统一抽出（按参数渲染，切页动画的双帧需要各自渲染各自的目标页）
+    val pageContent: @Composable (SettingsPage) -> Unit = { p ->
+        when (p) {
             SettingsPage.HOME -> HomePage(
                 s = s,
-                selected = if (wide) page else null,
+                selected = if (wide) p else null,
                 onApi = { page = SettingsPage.API },
                 onAppearance = { page = SettingsPage.APPEARANCE },
                 onLanguage = { page = SettingsPage.LANGUAGE },
+                onPreferences = { page = SettingsPage.PREFERENCES },
                 onOther = { page = SettingsPage.OTHER },
                 onArchived = { page = SettingsPage.ARCHIVED },
                 onAbout = { page = SettingsPage.ABOUT },
@@ -124,6 +133,13 @@ fun SettingsDialog(
                 onValidateConfig = onValidateConfig,
                 onDelete = onDeleteConfig,
                 onSetDefault = onSetDefaultConfig,
+            )
+
+            SettingsPage.PREFERENCES -> PreferencesPage(
+                settings = settings,
+                onSetDefaultModeId = onSetDefaultModeId,
+                onSetContextInjectionEnabled = onSetContextInjectionEnabled,
+                onSetUserNickname = onSetUserNickname,
             )
 
             SettingsPage.APPEARANCE -> AppearancePage(
@@ -138,11 +154,8 @@ fun SettingsDialog(
 
             SettingsPage.OTHER -> OtherPage(
                 settings = settings,
-                onSetDefaultModeId = onSetDefaultModeId,
-                onSetContextInjectionEnabled = onSetContextInjectionEnabled,
                 onSetTokenSavingLevel = onSetTokenSavingLevel,
                 onSetSearchEnabled = onSetSearchEnabled,
-                onSetUserNickname = onSetUserNickname,
                 onSetAutoCompressEnabled = onSetAutoCompressEnabled,
             )
 
@@ -152,7 +165,7 @@ fun SettingsDialog(
                 onDelete = onDeleteConversation,
             )
 
-            SettingsPage.ABOUT -> AboutPage()
+            SettingsPage.ABOUT -> AboutPage(onDownloadLatest = onDownloadLatest)
         }
     }
 
@@ -199,6 +212,7 @@ fun SettingsDialog(
                                 onApi = { page = SettingsPage.API },
                                 onAppearance = { page = SettingsPage.APPEARANCE },
                                 onLanguage = { page = SettingsPage.LANGUAGE },
+                                onPreferences = { page = SettingsPage.PREFERENCES },
                                 onOther = { page = SettingsPage.OTHER },
                                 onArchived = { page = SettingsPage.ARCHIVED },
                                 onAbout = { page = SettingsPage.ABOUT },
@@ -217,7 +231,7 @@ fun SettingsDialog(
                                 .verticalScroll(rememberScrollState())
                                 .padding(16.dp),
                         ) {
-                            pageContent()
+                            pageContent(page)
                         }
                     }
                 }
@@ -248,12 +262,28 @@ fun SettingsDialog(
                     }
                     HorizontalDivider()
 
-                    Column(
-                        modifier = Modifier
-                            .verticalScroll(rememberScrollState())
-                            .padding(16.dp),
-                    ) {
-                        pageContent()
+                    // 20 轮：页面切换平移动画——进入二级从右滑入，返回向右滑出，叠加淡入淡出
+                    AnimatedContent(
+                        targetState = page,
+                        transitionSpec = {
+                            val forward = targetState != SettingsPage.HOME && initialState == SettingsPage.HOME
+                            if (forward) {
+                                (slideInHorizontally { it / 4 } + fadeIn()) togetherWith
+                                    (slideOutHorizontally { -it / 6 } + fadeOut())
+                            } else {
+                                (slideInHorizontally { -it / 4 } + fadeIn()) togetherWith
+                                    (slideOutHorizontally { it / 6 } + fadeOut())
+                            }
+                        },
+                        label = "settingsPage",
+                    ) { target ->
+                        Column(
+                            modifier = Modifier
+                                .verticalScroll(rememberScrollState())
+                                .padding(16.dp),
+                        ) {
+                            pageContent(target)
+                        }
                     }
                 }
             }
@@ -268,6 +298,7 @@ private fun HomePage(
     onApi: () -> Unit,
     onAppearance: () -> Unit,
     onLanguage: () -> Unit,
+    onPreferences: () -> Unit,
     onOther: () -> Unit,
     onArchived: () -> Unit,
     onAbout: () -> Unit,
@@ -275,6 +306,7 @@ private fun HomePage(
     MenuRow(s.apiConfig, onApi, selected == SettingsPage.API)
     MenuRow(s.appearance, onAppearance, selected == SettingsPage.APPEARANCE)
     MenuRow(s.languageSetting, onLanguage, selected == SettingsPage.LANGUAGE)
+    MenuRow(s.preferencesSetting, onPreferences, selected == SettingsPage.PREFERENCES)
     MenuRow(s.otherSettings, onOther, selected == SettingsPage.OTHER)
     MenuRow(s.archivedConversations, onArchived, selected == SettingsPage.ARCHIVED)
     MenuRow(s.about, onAbout, selected == SettingsPage.ABOUT)
@@ -341,12 +373,14 @@ private fun ArchivedPage(
 
 @Composable
 private fun MenuRow(label: String, onClick: () -> Unit, selected: Boolean = false) {
+    val interaction = androidx.compose.foundation.interaction.MutableInteractionSource()
     Row(
         modifier = Modifier
+            .pressScale(interaction, 0.985f)
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
             .background(if (selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent)
-            .clickable(onClick = onClick)
+            .clickable(interactionSource = interaction, indication = androidx.compose.foundation.LocalIndication.current, onClick = onClick)
             .padding(horizontal = 10.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -734,35 +768,15 @@ private fun ConfigEditDialog(
     }
 }
 
-/** 其他设置：环境注入开关、新对话默认模式、自动压缩上下文。 */
+/** 其他设置：联网搜索、省 Token 档位、自动压缩上下文。 */
 @Composable
 private fun OtherPage(
     settings: AppSettings,
-    onSetDefaultModeId: (String) -> Unit,
-    onSetContextInjectionEnabled: (Boolean) -> Unit,
     onSetTokenSavingLevel: (Int) -> Unit,
     onSetSearchEnabled: (Boolean) -> Unit,
-    onSetUserNickname: (String) -> Unit,
     onSetAutoCompressEnabled: (Boolean) -> Unit,
 ) {
     val s = LocalAppStrings.current
-
-    // 自动注入环境信息开关（ds_web 强制开启，无视此开关）
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Text(s.contextInjectionLabel, style = MaterialTheme.typography.bodyLarge)
-        Switch(checked = settings.contextInjectionEnabled, onCheckedChange = { onSetContextInjectionEnabled(it) })
-    }
-    Text(
-        text = s.contextInjectionHint,
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
 
     Spacer(Modifier.height(16.dp))
     // 19 轮：联网搜索开关（DeepSeek 原生；其他模型经 DeepSeek-Flash 代理）
@@ -780,16 +794,6 @@ private fun OtherPage(
         text = s.searchProxyHint,
         style = MaterialTheme.typography.labelSmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
-
-    Spacer(Modifier.height(12.dp))
-    // 19 轮：用户称呼（可选，DS 网页版模式不注入）
-    OutlinedTextField(
-        value = settings.userNickname,
-        onValueChange = { onSetUserNickname(it) },
-        label = { Text(s.userNicknameLabel) },
-        singleLine = true,
-        modifier = Modifier.fillMaxWidth(),
     )
 
     Spacer(Modifier.height(16.dp))
@@ -836,6 +840,59 @@ private fun OtherPage(
         text = savingLevels.firstOrNull { it.first == settings.tokenSavingLevel }?.third.orEmpty(),
         style = MaterialTheme.typography.labelSmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+
+    Spacer(Modifier.height(16.dp))
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(s.autoCompress, style = MaterialTheme.typography.bodyLarge)
+        Switch(
+            checked = settings.autoCompressEnabled,
+            onCheckedChange = onSetAutoCompressEnabled,
+        )
+    }
+}
+
+/** 偏好设置：环境注入开关、用户称呼、新对话默认模式。 */
+@Composable
+private fun PreferencesPage(
+    settings: AppSettings,
+    onSetDefaultModeId: (String) -> Unit,
+    onSetContextInjectionEnabled: (Boolean) -> Unit,
+    onSetUserNickname: (String) -> Unit,
+) {
+    val s = LocalAppStrings.current
+
+    // 自动注入环境信息开关（ds_web 强制开启，无视此开关）
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(s.contextInjectionLabel, style = MaterialTheme.typography.bodyLarge)
+        Switch(checked = settings.contextInjectionEnabled, onCheckedChange = { onSetContextInjectionEnabled(it) })
+    }
+    Text(
+        text = s.contextInjectionHint,
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+
+    Spacer(Modifier.height(12.dp))
+    // 19 轮：用户称呼（可选，DS 网页版模式不注入）
+    OutlinedTextField(
+        value = settings.userNickname,
+        onValueChange = { onSetUserNickname(it) },
+        label = { Text(s.userNicknameLabel) },
+        singleLine = true,
+        modifier = Modifier.fillMaxWidth(),
     )
 
     Spacer(Modifier.height(16.dp))
@@ -927,21 +984,6 @@ private fun OtherPage(
                 )
             }
         }
-    }
-
-    Spacer(Modifier.height(16.dp))
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Text(s.autoCompress, style = MaterialTheme.typography.bodyLarge)
-        Switch(
-            checked = settings.autoCompressEnabled,
-            onCheckedChange = onSetAutoCompressEnabled,
-        )
     }
 }
 
@@ -1072,18 +1114,15 @@ private fun AboutContent(versionName: String) {
 
 /** 关于二级页面。 */
 @Composable
-private fun AboutPage() {
+private fun AboutPage(onDownloadLatest: () -> Unit = {}) {
     val versionName = rememberVersionName()
     val s = LocalAppStrings.current
-    val uriHandler = LocalUriHandler.current
     Column {
         AboutContent(versionName)
         Spacer(Modifier.height(12.dp))
-        // 20 轮：下载最新安装包（跳转 GitHub Latest）
+        // 20 轮：下载最新安装包——后台下载最新发布版 APK，失败回退浏览器下载页
         Button(
-            onClick = {
-                uriHandler.openUri("https://github.com/BambooMosaic/LLMChatMobile/releases/latest")
-            },
+            onClick = onDownloadLatest,
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text(s.aboutDownload)

@@ -41,4 +41,10 @@ interface ChatRepository {
         sessionId: String,
         onPages: (Int) -> Unit = {},
     ): String
+
+    /**
+     * 20 轮：查询最新发布（不含 prerelease）的安卓 APK 下载直链。
+     * 无网络或解析失败返回 null，由上层回退浏览器打开 Releases 页。
+     */
+    suspend fun latestApkDownloadUrl(): String?
 }

@@ -218,11 +218,15 @@ fun ChatInputBar(
                         }
 
                         // 发送按钮：锚定在输入区最后一行右侧（BottomEnd），不随文字增加上移
+                        // 20 轮：按压缩放反馈
+                        val sendInteraction = androidx.compose.foundation.interaction.MutableInteractionSource()
                         FilledIconButton(
                             onClick = if (isGenerating) onStop else onSend,
                             shape = CircleShape,
+                            interactionSource = sendInteraction,
                             modifier = Modifier
                                 .align(Alignment.BottomEnd)
+                                .pressScale(sendInteraction, 0.92f)
                                 .padding(end = 2.dp, bottom = 2.dp)
                                 .size(48.dp),
                             colors = if (isGenerating) {

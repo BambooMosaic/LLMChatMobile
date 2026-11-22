@@ -1,6 +1,7 @@
 package com.bamboomosaic.llmchat.feature.chat
 
 import android.content.Context
+import android.widget.Toast
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.bamboomosaic.llmchat.core.domain.ApiConfig
@@ -1125,6 +1126,71 @@ class ChatViewModel @Inject constructor(
     /** 19 轮：用户称呼（其他设置页，留空不注入）。 */
     fun setUserNickname(value: String) {
         viewModelScope.launch { settingsRepository.setUserNickname(value) }
+    }
+
+    /**
+     * 20 轮：后台下载最新发布版 APK（DownloadManager，通知栏可见进度）。
+     * 点击立即反馈；取直链失败回退浏览器打开 Releases 页手动下载。
+     */
+    fun downloadLatestApk() {
+        showAppToast(
+            when (settings.value.language) {
+                AppLanguage.TRADITIONAL_CHINESE -> "正在獲取最新版本…"
+                AppLanguage.ENGLISH -> "Checking for the latest version…"
+                else -> "正在获取最新版本…"
+            },
+        )
+        viewModelScope.launch {
+            val url = runCatching { chatRepository.latestApkDownloadUrl() }.getOrNull()
+            if (url.isNullOrBlank()) {
+                openInBrowser("https://github.com/BambooMosaic/LLMChatMobile/releases/latest")
+                return@launch
+            }
+            val enqueued = runCatching {
+                val dm = appContext.getSystemService(Context.DOWNLOAD_SERVICE)
+                    as android.app.DownloadManager
+                val request = android.app.DownloadManager.Request(android.net.Uri.parse(url))
+                    .setTitle("LLMChat 最新安装包")
+                    .setDescription("LLMChatMobile")
+                    .setNotificationVisibility(
+                        android.app.DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED,
+                    )
+                    .setDestinationInExternalPublicDir(
+                        android.os.Environment.DIRECTORY_DOWNLOADS,
+                        url.substringAfterLast('/'),
+                    )
+                dm.enqueue(request)
+            }.isSuccess
+            if (enqueued) {
+                showAppToast(
+                    when (settings.value.language) {
+                        AppLanguage.TRADITIONAL_CHINESE -> "已開始後台下載，可在通知欄查看進度"
+                        AppLanguage.ENGLISH -> "Download started — see the notification shade"
+                        else -> "已开始后台下载，可在通知栏查看进度"
+                    },
+                )
+            } else {
+                openInBrowser("https://github.com/BambooMosaic/LLMChatMobile/releases/latest")
+            }
+        }
+    }
+
+    /** 主线程弹 Toast。 */
+    private fun showAppToast(message: String) {
+        android.os.Handler(android.os.Looper.getMainLooper()).post {
+            android.widget.Toast.makeText(appContext, message, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    /** 20 轮：浏览器打开链接（下载兜底入口）。 */
+    private fun openInBrowser(url: String) {
+        runCatching {
+            val intent = android.content.Intent(
+                android.content.Intent.ACTION_VIEW,
+                android.net.Uri.parse(url),
+            ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+            appContext.startActivity(intent)
+        }
     }
 
     fun setDefaultModeId(modeId: String) {

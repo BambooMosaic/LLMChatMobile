@@ -169,7 +169,8 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
         val visible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
         // 锚点在 messages.size 位置，接近它即视为在底部
         val nearBottom = visible >= messages.size - 2
-        if (!autoScrolledOnce || nearBottom) {
+        if (!autoScrolledOnce) {
+            // 首次进入会话：直接跳到最新（长历史动画过慢）。
             // 单条消息可能极长（思考 + 正文），高度需要时间测量。
             // 等待布局稳定后一次性滚动；期间若用户开始滑动则放弃。
             withFrameNanos { }
@@ -177,6 +178,9 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
             if (listState.isScrollInProgress) return@LaunchedEffect
             listState.scrollToItem(messages.size, BOTTOM_SCROLL_OFFSET)
             autoScrolledOnce = true
+        } else if (nearBottom) {
+            // 20 轮：流式跟随改为平滑动画——高频触发时新动画从当前位置继续滑向底部，观感顺滑
+            listState.animateScrollToItem(messages.size, BOTTOM_SCROLL_OFFSET)
         }
     }
 
@@ -402,6 +406,7 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
             onSetTokenSavingLevel = viewModel::setTokenSavingLevel,
             onSetSearchEnabled = viewModel::setSearchEnabled,
             onSetUserNickname = viewModel::setUserNickname,
+            onDownloadLatest = viewModel::downloadLatestApk,
             onSetThemeMode = viewModel::setThemeMode,
             onSetLanguage = viewModel::setLanguage,
             onSetAutoCompressEnabled = viewModel::setAutoCompressEnabled,
