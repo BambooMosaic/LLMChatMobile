@@ -459,7 +459,12 @@ class ChatViewModel @Inject constructor(
         val topP = conversation?.effectiveTopP ?: mode.topP
         // 截断上限 = 最大上下文的 30%（字符数近似）
         val maxChars = (currentSettings.maxContextTokens * 30 / 100).coerceAtLeast(500)
-        val sp = SystemPromptBuilder.build(mode, conversation?.userPrompt, maxChars = maxChars, language = currentSettings.language)
+        // 18 轮修复：必须把括号规则开关传入拼装管道，否则参数默认 true，开关关了也不生效
+        val sp = SystemPromptBuilder.build(
+            mode, conversation?.userPrompt, maxChars = maxChars,
+            language = currentSettings.language,
+            roleplayParenRule = currentSettings.roleplayParenRule,
+        )
         // 环境上下文注入：ds_web 强制开启；其他模式跟随「自动注入环境信息」开关
         val shouldInject = mode.injectContext || currentSettings.contextInjectionEnabled
         val systemText = if (shouldInject) {
