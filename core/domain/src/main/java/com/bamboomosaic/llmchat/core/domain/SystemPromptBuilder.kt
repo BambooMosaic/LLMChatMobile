@@ -43,14 +43,7 @@ object SystemPromptBuilder {
             appendLine(header3)
             appendLine()
             appendLine(m.builtinPrompt)
-            // 17 轮：角色扮演模式括号描写规则按开关条件追加
-            if (mode.modeId == ModeConfig.ROLEPLAY && roleplayParenRule) {
-                appendLine(
-                    if (en) "Wrap actions, expressions and scene descriptions uniformly in parentheses (（）)."
-                    else if (tw) "動作、神態、環境描寫統一用（）包裹。"
-                    else "动作、神态、环境描写统一用（）包裹。"
-                )
-            }
+            // 18 轮：括号描写规则已迁移至用户层，模式层不再包含此规则
         }
 
         val user = userPrompt?.trim().orEmpty()
@@ -60,7 +53,16 @@ object SystemPromptBuilder {
             return Result(prompt = user)
         }
 
-        if (user.isEmpty()) {
+        // 18 轮修复：括号描写规则由模式层迁移到用户层——开关开启时追加，关闭时不追加
+        var userContent = user
+        if (mode.modeId == ModeConfig.ROLEPLAY && roleplayParenRule) {
+            val parenLine = if (en) "Wrap actions, expressions and scene descriptions uniformly in parentheses (（）)."
+                else if (tw) "動作、神態、環境描寫統一用（）包裹。"
+                else "描写统一用括号包裹。"
+            userContent = if (userContent.isEmpty()) parenLine else "$userContent\n$parenLine"
+        }
+
+        if (userContent.isEmpty()) {
             // 用户层为空：仅模式层，不渲染用户层区块与分隔线
             return Result(prompt = modeLayer.trim())
         }
@@ -86,7 +88,7 @@ object SystemPromptBuilder {
         }
         val userLayerHeader = if (en) "# User-Customized Instructions (User Layer)"
             else if (tw) "# 用戶自訂設定（用戶層）" else "# 用户自定义设定（用户层）"
-        val userLayerFull = "$userLayerHeader\n$user"
+        val userLayerFull = "$userLayerHeader\n$userContent"
 
         val full = modeLayer + safety + "\n" + userLayerFull
 

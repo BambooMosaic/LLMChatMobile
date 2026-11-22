@@ -322,11 +322,14 @@ fun ChatInputBar(
                         }
                     }
 
-                    // 2. 模式按钮（显示当前会话模式名；首条消息后置灰锁定）
+                    // 2. 模式按钮（显示当前会话模式名；首条消息后置灰，18 轮起点击改为只读预览）
                     Box {
                         TextButton(
                             onClick = onOpenModeEditor,
-                            enabled = !modeLocked,
+                            colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
+                                contentColor = if (modeLocked) MaterialTheme.colorScheme.onSurfaceVariant
+                                else MaterialTheme.colorScheme.primary,
+                            ),
                             modifier = Modifier.height(30.dp),
                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
                         ) {

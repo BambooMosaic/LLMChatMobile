@@ -58,10 +58,14 @@ fun ModeEditorDialog(
     var dropdownOpen by remember { mutableStateOf(false) }
 
     // 两个面板的数据互相隔离：角色卡表单 vs 自由输入
-    var cardName by remember { mutableStateOf("") }
-    var cardInfo by remember { mutableStateOf("") }
-    var freePrompt by remember { mutableStateOf(initialUserPrompt.orEmpty()) }
-    var useRoleCard by remember { mutableStateOf(true) }
+    // 18 轮修复：重开弹窗时从已保存的用户层提示词回显角色卡（保存格式：角色名：X\n角色设定：\nY）
+    val initialPrompt = initialUserPrompt?.trim().orEmpty()
+    val parsedCard = remember(initialPrompt) { parseRoleCard(initialPrompt) }
+    val hasSavedCard = parsedCard.first.isNotEmpty() || parsedCard.second.isNotEmpty()
+    var cardName by remember { mutableStateOf(parsedCard.first) }
+    var cardInfo by remember { mutableStateOf(parsedCard.second) }
+    var freePrompt by remember { mutableStateOf(if (hasSavedCard) "" else initialPrompt) }
+    var useRoleCard by remember { mutableStateOf(initialPrompt.isEmpty() || hasSavedCard) }
 
     var customTemp by remember { mutableStateOf(ChatModes.CUSTOM_DEFAULT_TEMPERATURE.toString()) }
     var customTopP by remember { mutableStateOf(ChatModes.CUSTOM_DEFAULT_TOP_P.toString()) }
@@ -304,4 +308,20 @@ private fun FilterChipCompact(selected: Boolean, onClick: () -> Unit, label: Str
         onClick = onClick,
         label = { Text(label, style = MaterialTheme.typography.labelMedium) },
     )
+}
+
+/**
+ * 解析已保存的角色卡文本（保存格式：角色名：X\n角色设定：\nY）。
+ * 非该格式（自由输入的历史提示词）返回空对，由调用方回退到自由输入面板。
+ */
+internal fun parseRoleCard(text: String): Pair<String, String> {
+    if (!text.startsWith("角色名：")) return "" to ""
+    val namePrefix = "角色名："
+    val infoMarker = "角色设定："
+    val firstNl = text.indexOf('\n')
+    if (firstNl < 0) return text.removePrefix(namePrefix).trim() to ""
+    val name = text.substring(namePrefix.length, firstNl).trim()
+    val markerIdx = text.indexOf(infoMarker, firstNl)
+    val info = if (markerIdx >= 0) text.substring(markerIdx + infoMarker.length).trim() else ""
+    return name to info
 }

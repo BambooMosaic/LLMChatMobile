@@ -113,7 +113,8 @@ object ChatModes {
             strings = ModeStrings(
                 modeName = "角色扮演模式",
                 description = "和虚拟角色对话，扮演剧情、人设互动",
-                builtinPrompt = "动作、神态、环境描写统一用（）包裹；严格维持人设一致性；" +
+                // 18 轮：括号描写规则已迁移至用户层（SystemPromptBuilder 按开关追加），模式层不再硬编码
+                builtinPrompt = "严格维持人设一致性；" +
                     "对话口语化；禁止跳出角色进行解释说明；安全约束优先级最高。",
                 userPromptPlaceholder = "请粘贴角色卡或人设说明（必填）",
             ),
@@ -213,7 +214,7 @@ object ChatModes {
         ModeConfig.ROLEPLAY -> ModeStrings(
             modeName = "角色扮演模式",
             description = "和虛擬角色對話，扮演劇情、人設互動",
-            builtinPrompt = "動作、神態、環境描寫統一用（）包裹；嚴格維持人設一致性；" +
+            builtinPrompt = "嚴格維持人設一致性；" +
                 "對話口語化；禁止跳出角色進行解釋說明；安全約束優先級最高。",
             userPromptPlaceholder = "請貼上角色卡或人設說明（必填）",
         )
@@ -273,8 +274,7 @@ object ChatModes {
         ModeConfig.ROLEPLAY -> ModeStrings(
             modeName = "Roleplay",
             description = "Talk with virtual characters — story and persona interaction",
-            builtinPrompt = "Wrap actions, expressions and scene descriptions in parentheses; " +
-                "stay strictly in character; keep dialogue conversational; never break " +
+            builtinPrompt = "Stay strictly in character; keep dialogue conversational; never break " +
                 "character to explain; safety constraints take priority.",
             userPromptPlaceholder = "Paste a character card or persona description (required)",
         )

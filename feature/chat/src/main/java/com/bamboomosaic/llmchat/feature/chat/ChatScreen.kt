@@ -111,6 +111,8 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
     var showNewChatModeDialog by remember { mutableStateOf(false) }
     // 会话模式编辑弹窗（工具栏模式按钮）
     var showModeEditor by remember { mutableStateOf(false) }
+    // 18 轮新增：灰色模式（锁定态）只读预览弹窗
+    var showModePreview by remember { mutableStateOf(false) }
     // 截断轻提示
     LaunchedEffect(Unit) {
         viewModel.truncatedToast.collect {
@@ -340,7 +342,11 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
                     effectiveModeId, settings.language,
                 ).localized(settings.language).modeName,
                 modeLocked = messages.any { it.role == MessageRole.ASSISTANT && it.dbId > 0 },
-                onOpenModeEditor = { if (!messages.any { m -> m.role == MessageRole.ASSISTANT && m.dbId > 0 }) showModeEditor = true },
+                // 18 轮：未锁定打开模式编辑弹窗；锁定（灰色模式）改为只读预览弹窗
+                onOpenModeEditor = {
+                    val locked = messages.any { m -> m.role == MessageRole.ASSISTANT && m.dbId > 0 }
+                    if (locked) showModePreview = true else showModeEditor = true
+                },
                 isGenerating = isGenerating,
                 visionSupported = Providers.supportsVision(currentConfig?.model ?: ""),
                 pendingImages = pendingImages,
@@ -412,6 +418,19 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
                 showModeEditor = false
             },
             onDismiss = { showModeEditor = false },
+        )
+    }
+
+    // 18 轮新增：灰色模式（锁定态）只读预览弹窗
+    if (showModePreview) {
+        ModePreviewDialog(
+            modeId = effectiveModeId,
+            modeName = com.bamboomosaic.llmchat.core.domain.ChatModes.find(
+                effectiveModeId, settings.language,
+            ).localized(settings.language).modeName,
+            userPrompt = effectiveUserPrompt,
+            uiLanguage = settings.language,
+            onDismiss = { showModePreview = false },
         )
     }
 

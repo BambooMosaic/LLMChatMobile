@@ -540,20 +540,22 @@ class ChatViewModel @Inject constructor(
 
         streamJob?.cancel()
         streamJob = viewModelScope.launch {
+            if (persistUserMessage && conversations.value.none { it.id == conversationId }) {
+                // 临时空白会话发消息即转正入库（用户层为空也转正——规则 7）。
+                // 18 轮修复：必须先带草稿模式建行。原先先 ensureConversation 用实体默认值（custom）建行，
+                // 随后 ensureConversationWithMode 对已存在行直接忽略，导致灰色模式重启后漂移成自定义模式。
+                conversationRepository.ensureConversationWithMode(
+                    conversationId = conversationId,
+                    title = "新对话",
+                    modeId = _draftModeId.value,
+                    userPrompt = _draftUserPrompt.value,
+                    temperature = null,
+                    topP = null,
+                )
+            }
             conversationRepository.ensureConversation(conversationId, userTextForTitle.take(MAX_TITLE_LENGTH))
             conversationRepository.updateTitleIfPlaceholder(conversationId, userTextForTitle.take(MAX_TITLE_LENGTH))
             if (persistUserMessage) {
-                // 临时空白会话发消息即转正入库（用户层为空也转正——规则 7）
-                if (conversations.value.none { it.id == conversationId }) {
-                    conversationRepository.ensureConversationWithMode(
-                        conversationId = conversationId,
-                        title = "新对话",
-                        modeId = _draftModeId.value,
-                        userPrompt = _draftUserPrompt.value,
-                        temperature = null,
-                        topP = null,
-                    )
-                }
                 conversationRepository.appendMessage(
                     conversationId,
                     ChatMessage(MessageRole.USER, userTextForTitle, images = userImages),
