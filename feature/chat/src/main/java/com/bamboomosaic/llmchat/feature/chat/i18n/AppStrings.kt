@@ -138,6 +138,18 @@ data class AppStrings(
     val modePreviewCopy: String,
     /** 18 轮：只读预览——复制成功反馈。 */
     val modePreviewCopied: String,
+    /** 19 轮：其他设置——联网搜索开关标题。 */
+    val searchSettingLabel: String,
+    /** 19 轮：其他设置——联网搜索副标题。 */
+    val searchProxyHint: String,
+    /** 19 轮：其他设置——用户称呼输入框标签。 */
+    val userNicknameLabel: String,
+    /** 19 轮：模式编辑——导出按钮。 */
+    val modeExport: String,
+    /** 19 轮：模式编辑——导入按钮。 */
+    val modeImport: String,
+    /** 19 轮：模式编辑——导入失败提示。 */
+    val modeImportFailed: String,
     val tokenSavingLabel: String,
     val tokenSavingOff: String,
     val tokenSavingOffHint: String,
@@ -299,6 +311,12 @@ private val ZhCN = AppStrings(
     modePreviewRoleCard = "角色卡",
     modePreviewCopy = "复制全文",
     modePreviewCopied = "已复制",
+    searchSettingLabel = "联网搜索",
+    searchProxyHint = "DeepSeek 原生联网搜索；其他模型将先由 DeepSeek-Flash 联网搜索，再把结果交给当前模型作答（消息内容会额外发送给 DeepSeek）",
+    userNicknameLabel = "用户称呼",
+    modeExport = "导出",
+    modeImport = "导入",
+    modeImportFailed = "导入失败：不是有效的模式配置文件",
     tokenSavingLabel = "省 Token 档位",
     tokenSavingOff = "关",
     tokenSavingOffHint = "不限制输出，不自动压缩上下文",
@@ -452,6 +470,12 @@ private val ZhTW = AppStrings(
     modePreviewRoleCard = "角色卡",
     modePreviewCopy = "複製全文",
     modePreviewCopied = "已複製",
+    searchSettingLabel = "聯網搜索",
+    searchProxyHint = "DeepSeek 原生聯網搜索；其他模型將先由 DeepSeek-Flash 聯網搜索，再把結果交給當前模型作答（消息內容會額外發送給 DeepSeek）",
+    userNicknameLabel = "用戶稱呼",
+    modeExport = "導出",
+    modeImport = "導入",
+    modeImportFailed = "導入失敗：不是有效的模式配置檔案",
     tokenSavingLabel = "省 Token 檔位",
     tokenSavingOff = "關",
     tokenSavingOffHint = "不限制輸出，不自動壓縮上下文",
@@ -605,6 +629,12 @@ private val EnUS = AppStrings(
     modePreviewRoleCard = "Role card",
     modePreviewCopy = "Copy all",
     modePreviewCopied = "Copied",
+    searchSettingLabel = "Web search",
+    searchProxyHint = "DeepSeek uses native web search; other models search via DeepSeek-Flash first, then answer with the current model (message content is additionally sent to DeepSeek)",
+    userNicknameLabel = "User nickname",
+    modeExport = "Export",
+    modeImport = "Import",
+    modeImportFailed = "Import failed: not a valid mode config file",
     tokenSavingLabel = "Token saving",
     tokenSavingOff = "Off",
     tokenSavingOffHint = "No output cap, no context compression",

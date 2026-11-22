@@ -68,6 +68,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.bamboomosaic.llmchat.core.domain.ApiConfig
+import com.bamboomosaic.llmchat.core.domain.ChatMessage
 import com.bamboomosaic.llmchat.core.domain.MessageRole
 import com.bamboomosaic.llmchat.core.domain.Providers
 import com.bamboomosaic.llmchat.feature.chat.i18n.LocalAppStrings
@@ -330,7 +331,8 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
                 thinkingSupported = currentConfig?.supportReasoning ?: false,
                 onToggleThinking = viewModel::setThinkingEnabled,
                 searchEnabled = settings.searchEnabled,
-                searchSupported = isDeepSeekConfig(currentConfig),
+                // 19 轮：搜索对所有模型开放（非 DeepSeek 模型经 DeepSeek-Flash 代理）
+                searchSupported = true,
                 onToggleSearch = viewModel::setSearchEnabled,
                 currentModel = currentConfig?.model?.ifBlank { currentConfig?.name } ?: "—",
                 currentConfigId = currentConfig?.id ?: 0,
@@ -376,6 +378,8 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
             onSetDefaultModeId = viewModel::setDefaultModeId,
             onSetContextInjectionEnabled = viewModel::setContextInjectionEnabled,
             onSetTokenSavingLevel = viewModel::setTokenSavingLevel,
+            onSetSearchEnabled = viewModel::setSearchEnabled,
+            onSetUserNickname = viewModel::setUserNickname,
             onSetThemeMode = viewModel::setThemeMode,
             onSetLanguage = viewModel::setLanguage,
             onSetAutoCompressEnabled = viewModel::setAutoCompressEnabled,
@@ -394,9 +398,20 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
             uiLanguage = settings.language,
             roleplayParenRule = settings.roleplayParenRule,
             onRoleplayParenRuleChange = viewModel::setRoleplayParenRule,
-            onConfirm = { modeId, userPrompt, temp, topp ->
+            onConfirm = { modeId, userPrompt, temp, topp, imported ->
                 viewModel.newConversation()
                 viewModel.createConversationWithMode(modeId, userPrompt, temp, topp)
+                imported?.takeIf { it.isNotEmpty() }?.let { list ->
+                    // 19 轮：导入的模式 JSON 携带对话记录，一并还原进新对话
+                    viewModel.importConversationMessages(
+                        modeId,
+                        list.mapNotNull { m ->
+                            runCatching { MessageRole.valueOf(m.roleName) }.getOrNull()?.let { role ->
+                                ChatMessage(role, m.text, reasoning = m.reasoning)
+                            }
+                        },
+                    )
+                }
                 showNewChatModeDialog = false
             },
             onDismiss = { showNewChatModeDialog = false },
@@ -413,7 +428,7 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
             uiLanguage = settings.language,
             roleplayParenRule = settings.roleplayParenRule,
             onRoleplayParenRuleChange = viewModel::setRoleplayParenRule,
-            onConfirm = { modeId, userPrompt, temp, topp ->
+            onConfirm = { modeId, userPrompt, temp, topp, _ ->
                 viewModel.updateConversationMode(modeId, userPrompt, temp, topp)
                 showModeEditor = false
             },
@@ -430,6 +445,10 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
             ).localized(settings.language).modeName,
             userPrompt = effectiveUserPrompt,
             uiLanguage = settings.language,
+            messages = messages
+                .filter { !it.isStreaming && it.text.isNotBlank() }
+                .map { ChatMessage(it.role, it.text, reasoning = it.reasoning.takeIf { r -> r.isNotBlank() }) },
+            roleplayParenRule = settings.roleplayParenRule,
             onDismiss = { showModePreview = false },
         )
     }

@@ -1,5 +1,7 @@
 package com.bamboomosaic.llmchat.feature.chat
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -20,11 +22,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.bamboomosaic.llmchat.core.domain.AppLanguage
+import com.bamboomosaic.llmchat.core.domain.ChatMessage
 import com.bamboomosaic.llmchat.core.domain.ModeConfig
 import com.bamboomosaic.llmchat.feature.chat.i18n.LocalAppStrings
 
@@ -39,6 +43,10 @@ fun ModePreviewDialog(
     modeName: String,
     userPrompt: String?,
     uiLanguage: AppLanguage,
+    /** 19 轮：当前会话已完成的消息（导出对话记录用）。 */
+    messages: List<ChatMessage> = emptyList(),
+    /** 19 轮：括号开关当前值（导出用）。 */
+    roleplayParenRule: Boolean = true,
     onDismiss: () -> Unit,
 ) {
     val s = LocalAppStrings.current
@@ -53,6 +61,45 @@ fun ModePreviewDialog(
         userPrompt?.trim().orEmpty()
     }
     var copied by remember { mutableStateOf(false) }
+
+    // —— 19 轮：导出当前模式配置（用户层提示词/角色卡 + 括号开关 + 对话记录） ——
+    val context = LocalContext.current
+    var pendingExportJson by remember { mutableStateOf("") }
+    val exportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json"),
+    ) { uri ->
+        if (uri != null && pendingExportJson.isNotEmpty()) {
+            runCatching {
+                context.contentResolver.openOutputStream(uri)?.use { out ->
+                    out.write(pendingExportJson.toByteArray(Charsets.UTF_8))
+                }
+            }
+        }
+    }
+
+    fun buildExportPayload(): String {
+        val obj = org.json.JSONObject()
+        obj.put("app", "llmchat-mode")
+        obj.put("version", 2)
+        obj.put("modeId", modeId)
+        obj.put("modeName", modeName)
+        obj.put("userPrompt", copyText)
+        obj.put("roleplayParenRule", roleplayParenRule)
+        obj.put(
+            "conversation",
+            org.json.JSONArray().apply {
+                messages.forEach { m ->
+                    put(
+                        org.json.JSONObject()
+                            .put("role", m.role.name)
+                            .put("text", m.content)
+                            .putOpt("reasoning", m.reasoning?.takeIf { it.isNotBlank() }),
+                    )
+                }
+            },
+        )
+        return obj.toString(2)
+    }
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(
@@ -102,6 +149,17 @@ fun ModePreviewDialog(
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Text(if (copied) s.modePreviewCopied else s.modePreviewCopy)
+                }
+                Spacer(Modifier.height(8.dp))
+                // 19 轮：导出模式配置（含对话记录），保存为 JSON 文件
+                OutlinedButton(
+                    onClick = {
+                        pendingExportJson = buildExportPayload()
+                        exportLauncher.launch("llmchat-mode-$modeId.json")
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(s.modeExport)
                 }
                 Spacer(Modifier.height(8.dp))
                 OutlinedButton(

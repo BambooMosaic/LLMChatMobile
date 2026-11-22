@@ -110,6 +110,8 @@ data class AppSettings(
     val tokenSavingLevel: Int = 0,
     /** 角色扮演模式：动作神态环境描写统一用（）包裹。 */
     val roleplayParenRule: Boolean = true,
+    /** 用户称呼（可选）；非空时注入环境上下文，DS 网页版模式除外。 */
+    val userNickname: String = "",
 ) {
     companion object {
         const val DEFAULT_MODEL = "deepseek-flash"
@@ -166,6 +168,9 @@ interface SettingsRepository {
 
     /** 角色扮演模式括号规则开关。 */
     suspend fun setRoleplayParenRule(enabled: Boolean)
+
+    /** 用户称呼（可选，留空不注入）。 */
+    suspend fun setUserNickname(value: String)
 
     /** 模式模板记忆：每个模式下用户最后一次填写的用户提示词。 */
     fun observeModeUserPrompt(modeId: String): kotlinx.coroutines.flow.Flow<String?>

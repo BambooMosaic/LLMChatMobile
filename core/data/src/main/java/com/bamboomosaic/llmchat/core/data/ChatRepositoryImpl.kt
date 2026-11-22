@@ -87,4 +87,54 @@ class ChatRepositoryImpl @Inject constructor(
         ).firstOrNull()
         Unit
     }
+
+    override suspend fun searchProxy(
+        config: ApiConfig,
+        question: String,
+        sessionId: String,
+        onPages: (Int) -> Unit,
+    ): String {
+        // 模型优先用该 DeepSeek 配置自己的模型；非 deepseek 系模型名兜底为 deepseek-flash
+        val model = config.model.takeIf { it.startsWith("deepseek", ignoreCase = true) }
+            ?: SEARCH_PROXY_MODEL
+        val answer = StringBuilder()
+        sseClient.stream(
+            baseUrl = config.baseUrl,
+            apiKey = config.apiKey,
+            model = model,
+            messages = listOf(
+                ChatMessage(MessageRole.SYSTEM, SEARCH_SYSTEM_PROMPT),
+                ChatMessage(MessageRole.USER, question),
+            ),
+            searchEnabled = true,
+        ).collect { event ->
+            when (event) {
+                is SseEvent.Text -> answer.append(event.chunk)
+                is SseEvent.SearchStarted -> onPages(0)
+                is SseEvent.SearchCompleted -> onPages(event.pageCount)
+                is SseEvent.Usage -> tokenUsageDao.insert(
+                    TokenUsageRecordEntity(
+                        sessionId = sessionId,
+                        model = model,
+                        promptTokens = event.promptTokens,
+                        completionTokens = event.completionTokens,
+                        timestamp = System.currentTimeMillis(),
+                    ),
+                )
+                is SseEvent.Reasoning -> Unit
+            }
+        }
+        return answer.toString()
+    }
+
+    private companion object {
+        /** 搜索代理固定指令：要求基于联网搜索结果作答并标注来源。 */
+        const val SEARCH_SYSTEM_PROMPT =
+            "你是联网搜索助手。请先联网搜索，再基于搜索结果回答用户的问题：" +
+                "优先给出现状、数据与结论，并标注信息来源（网站名称或链接）；" +
+                "如果搜索结果不足以回答，请如实说明。回答保持简洁。"
+
+        /** 搜索代理兜底模型（任务约定固定使用 DeepSeek-Flash）。 */
+        const val SEARCH_PROXY_MODEL = "deepseek-flash"
+    }
 }

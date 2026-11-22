@@ -286,6 +286,29 @@ class ChatViewModel @Inject constructor(
     }
 
     /**
+     * 19 轮：还原导入的模式 JSON 携带的对话记录。
+     * 写入当前（新）会话；临时会话先按模式转正。消息顺序与导出一致，时间戳为导入时刻。
+     */
+    fun importConversationMessages(modeId: String, messages: List<ChatMessage>) {
+        if (messages.isEmpty()) return
+        viewModelScope.launch {
+            val id = _currentConversationId.value
+            if (conversations.value.none { it.id == id }) {
+                conversationRepository.ensureConversationWithMode(
+                    conversationId = id,
+                    title = "新对话",
+                    modeId = modeId,
+                    userPrompt = _draftUserPrompt.value,
+                    temperature = null,
+                    topP = null,
+                )
+            }
+            messages.forEach { conversationRepository.appendMessage(id, it) }
+            _messages.value = loadLatestMessages(id)
+        }
+    }
+
+    /**
      * 重新生成最后一条助手回复：多版本保留，不覆盖旧版本。
      * versionKey = 被重新生成的助手消息所属版本组（定位不到时回退触发它的用户消息 id）。
      */
@@ -448,6 +471,8 @@ class ChatViewModel @Inject constructor(
     private suspend fun buildRequestBundle(
         currentSettings: AppSettings,
         history: List<ChatMessage>,
+        /** 19 轮：搜索代理返回的带引用结果（非空时注入 system）。 */
+        searchDigest: String? = null,
     ): RequestBundle {
         val conversationId = _currentConversationId.value
         // 直接查库：会话列表 Flow 可能有刷新延迟（新建后立刻发送的场景）
@@ -467,11 +492,25 @@ class ChatViewModel @Inject constructor(
         )
         // 环境上下文注入：ds_web 强制开启；其他模式跟随「自动注入环境信息」开关
         val shouldInject = mode.injectContext || currentSettings.contextInjectionEnabled
-        val systemText = if (shouldInject) {
-            sp.prompt + "\n\n[当前环境] " +
-                contextReminderProvider.buildReminder(currentSettings.language)
-        } else {
-            sp.prompt
+        // 19 轮：用户称呼注入——DS 网页版提示词固定单句，不注入称呼
+        val nickname = if (mode.modeId == ModeConfig.DS_WEB) "" else currentSettings.userNickname
+        val systemText = buildString {
+            append(sp.prompt)
+            searchDigest?.takeIf { it.isNotBlank() }?.let { digest ->
+                append("\n\n")
+                append(
+                    when (currentSettings.language) {
+                        AppLanguage.TRADITIONAL_CHINESE -> "[聯網搜索結果（DeepSeek 代理）]"
+                        AppLanguage.ENGLISH -> "[Web Search Results (via DeepSeek)]"
+                        else -> "[联网搜索结果（DeepSeek 代理）]"
+                    },
+                )
+                append('\n').append(digest)
+            }
+            if (shouldInject) {
+                append("\n\n[当前环境] ")
+                append(contextReminderProvider.buildReminder(currentSettings.language, nickname))
+            }
         }
         val withSystem = listOf(ChatMessage(MessageRole.SYSTEM, systemText)) + history
         // 省 Token 档位：质量/中等/最大 → 压缩阈值（所有模式生效）
@@ -508,17 +547,11 @@ class ChatViewModel @Inject constructor(
         /** 多版本上下文：触发本次回复的用户消息 dbId（0 = 普通新消息，持久化后再取 id）。 */
         versionKeyOf: suspend () -> Long = { 0L },
     ) {
-        viewModelScope.launch {
-            val bundle = buildRequestBundle(currentSettings, history)
-            if (bundle.truncated) {
-                _error.value = null
-                _truncatedToast.tryEmit(Unit)
-            }
-            streamInternal(
-                conversationId, bundle.messages, currentSettings, userTextForTitle,
-                userImages, persistUserMessage, bundle.temperature, bundle.topP, modeId, versionKeyOf,
-            )
-        }
+        // 19 轮：请求组装挪进 streamInternal（需在会话转正之后执行搜索代理前置阶段）
+        streamInternal(
+            conversationId, history, currentSettings, userTextForTitle,
+            userImages, persistUserMessage, modeId, versionKeyOf,
+        )
     }
 
     /** 截断轻提示事件。 */
@@ -527,13 +560,11 @@ class ChatViewModel @Inject constructor(
 
     private fun streamInternal(
         conversationId: String,
-        compressed: List<ChatMessage>,
+        history: List<ChatMessage>,
         currentSettings: AppSettings,
         userTextForTitle: String,
         userImages: List<String> = emptyList(),
         persistUserMessage: Boolean,
-        temperature: Float?,
-        topP: Float?,
         modeId: String = ModeConfig.CUSTOM,
         versionKeyOf: suspend () -> Long = { 0L },
     ) {
@@ -541,7 +572,8 @@ class ChatViewModel @Inject constructor(
         // 这里限制到约 16fps，结束时再强制渲染一次完整内容。
         val reasoningState = MutableStateFlow("")
         // 联网搜索状态：null = 本轮未开启；0 = 已发起未出结果；N = 累计网页数
-        val searchPagesState = MutableStateFlow<Int?>(if (currentSettings.searchEnabled) 0 else null)
+        // 19 轮：初始 null，搜索前置阶段结束后按路径写入
+        val searchPagesState = MutableStateFlow<Int?>(null)
 
         streamJob?.cancel()
         streamJob = viewModelScope.launch {
@@ -589,9 +621,56 @@ class ChatViewModel @Inject constructor(
                 }
             }
 
+            // —— 19 轮：DeepSeek-Flash 搜索代理前置阶段 ——
+            // 路由：当前模型是 DeepSeek → 原生搜索（SSE 事件累加，零改动）；
+            // 非 DeepSeek + 搜索开 → 先用已保存的 DeepSeek 配置搜索一次，结果注入 system。
+            // 失败降级：不阻断对话，本轮不带搜索结果，经 _error 提示。
+            var searchDigest: String? = null
+            val cfg = currentConfig.value
+            val isDsModel = cfg != null && (
+                cfg.provider.equals("deepseek", ignoreCase = true) ||
+                    cfg.baseUrl.contains("deepseek", ignoreCase = true)
+                )
+            if (currentSettings.searchEnabled && !isDsModel) {
+                // 先置 0，让消息气泡在搜索期间显示「正在搜索」
+                searchPagesState.value = 0
+                render(force = true)
+                val dsConfig = apiConfigs.value.firstOrNull {
+                    it.provider.equals("deepseek", ignoreCase = true)
+                }
+                if (dsConfig == null) {
+                    _error.value = ApiError(ApiError.Kind.UNKNOWN, searchUnavailableHint(currentSettings))
+                } else {
+                    val question = history.lastOrNull { it.role == MessageRole.USER }?.content
+                        ?.takeIf { it.isNotBlank() } ?: userTextForTitle
+                    try {
+                        var pages = 0
+                        val digest = chatRepository.searchProxy(
+                            config = dsConfig,
+                            question = question,
+                            sessionId = conversationId,
+                            onPages = { p -> pages += p },
+                        )
+                        if (digest.isNotBlank()) searchDigest = digest
+                        searchPagesState.value = pages
+                    } catch (e: Exception) {
+                        _error.value = ApiError(ApiError.Kind.UNKNOWN, searchFailedHint(currentSettings))
+                    }
+                }
+                render(force = true)
+            } else if (currentSettings.searchEnabled) {
+                searchPagesState.value = 0
+            }
+
+            val bundle = buildRequestBundle(currentSettings, history, searchDigest)
+            if (bundle.truncated) {
+                _error.value = null
+                _truncatedToast.tryEmit(Unit)
+            }
+
             chatRepository.sendChatStream(
                 sessionId = conversationId,
-                messages = compressed,
+                messages = bundle.messages,
                 model = currentConfig.value?.model ?: currentSettings.model,
                 thinkingEnabled = currentSettings.thinkingEnabled,
                 maxTokens = effectiveMaxOutputTokens(currentSettings, modeId),
@@ -601,8 +680,8 @@ class ChatViewModel @Inject constructor(
                     render(force = false)
                 },
                 searchEnabled = currentSettings.searchEnabled,
-                temperature = temperature,
-                topP = topP,
+                temperature = bundle.temperature,
+                topP = bundle.topP,
                 onSearchPages = { count ->
                     // SearchStarted 回调 0（保持累计值不变），SearchCompleted 回调本次网页数（累加）
                     searchPagesState.update { (it ?: 0) + count }
@@ -1043,6 +1122,11 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch { settingsRepository.setSearchEnabled(enabled) }
     }
 
+    /** 19 轮：用户称呼（其他设置页，留空不注入）。 */
+    fun setUserNickname(value: String) {
+        viewModelScope.launch { settingsRepository.setUserNickname(value) }
+    }
+
     fun setDefaultModeId(modeId: String) {
         viewModelScope.launch { settingsRepository.setDefaultModeId(modeId) }
     }
@@ -1114,6 +1198,20 @@ class ChatViewModel @Inject constructor(
     }
 
     /** 请求成功但没有任何正文时的提示（避免只留一个空白气泡）。 */
+    /** 19 轮：搜索降级提示——没有可用的 DeepSeek 配置。 */
+    private fun searchUnavailableHint(settings: AppSettings): String = when (settings.language) {
+        AppLanguage.TRADITIONAL_CHINESE -> "未找到 DeepSeek 配置，本轮回答未使用联网搜索"
+        AppLanguage.ENGLISH -> "No DeepSeek config found — this reply skipped web search"
+        else -> "未找到 DeepSeek 配置，本轮回答未使用联网搜索"
+    }
+
+    /** 19 轮：搜索降级提示——搜索调用失败。 */
+    private fun searchFailedHint(settings: AppSettings): String = when (settings.language) {
+        AppLanguage.TRADITIONAL_CHINESE -> "联网搜索失败，本轮回答未使用搜索结果"
+        AppLanguage.ENGLISH -> "Web search failed — this reply was generated without search results"
+        else -> "联网搜索失败，本轮回答未使用搜索结果"
+    }
+
     private fun emptyResponseHint(settings: AppSettings): String = when (settings.language) {
         AppLanguage.SIMPLIFIED_CHINESE ->
             "模型没有返回正文内容（token 已消耗）。请确认模型名支持对话，或检查「最大输出」是否过小。"

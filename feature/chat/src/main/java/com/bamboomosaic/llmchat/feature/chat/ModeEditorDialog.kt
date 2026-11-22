@@ -1,5 +1,8 @@
 package com.bamboomosaic.llmchat.feature.chat
 
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -26,6 +29,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -50,7 +54,7 @@ fun ModeEditorDialog(
     roleplayParenRule: Boolean = true,
     /** 括号规则开关变化回调。 */
     onRoleplayParenRuleChange: (Boolean) -> Unit = {},
-    onConfirm: (modeId: String, userPrompt: String?, temperature: Float?, topP: Float?) -> Unit,
+    onConfirm: (modeId: String, userPrompt: String?, temperature: Float?, topP: Float?, importedMessages: List<ImportedMessage>?) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val s = LocalAppStrings.current
@@ -69,6 +73,8 @@ fun ModeEditorDialog(
 
     var customTemp by remember { mutableStateOf(ChatModes.CUSTOM_DEFAULT_TEMPERATURE.toString()) }
     var customTopP by remember { mutableStateOf(ChatModes.CUSTOM_DEFAULT_TOP_P.toString()) }
+    // 19 轮：导入的模式 JSON 中携带的对话记录，确定时一并还原
+    var importedMessages by remember { mutableStateOf<List<ImportedMessage>?>(null) }
 
     val selected = ChatModes.find(selectedId, uiLanguage)
     val isRoleplay = selected.modeId == ModeConfig.ROLEPLAY
@@ -81,6 +87,61 @@ fun ModeEditorDialog(
             if (name.isEmpty() && info.isEmpty()) "" else "角色名：$name\n角色设定：\n$info"
         }
         else -> freePrompt.trim()
+    }
+
+    // —— 19 轮：单模式配置导入（导出入口在「模式详情」只读预览弹窗） ——
+    val context = LocalContext.current
+
+    /** 解析导入 JSON：合法则还原进编辑器（落为自定义模式），返回是否成功。 */
+    fun applyImportPayload(text: String): Boolean {
+        val obj = runCatching { org.json.JSONObject(text) }.getOrNull() ?: return false
+        if (obj.optString("app") != "llmchat-mode") return false
+        selectedId = ModeConfig.CUSTOM
+        val up = obj.optString("userPrompt")
+        val card = parseRoleCard(up)
+        if (card.first.isNotEmpty() || card.second.isNotEmpty()) {
+            cardName = card.first
+            cardInfo = card.second
+            useRoleCard = true
+            freePrompt = ""
+        } else {
+            useRoleCard = false
+            freePrompt = up
+        }
+        if (obj.has("roleplayParenRule")) {
+            onRoleplayParenRuleChange(obj.optBoolean("roleplayParenRule", roleplayParenRule))
+        }
+        obj.optString("temperature").toFloatOrNull()?.let { customTemp = it.toString() }
+        obj.optString("top_p").toFloatOrNull()?.let { customTopP = it.toString() }
+        importedMessages = obj.optJSONArray("conversation")?.let { arr ->
+            buildList {
+                for (i in 0 until arr.length()) {
+                    val m = arr.optJSONObject(i) ?: continue
+                    add(
+                        ImportedMessage(
+                            roleName = m.optString("role"),
+                            text = m.optString("text"),
+                            reasoning = m.optString("reasoning").takeIf { it.isNotEmpty() },
+                        ),
+                    )
+                }
+            }
+        }
+        return true
+    }
+
+    val importLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        val text = runCatching {
+            context.contentResolver.openInputStream(uri)?.use {
+                it.readBytes().toString(Charsets.UTF_8)
+            }
+        }.getOrNull().orEmpty()
+        if (!applyImportPayload(text)) {
+            Toast.makeText(context, s.modeImportFailed, Toast.LENGTH_SHORT).show()
+        }
     }
 
     Dialog(
@@ -100,6 +161,19 @@ fun ModeEditorDialog(
                     .padding(20.dp),
             ) {
                 Text(s.modeSelectTitle, style = MaterialTheme.typography.titleMedium)
+                // 19 轮：导入模式配置（含对话记录），还原为自定义模式；仅新建对话场景显示
+                if (createMode) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
+                    ) {
+                        androidx.compose.material3.TextButton(onClick = {
+                            importLauncher.launch(arrayOf("application/json", "text/plain", "*/*"))
+                        }) {
+                            Text(s.modeImport, style = MaterialTheme.typography.labelMedium)
+                        }
+                    }
+                }
 
                 Spacer(Modifier.height(12.dp))
                 // 折叠下拉触发框（显示当前选中模式）
@@ -289,6 +363,7 @@ fun ModeEditorDialog(
                             effectiveUserPrompt.takeIf { it.isNotBlank() },
                             if (selectedId == ModeConfig.CUSTOM) temp else null,
                             if (selectedId == ModeConfig.CUSTOM) topp else null,
+                            importedMessages,
                         )
                     },
                     modifier = Modifier.fillMaxWidth(),
@@ -325,3 +400,10 @@ internal fun parseRoleCard(text: String): Pair<String, String> {
     val info = if (markerIdx >= 0) text.substring(markerIdx + infoMarker.length).trim() else ""
     return name to info
 }
+
+/** 19 轮：导入的模式 JSON 中的一条对话记录（role 取 MessageRole.name）。 */
+data class ImportedMessage(
+    val roleName: String,
+    val text: String,
+    val reasoning: String?,
+)

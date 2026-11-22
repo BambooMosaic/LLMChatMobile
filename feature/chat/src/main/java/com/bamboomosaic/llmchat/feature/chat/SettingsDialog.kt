@@ -77,6 +77,8 @@ fun SettingsDialog(
     onSetDefaultModeId: (String) -> Unit,
     onSetContextInjectionEnabled: (Boolean) -> Unit,
     onSetTokenSavingLevel: (Int) -> Unit,
+    onSetSearchEnabled: (Boolean) -> Unit,
+    onSetUserNickname: (String) -> Unit,
     onSetThemeMode: (ThemeMode) -> Unit,
     onSetLanguage: (AppLanguage) -> Unit,
     onSetAutoCompressEnabled: (Boolean) -> Unit,
@@ -170,6 +172,8 @@ fun SettingsDialog(
                             onSetDefaultModeId = onSetDefaultModeId,
                             onSetContextInjectionEnabled = onSetContextInjectionEnabled,
                             onSetTokenSavingLevel = onSetTokenSavingLevel,
+                            onSetSearchEnabled = onSetSearchEnabled,
+                            onSetUserNickname = onSetUserNickname,
                             onSetAutoCompressEnabled = onSetAutoCompressEnabled,
                         )
 
@@ -664,6 +668,8 @@ private fun OtherPage(
     onSetDefaultModeId: (String) -> Unit,
     onSetContextInjectionEnabled: (Boolean) -> Unit,
     onSetTokenSavingLevel: (Int) -> Unit,
+    onSetSearchEnabled: (Boolean) -> Unit,
+    onSetUserNickname: (String) -> Unit,
     onSetAutoCompressEnabled: (Boolean) -> Unit,
 ) {
     val s = LocalAppStrings.current
@@ -683,6 +689,34 @@ private fun OtherPage(
         text = s.contextInjectionHint,
         style = MaterialTheme.typography.labelSmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+
+    Spacer(Modifier.height(16.dp))
+    // 19 轮：联网搜索开关（DeepSeek 原生；其他模型经 DeepSeek-Flash 代理）
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(s.searchSettingLabel, style = MaterialTheme.typography.bodyLarge)
+        Switch(checked = settings.searchEnabled, onCheckedChange = { onSetSearchEnabled(it) })
+    }
+    Text(
+        text = s.searchProxyHint,
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+
+    Spacer(Modifier.height(12.dp))
+    // 19 轮：用户称呼（可选，DS 网页版模式不注入）
+    OutlinedTextField(
+        value = settings.userNickname,
+        onValueChange = { onSetUserNickname(it) },
+        label = { Text(s.userNicknameLabel) },
+        singleLine = true,
+        modifier = Modifier.fillMaxWidth(),
     )
 
     Spacer(Modifier.height(16.dp))

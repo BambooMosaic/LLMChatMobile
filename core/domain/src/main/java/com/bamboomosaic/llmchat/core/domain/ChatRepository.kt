@@ -28,4 +28,17 @@ interface ChatRepository {
      * 成功返回 Ok，失败返回具体错误（密钥错误/网络异常等由上层转成友好文案）。
      */
     suspend fun validateConfig(config: ApiConfig): Result<Unit>
+
+    /**
+     * 19 轮新增：DeepSeek-Flash 搜索代理。
+     * 用指定（DeepSeek）配置执行一次联网搜索问答，返回回答全文（含引用）；
+     * 网页条数经 [onPages] 增量回调；本轮 usage 写入统计表（sessionId 归集）。
+     * 失败抛异常，由上层降级处理（不阻断对话）。
+     */
+    suspend fun searchProxy(
+        config: ApiConfig,
+        question: String,
+        sessionId: String,
+        onPages: (Int) -> Unit = {},
+    ): String
 }
