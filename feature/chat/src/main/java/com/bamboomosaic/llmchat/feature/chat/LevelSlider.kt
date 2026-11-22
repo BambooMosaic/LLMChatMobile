@@ -79,11 +79,11 @@ fun LevelSlider(
                     .clip(RoundedCornerShape(3.dp))
                     .background(activeColor),
             )
-            // 圆点：压在轨道上，位于当前档中心
+            // 圆点：中心压在当前档中心（cell*(i+0.5)），与进度条末端重合
             Box(
                 Modifier
                     .align(Alignment.CenterStart)
-                    .offset(x = cell * animatedIndex)
+                    .offset(x = cell * (animatedIndex + 0.5f) - 10.dp)
                     .size(20.dp)
                     .clip(CircleShape)
                     .background(activeColor),
