@@ -54,10 +54,12 @@ fun ConversationDrawer(
     onExport: (String) -> Unit,
     onOpenTokenStats: () -> Unit,
     onOpenSettings: () -> Unit,
+    /** 20 轮：平板/横屏常驻模式，宽度固定且不随屏幕比例变化。 */
+    permanent: Boolean = false,
 ) {
     val s = LocalAppStrings.current
     val screenWidthDp = LocalConfiguration.current.screenWidthDp
-    val drawerWidth = (screenWidthDp * 2f / 3f).dp
+    val drawerWidth = if (permanent) 300.dp else (screenWidthDp * 2f / 3f).dp
 
     var renameTarget by remember { mutableStateOf<Conversation?>(null) }
     var menuTarget by remember { mutableStateOf<Conversation?>(null) }

@@ -150,6 +150,8 @@ data class AppStrings(
     val modeImport: String,
     /** 19 轮：模式编辑——导入失败提示。 */
     val modeImportFailed: String,
+    /** 20 轮：关于页——下载最新安装包按钮。 */
+    val aboutDownload: String,
     val tokenSavingLabel: String,
     val tokenSavingOff: String,
     val tokenSavingOffHint: String,
@@ -317,6 +319,7 @@ private val ZhCN = AppStrings(
     modeExport = "导出",
     modeImport = "导入",
     modeImportFailed = "导入失败：不是有效的模式配置文件",
+    aboutDownload = "下载最新安装包",
     tokenSavingLabel = "省 Token 档位",
     tokenSavingOff = "关",
     tokenSavingOffHint = "不限制输出，不自动压缩上下文",
@@ -476,6 +479,7 @@ private val ZhTW = AppStrings(
     modeExport = "導出",
     modeImport = "導入",
     modeImportFailed = "導入失敗：不是有效的模式配置檔案",
+    aboutDownload = "下載最新安裝包",
     tokenSavingLabel = "省 Token 檔位",
     tokenSavingOff = "關",
     tokenSavingOffHint = "不限制輸出，不自動壓縮上下文",
@@ -635,6 +639,7 @@ private val EnUS = AppStrings(
     modeExport = "Export",
     modeImport = "Import",
     modeImportFailed = "Import failed: not a valid mode config file",
+    aboutDownload = "Download latest APK",
     tokenSavingLabel = "Token saving",
     tokenSavingOff = "Off",
     tokenSavingOffHint = "No output cap, no context compression",

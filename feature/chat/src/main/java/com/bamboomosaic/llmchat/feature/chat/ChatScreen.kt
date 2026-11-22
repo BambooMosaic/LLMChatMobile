@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -179,47 +180,49 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
         }
     }
 
-    ModalNavigationDrawer(
-        drawerState = drawerState,
-        drawerContent = {
-            ConversationDrawer(
-                conversations = conversations,
-                currentId = currentId,
-                onNewConversation = {
-                    scope.launch { drawerState.close() }
-                    if (settings.defaultModeId == "off") {
-                        // 禁用：弹模式选择弹窗
-                        showNewChatModeDialog = true
-                    } else {
-                        viewModel.newConversation()
-                    }
-                },
-                onSelect = { id ->
-                    viewModel.selectConversation(id)
-                    scope.launch { drawerState.close() }
-                },
-                onRename = { id, title -> viewModel.renameConversation(id, title) },
-                onArchive = { id -> viewModel.archiveConversation(id) },
-                onEditPrompt = { id ->
-                    viewModel.selectConversation(id)
-                    scope.launch { drawerState.close() }
-                    showModeEditor = true
-                },
-                onExport = { id ->
-                    exportTarget = id
-                    scope.launch { drawerState.close() }
-                },
-                onOpenTokenStats = {
-                    scope.launch { drawerState.close() }
-                    showTokenStats = true
-                },
-                onOpenSettings = {
-                    scope.launch { drawerState.close() }
-                    showSettings = true
-                },
-            )
-        },
-    ) {
+    // 20 轮：平板/横屏（宽屏）侧边栏常驻展开，与聊天内容并排；手机保持抽屉交互
+    val wideScreen = LocalConfiguration.current.screenWidthDp >= 600
+    val closeDrawer: () -> Unit = { scope.launch { drawerState.close() } }
+    val drawerContent: @Composable (Boolean) -> Unit = { permanent ->
+        ConversationDrawer(
+            conversations = conversations,
+            currentId = currentId,
+            permanent = permanent,
+            onNewConversation = {
+                closeDrawer()
+                if (settings.defaultModeId == "off") {
+                    // 禁用：弹模式选择弹窗
+                    showNewChatModeDialog = true
+                } else {
+                    viewModel.newConversation()
+                }
+            },
+            onSelect = { id ->
+                viewModel.selectConversation(id)
+                closeDrawer()
+            },
+            onRename = { id, title -> viewModel.renameConversation(id, title) },
+            onArchive = { id -> viewModel.archiveConversation(id) },
+            onEditPrompt = { id ->
+                viewModel.selectConversation(id)
+                closeDrawer()
+                showModeEditor = true
+            },
+            onExport = { id ->
+                exportTarget = id
+                closeDrawer()
+            },
+            onOpenTokenStats = {
+                closeDrawer()
+                showTokenStats = true
+            },
+            onOpenSettings = {
+                closeDrawer()
+                showSettings = true
+            },
+        )
+    }
+    val chatBody: @Composable (Boolean) -> Unit = { permanentDrawer ->
         // 必须自己绘制背景：否则 ModalNavigationDrawer 内容区透明，会露出窗口背景（浅色主题下是白色）
         // imePadding：Android 15 强制 edge-to-edge 后窗口不再 resize，不加会被键盘挡住输入栏/发送按钮
         Column(
@@ -233,7 +236,11 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
                     containerColor = MaterialTheme.colorScheme.surface,
                 ),
                 navigationIcon = {
-                    TextButton(onClick = { scope.launch { drawerState.open() } }) { Text("☰") }
+                    if (!permanentDrawer) {
+                        TextButton(onClick = { scope.launch { drawerState.open() } }) { Text("☰") }
+                    } else {
+                        Spacer(Modifier.width(8.dp))
+                    }
                 },
                 title = {
                     Text(
@@ -359,6 +366,21 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
                     input = ""
                 },
             )
+        }
+    }
+
+    if (wideScreen) {
+        // 20 轮：宽屏侧边栏常驻，聊天内容在右侧
+        Row(modifier = Modifier.fillMaxSize()) {
+            Box(modifier = Modifier.width(300.dp)) { drawerContent(true) }
+            Box(modifier = Modifier.weight(1f)) { chatBody(true) }
+        }
+    } else {
+        ModalNavigationDrawer(
+            drawerState = drawerState,
+            drawerContent = { drawerContent(false) },
+        ) {
+            Box(modifier = Modifier.fillMaxSize()) { chatBody(false) }
         }
     }
 

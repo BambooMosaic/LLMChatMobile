@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -19,6 +20,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -87,7 +90,9 @@ fun SettingsDialog(
     onDismiss: () -> Unit,
 ) {
     val s = LocalAppStrings.current
-    var page by remember { mutableStateOf(SettingsPage.HOME) }
+    // 20 轮：平板/横屏（宽屏）双栏布局；手机保持单栏
+    val wide = LocalConfiguration.current.screenWidthDp >= 600
+    var page by remember { mutableStateOf(if (wide) SettingsPage.API else SettingsPage.HOME) }
 
     val title = when (page) {
         SettingsPage.HOME -> s.settings
@@ -99,91 +104,156 @@ fun SettingsDialog(
         SettingsPage.ABOUT -> s.about
     }
 
+    // 20 轮：页面内容统一抽出，单栏/双栏共用同一份 when
+    val pageContent: @Composable () -> Unit = {
+        when (page) {
+            SettingsPage.HOME -> HomePage(
+                s = s,
+                selected = if (wide) page else null,
+                onApi = { page = SettingsPage.API },
+                onAppearance = { page = SettingsPage.APPEARANCE },
+                onLanguage = { page = SettingsPage.LANGUAGE },
+                onOther = { page = SettingsPage.OTHER },
+                onArchived = { page = SettingsPage.ARCHIVED },
+                onAbout = { page = SettingsPage.ABOUT },
+            )
+
+            SettingsPage.API -> ApiConfigListPage(
+                configs = apiConfigs,
+                onSave = onSaveConfig,
+                onValidateConfig = onValidateConfig,
+                onDelete = onDeleteConfig,
+                onSetDefault = onSetDefaultConfig,
+            )
+
+            SettingsPage.APPEARANCE -> AppearancePage(
+                themeMode = settings.themeMode,
+                onSetThemeMode = onSetThemeMode,
+            )
+
+            SettingsPage.LANGUAGE -> LanguagePage(
+                language = settings.language,
+                onSetLanguage = onSetLanguage,
+            )
+
+            SettingsPage.OTHER -> OtherPage(
+                settings = settings,
+                onSetDefaultModeId = onSetDefaultModeId,
+                onSetContextInjectionEnabled = onSetContextInjectionEnabled,
+                onSetTokenSavingLevel = onSetTokenSavingLevel,
+                onSetSearchEnabled = onSetSearchEnabled,
+                onSetUserNickname = onSetUserNickname,
+                onSetAutoCompressEnabled = onSetAutoCompressEnabled,
+            )
+
+            SettingsPage.ARCHIVED -> ArchivedPage(
+                conversations = archivedConversations,
+                onRestore = onRestoreConversation,
+                onDelete = onDeleteConversation,
+            )
+
+            SettingsPage.ABOUT -> AboutPage()
+        }
+    }
+
     Dialog(onDismissRequest = onDismiss) {
         Surface(
             shape = RoundedCornerShape(24.dp),
             color = MaterialTheme.colorScheme.surface,
+            // 20 轮：高度固定为屏幕 75%——页面切换不再因内容高度变化而抖动
             modifier = Modifier
-                .fillMaxWidth(0.94f)
-                .heightIn(max = 560.dp),
+                .fillMaxWidth(if (wide) 0.85f else 0.94f)
+                .fillMaxHeight(0.75f),
         ) {
-            Column {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 4.dp),
-                ) {
-                    if (page != SettingsPage.HOME) {
-                        TextButton(onClick = { page = SettingsPage.HOME }) { Text("←") }
-                    } else {
+            if (wide) {
+                // 宽屏双栏：左侧一级菜单常驻，右侧二级内容
+                Column {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                    ) {
+                        Text(
+                            text = s.settings,
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(start = 8.dp),
+                        )
+                        TextButton(onClick = onDismiss) { Text(s.cancel) }
                         Spacer(Modifier.width(8.dp))
                     }
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.weight(1f),
-                    )
-                    // 二级页面只保留左上角「←」返回，不再显示「取消」，避免出现两个返回入口
-                    if (page == SettingsPage.HOME) {
-                        TextButton(onClick = onDismiss) { Text(s.cancel) }
-                    } else {
-                        Spacer(Modifier.width(8.dp))
+                    HorizontalDivider()
+                    Row(Modifier.weight(1f)) {
+                        Column(
+                            modifier = Modifier
+                                .width(210.dp)
+                                .fillMaxHeight()
+                                .verticalScroll(rememberScrollState())
+                                .padding(vertical = 8.dp),
+                        ) {
+                            HomePage(
+                                s = s,
+                                selected = page.takeIf { it != SettingsPage.HOME },
+                                onApi = { page = SettingsPage.API },
+                                onAppearance = { page = SettingsPage.APPEARANCE },
+                                onLanguage = { page = SettingsPage.LANGUAGE },
+                                onOther = { page = SettingsPage.OTHER },
+                                onArchived = { page = SettingsPage.ARCHIVED },
+                                onAbout = { page = SettingsPage.ABOUT },
+                            )
+                        }
+                        Box(
+                            modifier = Modifier
+                                .width(1.dp)
+                                .fillMaxHeight()
+                                .background(MaterialTheme.colorScheme.outlineVariant),
+                        )
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight()
+                                .verticalScroll(rememberScrollState())
+                                .padding(16.dp),
+                        ) {
+                            pageContent()
+                        }
                     }
                 }
-                HorizontalDivider()
-
-                Column(
-                    modifier = Modifier
-                        .verticalScroll(rememberScrollState())
-                        .padding(16.dp),
-                ) {
-                    when (page) {
-                        SettingsPage.HOME -> HomePage(
-                            s = s,
-                            onApi = { page = SettingsPage.API },
-                            onAppearance = { page = SettingsPage.APPEARANCE },
-                            onLanguage = { page = SettingsPage.LANGUAGE },
-                            onOther = { page = SettingsPage.OTHER },
-                            onArchived = { page = SettingsPage.ARCHIVED },
-                            onAbout = { page = SettingsPage.ABOUT },
+            } else {
+                Column {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                    ) {
+                        if (page != SettingsPage.HOME) {
+                            TextButton(onClick = { page = SettingsPage.HOME }) { Text("←") }
+                        } else {
+                            Spacer(Modifier.width(8.dp))
+                        }
+                        Text(
+                            text = title,
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.weight(1f),
                         )
+                        // 二级页面只保留左上角「←」返回，不再显示「取消」，避免出现两个返回入口
+                        if (page == SettingsPage.HOME) {
+                            TextButton(onClick = onDismiss) { Text(s.cancel) }
+                        } else {
+                            Spacer(Modifier.width(8.dp))
+                        }
+                    }
+                    HorizontalDivider()
 
-                        SettingsPage.API -> ApiConfigListPage(
-                            configs = apiConfigs,
-                            onSave = onSaveConfig,
-                            onValidateConfig = onValidateConfig,
-                            onDelete = onDeleteConfig,
-                            onSetDefault = onSetDefaultConfig,
-                        )
-
-                        SettingsPage.APPEARANCE -> AppearancePage(
-                            themeMode = settings.themeMode,
-                            onSetThemeMode = onSetThemeMode,
-                        )
-
-                        SettingsPage.LANGUAGE -> LanguagePage(
-                            language = settings.language,
-                            onSetLanguage = onSetLanguage,
-                        )
-
-                        SettingsPage.OTHER -> OtherPage(
-                            settings = settings,
-                            onSetDefaultModeId = onSetDefaultModeId,
-                            onSetContextInjectionEnabled = onSetContextInjectionEnabled,
-                            onSetTokenSavingLevel = onSetTokenSavingLevel,
-                            onSetSearchEnabled = onSetSearchEnabled,
-                            onSetUserNickname = onSetUserNickname,
-                            onSetAutoCompressEnabled = onSetAutoCompressEnabled,
-                        )
-
-                        SettingsPage.ARCHIVED -> ArchivedPage(
-                            conversations = archivedConversations,
-                            onRestore = onRestoreConversation,
-                            onDelete = onDeleteConversation,
-                        )
-
-                        SettingsPage.ABOUT -> AboutPage()
+                    Column(
+                        modifier = Modifier
+                            .verticalScroll(rememberScrollState())
+                            .padding(16.dp),
+                    ) {
+                        pageContent()
                     }
                 }
             }
@@ -194,6 +264,7 @@ fun SettingsDialog(
 @Composable
 private fun HomePage(
     s: com.bamboomosaic.llmchat.feature.chat.i18n.AppStrings,
+    selected: SettingsPage? = null,
     onApi: () -> Unit,
     onAppearance: () -> Unit,
     onLanguage: () -> Unit,
@@ -201,12 +272,12 @@ private fun HomePage(
     onArchived: () -> Unit,
     onAbout: () -> Unit,
 ) {
-    MenuRow(s.apiConfig, onApi)
-    MenuRow(s.appearance, onAppearance)
-    MenuRow(s.languageSetting, onLanguage)
-    MenuRow(s.otherSettings, onOther)
-    MenuRow(s.archivedConversations, onArchived)
-    MenuRow(s.about, onAbout)
+    MenuRow(s.apiConfig, onApi, selected == SettingsPage.API)
+    MenuRow(s.appearance, onAppearance, selected == SettingsPage.APPEARANCE)
+    MenuRow(s.languageSetting, onLanguage, selected == SettingsPage.LANGUAGE)
+    MenuRow(s.otherSettings, onOther, selected == SettingsPage.OTHER)
+    MenuRow(s.archivedConversations, onArchived, selected == SettingsPage.ARCHIVED)
+    MenuRow(s.about, onAbout, selected == SettingsPage.ABOUT)
 }
 
 /** 已归档会话：点右侧「恢复」放回侧边栏，或「删除」永久删除（二次确认）。 */
@@ -269,12 +340,14 @@ private fun ArchivedPage(
 }
 
 @Composable
-private fun MenuRow(label: String, onClick: () -> Unit) {
+private fun MenuRow(label: String, onClick: () -> Unit, selected: Boolean = false) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(if (selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent)
             .clickable(onClick = onClick)
-            .padding(vertical = 16.dp),
+            .padding(horizontal = 10.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
@@ -1001,7 +1074,21 @@ private fun AboutContent(versionName: String) {
 @Composable
 private fun AboutPage() {
     val versionName = rememberVersionName()
-    AboutContent(versionName)
+    val s = LocalAppStrings.current
+    val uriHandler = LocalUriHandler.current
+    Column {
+        AboutContent(versionName)
+        Spacer(Modifier.height(12.dp))
+        // 20 轮：下载最新安装包（跳转 GitHub Latest）
+        Button(
+            onClick = {
+                uriHandler.openUri("https://github.com/BambooMosaic/LLMChatMobile/releases/latest")
+            },
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(s.aboutDownload)
+        }
+    }
 }
 
 /** 开发者名单弹窗。 */
