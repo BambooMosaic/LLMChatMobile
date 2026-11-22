@@ -353,7 +353,7 @@ fun ChatInputBar(
                         selected = searchEnabled,
                         onClick = { onToggleSearch(!searchEnabled) },
                         enabled = searchSupported,
-                        modifier = Modifier.height(28.dp),
+                        modifier = Modifier,
                         label = { Text(s.searchShort, style = MaterialTheme.typography.labelSmall) },
                     )
 
@@ -364,7 +364,7 @@ fun ChatInputBar(
                         selected = thinkingEnabled,
                         onClick = { onToggleThinking(!thinkingEnabled) },
                         enabled = thinkingSupported,
-                        modifier = Modifier.height(28.dp),
+                        modifier = Modifier,
                         label = { Text(s.thinkingShort, style = MaterialTheme.typography.labelSmall) },
                     )
 

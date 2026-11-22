@@ -25,8 +25,8 @@ android {
         applicationId = "com.bamboomosaic.llmchat"
         minSdk = 24
         targetSdk = 35
-        versionCode = 12
-        versionName = "beta0.5.0prerelease"
+        versionCode = 13
+        versionName = "beta0.5.0"
     }
 
     compileOptions {
