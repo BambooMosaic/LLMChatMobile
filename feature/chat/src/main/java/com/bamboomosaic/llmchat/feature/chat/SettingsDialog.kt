@@ -262,17 +262,17 @@ fun SettingsDialog(
                     }
                     HorizontalDivider()
 
-                    // 20 轮：页面切换平移动画——进入二级从右滑入，返回向右滑出，叠加淡入淡出
+                    // 20 轮：页面切换动画——新页从右滑入，旧页原地快速淡出（避免滑动残影）
                     AnimatedContent(
                         targetState = page,
                         transitionSpec = {
                             val forward = targetState != SettingsPage.HOME && initialState == SettingsPage.HOME
                             if (forward) {
                                 (slideInHorizontally { it / 4 } + fadeIn()) togetherWith
-                                    (slideOutHorizontally { -it / 6 } + fadeOut())
+                                    fadeOut(androidx.compose.animation.core.tween(durationMillis = 110))
                             } else {
                                 (slideInHorizontally { -it / 4 } + fadeIn()) togetherWith
-                                    (slideOutHorizontally { it / 6 } + fadeOut())
+                                    fadeOut(androidx.compose.animation.core.tween(durationMillis = 110))
                             }
                         },
                         label = "settingsPage",

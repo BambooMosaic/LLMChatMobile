@@ -284,8 +284,9 @@ private fun buildHighlightedCode(code: String, highlights: Highlights): Annotate
     }
 
 /**
- * 带网格线的表格：每行一个 Row（Intrinsic 高度撑满竖线），行间横线，表头分隔加粗；
- * 外层横向滚动适配宽表格，单元格文字自动换行。
+ * 带网格线的表格：整体按最宽行的内容自然宽度撑开（IntrinsicSize.Max），
+ * 各列在行间对齐，超宽单元格按列宽自动换行；外层横向滚动适配宽表格。
+ * 20 轮修复：修复列宽互相挤压导致内容截断、`<br>` 被当作原始文本的问题。
  */
 @Composable
 private fun BorderedTable(model: MarkdownComponentModel) {
@@ -302,12 +303,17 @@ private fun BorderedTable(model: MarkdownComponentModel) {
             .padding(vertical = 6.dp)
             .horizontalScroll(rememberScrollState()),
     ) {
-        Column(modifier = Modifier.widthIn(min = 280.dp)) {
+        // IntrinsicSize.Max：以最宽行为准撑开整表，所有行的列边界对齐
+        Column(
+            modifier = Modifier
+                .widthIn(min = 280.dp)
+                .width(IntrinsicSize.Max),
+        ) {
             rows.forEachIndexed { rowIndex, row ->
                 Row(
                     modifier = Modifier
-                        .height(IntrinsicSize.Min)
-                        .widthIn(min = 260.dp),
+                        .width(IntrinsicSize.Max)
+                        .height(IntrinsicSize.Min),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     (0 until columnCount).forEach { col ->
@@ -348,7 +354,12 @@ private fun parseTableRows(model: MarkdownComponentModel): List<List<String>> {
             .map { rowNode ->
                 rowNode.children
                     .filter { it.type == GFMTokenTypes.CELL }
-                    .map { cell -> model.content.substring(cell.startOffset, cell.endOffset).trim() }
+                    .map { cell ->
+                        // 单元格内的 <br>/<br/> 是换行而非分列；还原为真实换行
+                        model.content.substring(cell.startOffset, cell.endOffset)
+                            .replace(Regex("<br\\s*/?>", RegexOption.IGNORE_CASE), "\n")
+                            .trim()
+                    }
             }
             .filter { it.isNotEmpty() }
     } catch (e: Exception) {
