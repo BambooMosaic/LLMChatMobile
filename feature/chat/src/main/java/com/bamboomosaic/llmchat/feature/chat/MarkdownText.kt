@@ -286,9 +286,9 @@ private fun buildHighlightedCode(code: String, highlights: Highlights): Annotate
     }
 
 /**
- * 20 轮重做：适合聊天的撑满式表格——无外框无竖线，行间横线，表头分隔加粗。
- * 列宽按各列内容的自然宽度加权分配（窄列自动窄、长文本列自动宽且换行），
- * 全表撑满消息宽度，无横向滚动。
+ * 20 轮：适合聊天的表格——无外框无竖线，行间横线，表头分隔加粗。
+ * 列宽按各列内容的自然宽度计算（52~320dp）；自然总宽 ≤ 消息宽度时撑满消息宽度，
+ * 超出时保持自然宽度并横向滚动（列宽不被挤压）。
  */
 @Composable
 private fun BorderedTable(model: MarkdownComponentModel) {
@@ -300,46 +300,62 @@ private fun BorderedTable(model: MarkdownComponentModel) {
     val density = LocalDensity.current
     val textMeasurer = rememberTextMeasurer()
 
-    // 每列权重 = 列内最长单行的自然宽度（限制在 52~320dp），窄列自动窄、宽列自动宽
-    val columnWeights = remember(rows, cellStyle) {
+    androidx.compose.foundation.layout.BoxWithConstraints {
+        val availablePx = with(density) { maxWidth.toPx() }
         val minPx = with(density) { 52.dp.toPx() }
         val maxPx = with(density) { 320.dp.toPx() }
-        (0 until columnCount).map { col ->
-            val natural = rows.maxOf { row ->
-                row.getOrElse(col) { "" }.split('\n')
-                    .maxOfOrNull { line ->
-                        if (line.isBlank()) 0f
-                        else textMeasurer.measure(line, cellStyle, maxLines = 1)
-                            .size.width.toFloat()
-                    } ?: 0f
-            }.coerceAtLeast(0f)
-            natural.coerceIn(minPx, maxPx)
+        // 每列自然宽度 = 列内最长单行的像素宽（52~320dp 截断）
+        val naturals = remember(rows, availablePx) {
+            (0 until columnCount).map { col ->
+                rows.maxOf { row ->
+                    row.getOrElse(col) { "" }.split('\n')
+                        .maxOfOrNull { line ->
+                            if (line.isBlank()) 0f
+                            else textMeasurer.measure(line, cellStyle, maxLines = 1)
+                                .size.width.toFloat()
+                        } ?: 0f
+                }.coerceIn(minPx, maxPx)
+            }
         }
-    }
+        val totalNatural = naturals.sum()
+        // 自然总宽超出消息宽度 → 横向滚动模式（列宽保持自然值，不再挤压）
+        val scrollable = totalNatural > availablePx
 
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 6.dp),
-    ) {
-        rows.forEachIndexed { rowIndex, row ->
-            Row(modifier = Modifier.fillMaxWidth()) {
-                (0 until columnCount).forEach { col ->
-                    Text(
-                        text = row.getOrElse(col) { "" },
-                        style = cellStyle,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier
-                            .weight(columnWeights.getOrElse(col) { 1f })
-                            .padding(horizontal = 8.dp, vertical = 10.dp),
+        Column(
+            modifier = Modifier
+                .padding(vertical = 6.dp)
+                .then(if (scrollable) Modifier.horizontalScroll(rememberScrollState()) else Modifier)
+                .then(
+                    if (scrollable) Modifier.width(with(density) { totalNatural.toDp() })
+                    else Modifier.fillMaxWidth(),
+                ),
+        ) {
+            rows.forEachIndexed { rowIndex, row ->
+                Row(modifier = if (scrollable) Modifier else Modifier.fillMaxWidth()) {
+                    (0 until columnCount).forEach { col ->
+                        Text(
+                            text = row.getOrElse(col) { "" },
+                            style = cellStyle,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier =
+                                if (scrollable) {
+                                    Modifier
+                                        .width(with(density) { naturals[col].toDp() })
+                                        .padding(horizontal = 8.dp, vertical = 10.dp)
+                                } else {
+                                    Modifier
+                                        .weight(naturals[col])
+                                        .padding(horizontal = 8.dp, vertical = 10.dp)
+                                },
+                        )
+                    }
+                }
+                if (rowIndex < rows.lastIndex) {
+                    HorizontalDivider(
+                        color = if (rowIndex == 0) borderColor else borderColor.copy(alpha = 0.5f),
+                        thickness = if (rowIndex == 0) 1.dp else 0.5.dp,
                     )
                 }
-            }
-            if (rowIndex < rows.lastIndex) {
-                HorizontalDivider(
-                    color = if (rowIndex == 0) borderColor else borderColor.copy(alpha = 0.5f),
-                    thickness = if (rowIndex == 0) 1.dp else 0.5.dp,
-                )
             }
         }
     }
