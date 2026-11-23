@@ -32,8 +32,8 @@ import com.bamboomosaic.llmchat.core.domain.TokenTotals
 import com.bamboomosaic.llmchat.feature.chat.i18n.LocalAppStrings
 
 /**
- * 21 轮：上下文统计圆角弹窗——本对话命中/输入/输出/联网搜索/深度思考、容量占比、三分项条形、手动压缩入口。
- * 22 轮：容量分项移除联网搜索（搜索内容不进上下文）；token 行增加联网搜索/深度思考分项。
+ * 21 轮：上下文统计圆角弹窗——容量占比、三分项条形、会话 token 分项、手动压缩入口。
+ * 22 轮：容量分项移除联网搜索；token 行为 缓存命中/输入/输出/深度思考 四项（联网搜索永远为 0，移除）；分项色改主题色分层。
  */
 @Composable
 fun ContextPanelDialog(
@@ -43,10 +43,11 @@ fun ContextPanelDialog(
     onDismiss: () -> Unit,
 ) {
     val s = LocalAppStrings.current
-    // 22 轮：联网搜索内容不进上下文，容量分项只剩三项（系统提示词/消息/深度思考）
-    val segSystem = Color(0xFF2E2660)
-    val segMessages = Color(0xFF9B8CFF)
-    val segReasoning = Color(0xFFD9CCFF)
+    // 22 轮：联网搜索内容不进上下文，容量分项只剩三项；分项色改为主题色透明度分层（不再硬编码紫色）
+    val segPrimary = MaterialTheme.colorScheme.primary
+    val segSystem = segPrimary.copy(alpha = 0.30f)
+    val segMessages = segPrimary.copy(alpha = 0.60f)
+    val segReasoning = segPrimary.copy(alpha = 0.95f)
     val totalSeg = listOf(
         Triple(s.segSystem, usage.systemChars, segSystem),
         Triple(s.segMessages, usage.messageChars, segMessages),
@@ -117,18 +118,18 @@ fun ContextPanelDialog(
                 Spacer(Modifier.height(16.dp))
                 HorizontalDivider()
                 Spacer(Modifier.height(12.dp))
-                // 22 轮：会话 token 行扩为五项（缓存命中/输入/输出/联网搜索/深度思考）
+                // 22 轮：会话 token 行四项（缓存命中/输入/输出/深度思考）——
+                // 联网搜索项移除：DeepSeek 原生搜索消耗无法单独采集，该项永远为 0，保留无意义
                 Text(
                     text = s.tokenCacheHit + " / " + s.inputTokens + " / " + s.outputTokens +
-                        " / " + s.segSearch + " / " + s.segReasoning,
+                        " / " + s.segReasoning,
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
                     text = "${formatCount(sessionTotals.cacheHitTokens)} / ${formatCount(sessionTotals.promptTokens)} / " +
-                        "${formatCount(sessionTotals.completionTokens)} / ${formatCount(sessionTotals.searchTokens)} / " +
-                        "${formatCount(sessionTotals.reasoningTokens)}",
+                        "${formatCount(sessionTotals.completionTokens)} / ${formatCount(sessionTotals.reasoningTokens)}",
                     style = MaterialTheme.typography.bodyMedium,
                 )
 

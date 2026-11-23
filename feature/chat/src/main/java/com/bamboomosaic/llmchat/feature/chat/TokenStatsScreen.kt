@@ -111,9 +111,10 @@ fun TokenStatsScreen(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    LegendDot(color = Color(0xFFD9CCFF), label = s.tokenCacheHit)
-                    LegendDot(color = Color(0xFF9B8CFF), label = s.inputTokens)
-                    LegendDot(color = Color(0xFF5A46C8), label = s.outputTokens)
+                    // 22 轮：三色改为主题色透明度分层（不再硬编码紫色）
+                    LegendDot(color = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f), label = s.tokenCacheHit)
+                    LegendDot(color = MaterialTheme.colorScheme.primary.copy(alpha = 0.65f), label = s.inputTokens)
+                    LegendDot(color = MaterialTheme.colorScheme.primary, label = s.outputTokens)
                 }
                 Spacer(Modifier.height(8.dp))
             }
@@ -194,9 +195,10 @@ private fun TokenBarChart(
     }
     val items = labels.map { label -> byDate[label] ?: DailyTokenStats(date = label, tokens = 0) }
     val maxValue = items.maxOf { it.tokens } ?: 0L
-    val cacheColor = Color(0xFFD9CCFF)
-    val inputColor = Color(0xFF9B8CFF)
-    val outputColor = Color(0xFF5A46C8)
+    // 22 轮：柱状三色改为主题色透明度分层
+    val cacheColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
+    val inputColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.65f)
+    val outputColor = MaterialTheme.colorScheme.primary
     val emptyColor = MaterialTheme.colorScheme.surfaceVariant
     val chartHeight = 120.dp
 
@@ -306,9 +308,10 @@ private fun TokenHourlyBarChart(
     val hours = (0..21 step 3).toList()
     val items = hours.map { hour -> byHour[hour] ?: HourlyTokenStats(hour = hour, tokens = 0) }
     val maxValue = items.maxOf { it.tokens } ?: 0L
-    val cacheColor = Color(0xFFD9CCFF)
-    val inputColor = Color(0xFF9B8CFF)
-    val outputColor = Color(0xFF5A46C8)
+    // 22 轮：柱状三色改为主题色透明度分层
+    val cacheColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
+    val inputColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.65f)
+    val outputColor = MaterialTheme.colorScheme.primary
     val emptyColor = MaterialTheme.colorScheme.surfaceVariant
     val chartHeight = 120.dp
 

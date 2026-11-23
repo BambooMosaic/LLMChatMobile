@@ -55,12 +55,12 @@ private val darkForest = Palette(
 )
 
 private val darkEmber = Palette(
-    primary = Color(0xFFFFB27F), onPrimary = Color(0xFF26140A),
-    primaryContainer = Color(0xFF4A2E1B), onPrimaryContainer = Color(0xFFFFE4CC),
-    background = Color(0xFF1A120B), surface = Color(0xFF2A2016),
-    surfaceVariant = Color(0xFF362A1D), onSurfaceVariant = Color(0xFFD0C2B2),
-    surfaceContainerLow = Color(0xFF211810), surfaceContainer = Color(0xFF2A2016),
-    surfaceContainerHigh = Color(0xFF34281C), outlineVariant = Color(0xFF4A3A2A),
+    primary = Color(0xFFF5C08A), onPrimary = Color(0xFF241A0C),
+    primaryContainer = Color(0xFF3E3320), onPrimaryContainer = Color(0xFFFFE9CC),
+    background = Color(0xFF121110), surface = Color(0xFF201D18),
+    surfaceVariant = Color(0xFF2A2620), onSurfaceVariant = Color(0xFFC9C2B4),
+    surfaceContainerLow = Color(0xFF181613), surfaceContainer = Color(0xFF201D18),
+    surfaceContainerHigh = Color(0xFF2B2721), outlineVariant = Color(0xFF3B362D),
 )
 
 /** 22 轮：纯黑——UI 全黑，按钮白色。 */
@@ -131,12 +131,12 @@ private val lightGray = Palette(
 
 /** 22 轮：浅粉——菜单 UI 跟随主题色（粉）。 */
 private val lightPink = Palette(
-    primary = Color(0xFFD9648C), onPrimary = Color.White,
-    primaryContainer = Color(0xFFFFE3EC), onPrimaryContainer = Color(0xFF4A1226),
-    background = Color(0xFFFFF7FA), surface = Color(0xFFFFFBFD),
-    surfaceVariant = Color(0xFFFCE7EF), onSurfaceVariant = Color(0xFF5C4149),
-    surfaceContainerLow = Color(0xFFFEF8FB), surfaceContainer = Color(0xFFFDF1F6),
-    surfaceContainerHigh = Color(0xFFFBE7EF), outlineVariant = Color(0xFFF2D5DF),
+    primary = Color(0xFFD6496F), onPrimary = Color.White,
+    primaryContainer = Color(0xFFFFD9E5), onPrimaryContainer = Color(0xFF4A0F22),
+    background = Color(0xFFFFEDF4), surface = Color(0xFFFFDFEB),
+    surfaceVariant = Color(0xFFF9C9DC), onSurfaceVariant = Color(0xFF5C3646),
+    surfaceContainerLow = Color(0xFFFFE6EF), surfaceContainer = Color(0xFFFCDCE8),
+    surfaceContainerHigh = Color(0xFFF7CBDC), outlineVariant = Color(0xFFEDA9C2),
 )
 
 private fun darkColors(p: Palette) = darkColorScheme(
@@ -200,14 +200,14 @@ val lightColorPresetOptions = listOf(
     PresetOption("light_green", Color(0xFFD8F0EB), Color(0xFF2E8B7F)),
     PresetOption("light_yellow", Color(0xFFF5E9D5), Color(0xFFA87832)),
     PresetOption("light_gray", Color(0xFFFFFFFF), Color(0xFF636363)),
-    PresetOption("light_pink", Color(0xFFFFF1F5), Color(0xFFD9648C)),
+    PresetOption("light_pink", Color(0xFFFFDFEB), Color(0xFFD6496F)),
 )
 
 val darkColorPresetOptions = listOf(
     PresetOption("dark_default", Color(0xFF272727), Color(0xFF9B8CFF)),
     PresetOption("dark_blue", Color(0xFF16213A), Color(0xFF7FB2FF)),
     PresetOption("dark_green", Color(0xFF16241C), Color(0xFF8FD6A8)),
-    PresetOption("dark_brown", Color(0xFF2A2016), Color(0xFFFFB27F)),
+    PresetOption("dark_brown", Color(0xFF201D18), Color(0xFFF5C08A)),
     PresetOption("dark_black", Color(0xFF050505), Color(0xFFF5F5F5)),
     PresetOption("dark_red", Color(0xFF1F1013), Color(0xFFFF8A8A)),
 )
