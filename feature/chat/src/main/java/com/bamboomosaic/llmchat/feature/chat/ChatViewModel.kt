@@ -1201,6 +1201,11 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch { settingsRepository.setFollowSystemTheme(value) }
     }
 
+    /** 23 轮：手动压缩摘要字数上限（100~1024）。 */
+    fun setCompressSummaryLimit(value: Int) {
+        viewModelScope.launch { settingsRepository.setCompressSummaryLimit(value) }
+    }
+
     /**
      * 22 轮：取最新发布版 APK 直链后直接跳浏览器下载。
      * 系统下载器在部分机型/网络下无法连 GitHub（一直 0 进度），浏览器下载更可靠。
@@ -1380,14 +1385,14 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    /** 21 轮：手动压缩系统提示词（按语言）。 */
+    /** 21 轮：手动压缩系统提示词（按语言）。23 轮：字数上限用户可自定义。 */
     private fun compressSystemPrompt(settings: AppSettings): String = when (settings.language) {
         AppLanguage.TRADITIONAL_CHINESE ->
-            "你是对话压缩器。把用户给出的对话历史压缩成简洁摘要：保留关键事实、已做的决定、未完成任务与用户偏好；不超过 400 字；只输出摘要本身。"
+            "你是对话压缩器。把用户给出的对话历史压缩成简洁摘要：保留关键事实、已做的决定、未完成任务与用户偏好；不超过 ${settings.compressSummaryLimit} 字；只输出摘要本身。"
         AppLanguage.ENGLISH ->
-            "You are a conversation compactor. Summarize the provided chat history concisely: keep key facts, decisions, open tasks and user preferences; at most 400 words; output only the summary."
+            "You are a conversation compactor. Summarize the provided chat history concisely: keep key facts, decisions, open tasks and user preferences; at most ${settings.compressSummaryLimit} words; output only the summary."
         else ->
-            "你是对话压缩器。把用户给出的对话历史压缩成简洁摘要：保留关键事实、已做的决定、未完成任务与用户偏好；不超过 400 字；只输出摘要本身。"
+            "你是对话压缩器。把用户给出的对话历史压缩成简洁摘要：保留关键事实、已做的决定、未完成任务与用户偏好；不超过 ${settings.compressSummaryLimit} 字；只输出摘要本身。"
     }
 
     /** 21 轮：手动压缩——用当前模型把较早对话压成摘要存入会话，再物理删除旧消息（保留最近 4 条）。 */

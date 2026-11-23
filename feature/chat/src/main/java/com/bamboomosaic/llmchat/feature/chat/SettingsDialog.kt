@@ -89,6 +89,7 @@ fun SettingsDialog(
     onSetTokenSavingLevel: (Int) -> Unit,
     onSetSearchEnabled: (Boolean) -> Unit,
     onSetUserNickname: (String) -> Unit,
+    onSetCompressSummaryLimit: (Int) -> Unit,
     onDownloadLatest: () -> Unit,
     onSetColorPreset: (String) -> Unit,
     onSetFollowSystemTheme: (Boolean) -> Unit,
@@ -177,6 +178,7 @@ fun SettingsDialog(
                 onSetTokenSavingLevel = onSetTokenSavingLevel,
                 onSetSearchEnabled = onSetSearchEnabled,
                 onSetAutoCompressEnabled = onSetAutoCompressEnabled,
+                onSetCompressSummaryLimit = onSetCompressSummaryLimit,
             )
 
             SettingsPage.ARCHIVED -> ArchivedPage(
@@ -795,8 +797,37 @@ private fun OtherPage(
     onSetTokenSavingLevel: (Int) -> Unit,
     onSetSearchEnabled: (Boolean) -> Unit,
     onSetAutoCompressEnabled: (Boolean) -> Unit,
+    onSetCompressSummaryLimit: (Int) -> Unit,
 ) {
     val s = LocalAppStrings.current
+
+    // 23 轮：手动压缩摘要字数上限（100~1024，默认 400）——输入合法即生效
+    var limitText by remember { mutableStateOf(settings.compressSummaryLimit.toString()) }
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(s.compressLimitLabel, style = MaterialTheme.typography.bodyLarge)
+        OutlinedTextField(
+            value = limitText,
+            onValueChange = { raw ->
+                val digits = raw.filter { it.isDigit() }.take(4)
+                limitText = digits
+                digits.toIntOrNull()?.let { v ->
+                    if (v in 100..1024) onSetCompressSummaryLimit(v)
+                }
+            },
+            singleLine = true,
+            textStyle = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.width(120.dp),
+        )
+    }
+    Text(
+        text = s.compressLimitHint,
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
 
     Spacer(Modifier.height(16.dp))
     // 19 轮：联网搜索开关（DeepSeek 原生；其他模型经 DeepSeek-Flash 代理）
@@ -1002,6 +1033,24 @@ private fun AppearancePage(
     onSetBackgroundImage: (String) -> Unit,
 ) {
     val s = LocalAppStrings.current
+    // 23 轮：跟随系统开启时按配对位置在两组同时高亮（默认↔默认、黄↔棕…）；关闭时只亮选中组
+    val lightIds = com.bamboomosaic.llmchat.feature.chat.theme.lightColorPresetOptions.map { it.id }
+    val darkIds = com.bamboomosaic.llmchat.feature.chat.theme.darkColorPresetOptions.map { it.id }
+    val selectedLightId: String?
+    val selectedDarkId: String?
+    if (followSystemTheme) {
+        val pos = if (colorPreset.startsWith("light_")) lightIds.indexOf(colorPreset)
+        else darkIds.indexOf(colorPreset)
+        val p = pos.coerceAtLeast(0)
+        selectedLightId = lightIds.getOrNull(p)
+        selectedDarkId = darkIds.getOrNull(p)
+    } else if (colorPreset.startsWith("light_")) {
+        selectedLightId = colorPreset
+        selectedDarkId = null
+    } else {
+        selectedLightId = null
+        selectedDarkId = colorPreset
+    }
     // 23 轮：跟随系统开关（默认关）——开启时按系统深浅自动切换浅色/深色预设组
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -1034,7 +1083,7 @@ private fun AppearancePage(
                 else -> s.presetLightPink
             }
         },
-        selectedId = colorPreset,
+        selectedId = selectedLightId,
         onSelect = onSetColorPreset,
     )
     Spacer(Modifier.height(14.dp))
@@ -1052,7 +1101,7 @@ private fun AppearancePage(
                 else -> s.presetDarkRed
             }
         },
-        selectedId = colorPreset,
+        selectedId = selectedDarkId,
         onSelect = onSetColorPreset,
     )
 
@@ -1134,7 +1183,7 @@ private fun rememberVersionName(): String {
 private fun PresetSwatchRow(
     options: List<com.bamboomosaic.llmchat.feature.chat.theme.PresetOption>,
     nameOf: (String) -> String,
-    selectedId: String,
+    selectedId: String?,
     onSelect: (String) -> Unit,
 ) {
     Row(

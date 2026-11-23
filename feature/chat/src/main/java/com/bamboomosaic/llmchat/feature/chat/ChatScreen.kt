@@ -531,6 +531,7 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
             onDownloadLatest = viewModel::downloadLatestApk,
             onSetColorPreset = viewModel::setColorPreset,
             onSetFollowSystemTheme = viewModel::setFollowSystemTheme,
+            onSetCompressSummaryLimit = viewModel::setCompressSummaryLimit,
             onSetBackgroundImage = viewModel::setBackgroundImage,
             onSetLanguage = viewModel::setLanguage,
             onSetAutoCompressEnabled = viewModel::setAutoCompressEnabled,
@@ -627,7 +628,7 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
             onDismissRequest = { showCompressConfirm = false },
             title = { Text(s.manualCompressButton) },
             text = {
-                Text(text = s.compressPreviewBody(toCompress))
+                Text(text = s.compressPreviewBody(toCompress, settings.compressSummaryLimit))
             },
             confirmButton = {
                 TextButton(

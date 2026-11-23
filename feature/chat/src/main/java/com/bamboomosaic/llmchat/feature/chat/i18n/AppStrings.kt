@@ -236,6 +236,8 @@ data class AppStrings(
     val compressConfirmBtn: String,
     /** 23 轮：跟随系统主题开关说明。 */
     val followSystemHint: String,
+    val compressLimitLabel: String,
+    val compressLimitHint: String,
 ) {
 
     fun thisRound(prompt: Long, completion: Long, total: Long): String =
@@ -250,8 +252,8 @@ data class AppStrings(
         "$costThisLabel $formattedThis / $costTotalLabel $formattedTotal"
 
     /** 23 轮：压缩预览正文。 */
-    fun compressPreviewBody(toCompress: Int): String =
-        String.format(compressPreviewBodyFormat, toCompress)
+    fun compressPreviewBody(toCompress: Int, summaryLimit: Int): String =
+        String.format(compressPreviewBodyFormat, toCompress, summaryLimit)
 }
 
 private val ZhCN = AppStrings(
@@ -448,9 +450,11 @@ private val ZhCN = AppStrings(
     searchInConversation = "会话内搜索",
     searchHint = "搜索消息",
     searchEmpty = "无匹配消息",
-    compressPreviewBodyFormat = "将保留最近 4 条消息，其余 %1\$d 条压缩为不超过 400 字的 AI 摘要，原细节不可回溯。确认执行？",
+    compressPreviewBodyFormat = "将保留最近 4 条消息，其余 %1\$d 条压缩为不超过 %2\$d 字的 AI 摘要，原细节不可回溯。确认执行？",
     compressConfirmBtn = "确认压缩",
     followSystemHint = "开启后按系统深浅自动切换浅色 / 深色预设组",
+    compressLimitLabel = "压缩摘要上限（字）",
+    compressLimitHint = "手动压缩时 AI 摘要的字数上限，100~1024（默认 400）",
 )
 
 private val ZhTW = AppStrings(
@@ -647,9 +651,11 @@ private val ZhTW = AppStrings(
     searchInConversation = "會話內搜尋",
     searchHint = "搜尋訊息",
     searchEmpty = "無符合訊息",
-    compressPreviewBodyFormat = "將保留最近 4 條訊息，其餘 %1\$d 條壓縮為不超過 400 字的 AI 摘要，原細節不可回溯。確認執行？",
+    compressPreviewBodyFormat = "將保留最近 4 條訊息，其餘 %1\$d 條壓縮為不超過 %2\$d 字的 AI 摘要，原細節不可回溯。確認執行？",
     compressConfirmBtn = "確認壓縮",
     followSystemHint = "開啟後按系統深淺自動切換淺色 / 深色配色組",
+    compressLimitLabel = "壓縮摘要上限（字）",
+    compressLimitHint = "手動壓縮時 AI 摘要的字數上限，100~1024（預設 400）",
 )
 
 private val EnUS = AppStrings(
@@ -846,9 +852,11 @@ private val EnUS = AppStrings(
     searchInConversation = "Search in chat",
     searchHint = "Search messages",
     searchEmpty = "No matching messages",
-    compressPreviewBodyFormat = "Keep the last 4 messages; the other %1\$d will be compressed into an AI digest of at most 400 characters. Details cannot be recovered. Continue?",
+    compressPreviewBodyFormat = "Keep the last 4 messages; the other %1\$d will be compressed into an AI digest of at most %2\$d characters. Details cannot be recovered. Continue?",
     compressConfirmBtn = "Compress",
     followSystemHint = "When on, follows system dark mode to switch between the light / dark preset groups",
+    compressLimitLabel = "Summary size limit (chars)",
+    compressLimitHint = "Max characters of the AI digest on manual compress, 100~1024 (default 400)",
 )
 
 fun stringsFor(language: AppLanguage): AppStrings = when (language) {

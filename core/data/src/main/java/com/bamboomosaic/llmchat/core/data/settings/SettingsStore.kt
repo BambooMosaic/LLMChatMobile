@@ -49,10 +49,10 @@ class SettingsStore @Inject constructor(
     private val userNicknameKey = stringPreferencesKey("user_nickname")
     private val backgroundImageUriKey = stringPreferencesKey("background_image_uri")
     private val colorPresetKey = stringPreferencesKey("color_preset")
-    // 23 轮：跟随系统 + 浅色/深色两组槽位
+    // 23 轮：跟随系统 + 配对索引（浅色组与深色组按位置一一配对：0=默认对默认…5=浅粉对深红）
     private val followSystemKey = booleanPreferencesKey("follow_system_theme")
-    private val colorPresetLightKey = stringPreferencesKey("color_preset_light")
-    private val colorPresetDarkKey = stringPreferencesKey("color_preset_dark")
+    private val colorPresetPairKey = intPreferencesKey("color_preset_pair")
+    private val compressSummaryLimitKey = intPreferencesKey("compress_summary_limit")
 
     override fun observeSettings(): Flow<AppSettings> = context.settingsDataStore.data.map { prefs ->
         val language = AppLanguage.fromTag(prefs[languageKey])
@@ -79,45 +79,48 @@ class SettingsStore @Inject constructor(
             backgroundImageUri = prefs[backgroundImageUriKey] ?: "",
             colorPreset = effectiveColorPreset(prefs),
             followSystemTheme = prefs[followSystemKey] ?: false,
-            colorPresetLight = migrateColorPreset(prefs, lightSlot = true),
-            colorPresetDark = migrateColorPreset(prefs, lightSlot = false),
+            compressSummaryLimit = prefs[compressSummaryLimitKey] ?: 400,
         )
     }
 
     /**
-     * 23 轮：生效预设——跟随系统开启时取系统深浅对应组的槽位，关闭时取手动选中值。
+     * 23 轮：生效预设——跟随系统开启时按配对索引取系统深浅对应组的预设
+     * （浅色组与深色组按位置一一配对：默认↔默认、黄↔棕、浅灰↔纯黑、浅粉↔深红…），
+     * 关闭时取手动选中值。配对索引缺省时由当前选中值的位置推导。
      */
     private fun effectiveColorPreset(prefs: androidx.datastore.preferences.core.Preferences): String {
+        val active = migrateColorPreset(prefs)
         val follow = prefs[followSystemKey] ?: false
-        if (!follow) return migrateColorPreset(prefs)
+        if (!follow) return active
+        val pair = prefs[colorPresetPairKey] ?: pairIndexOf(active)
+        if (pair !in 0..5) return active
         val systemDark = (context.resources.configuration.uiMode and
             android.content.res.Configuration.UI_MODE_NIGHT_MASK
         ) == android.content.res.Configuration.UI_MODE_NIGHT_YES
-        return if (systemDark) {
-            prefs[colorPresetDarkKey] ?: migrateColorPreset(prefs, lightSlot = false)
-        } else {
-            prefs[colorPresetLightKey] ?: migrateColorPreset(prefs, lightSlot = true)
-        }
+        return if (systemDark) darkPairIds().getOrNull(pair) ?: active else lightPairIds().getOrNull(pair) ?: active
     }
+
+    /** 23 轮：配对位置表（与设置页两组色块的顺序一一对应）。 */
+    private fun lightPairIds() = listOf(
+        "light_default", "light_blue", "light_green", "light_yellow", "light_gray", "light_pink",
+    )
+
+    private fun darkPairIds() = listOf(
+        "dark_default", "dark_blue", "dark_green", "dark_brown", "dark_black", "dark_red",
+    )
+
+    private fun pairIndexOf(presetId: String): Int =
+        if (presetId.startsWith("light_")) lightPairIds().indexOf(presetId).coerceAtLeast(0)
+        else darkPairIds().indexOf(presetId).coerceAtLeast(0)
 
     /**
      * 22 轮：配色预设改为自带深浅前缀的 12 套（light_ / dark_）。
      * 21 轮旧 id（default/blue/green/warm）按当时的明暗模式设置迁移到新 id，
      * 跟随系统时读一次系统夜间模式定组，之后明暗完全由所选预设决定。
-     * 23 轮：[lightSlot] 为 true 时用于浅色组槽位——旧值不是浅色组时回退 light_default。
      */
-    private fun migrateColorPreset(
-        prefs: androidx.datastore.preferences.core.Preferences,
-        lightSlot: Boolean = false,
-    ): String {
-        val stored = prefs[colorPresetKey] ?: return if (lightSlot) "light_default" else "dark_default"
-        if (stored.startsWith("light_") || stored.startsWith("dark_")) {
-            return if (lightSlot) {
-                if (stored.startsWith("light_")) stored else "light_default"
-            } else {
-                if (stored.startsWith("dark_")) stored else "dark_default"
-            }
-        }
+    private fun migrateColorPreset(prefs: androidx.datastore.preferences.core.Preferences): String {
+        val stored = prefs[colorPresetKey] ?: return "dark_default"
+        if (stored.startsWith("light_") || stored.startsWith("dark_")) return stored
         val group = when (
             runCatching { ThemeMode.valueOf(prefs[themeModeKey] ?: "") }.getOrDefault(ThemeMode.DARK)
         ) {
@@ -129,9 +132,8 @@ class SettingsStore @Inject constructor(
                 ) == android.content.res.Configuration.UI_MODE_NIGHT_YES
                 ) "dark" else "light"
         }
-        if (lightSlot && group != "light") return "light_default"
-        if (!lightSlot && group != "dark") return "dark_default"
-        val name = if (stored == "warm") (if (group == "light") "yellow" else "brown") else stored
+        val name = if (group == "light" && stored == "warm") "yellow" else
+            if (stored == "warm") "brown" else stored
         return "${group}_$name"
     }
 
@@ -202,15 +204,25 @@ class SettingsStore @Inject constructor(
     override suspend fun setColorPreset(value: String) {
         context.settingsDataStore.edit { prefs ->
             prefs[colorPresetKey] = value
-            // 23 轮：同步写入对应组的最近选择槽位（跟随系统时切换组用）
-            if (value.startsWith("light_")) prefs[colorPresetLightKey] = value
-            if (value.startsWith("dark_")) prefs[colorPresetDarkKey] = value
+            // 23 轮：同步记录配对索引（跟随系统自动切换时按位置取对应组）
+            prefs[colorPresetPairKey] = pairIndexOf(value)
         }
     }
 
-    /** 23 轮：跟随系统明暗开关。 */
+    /** 23 轮：跟随系统明暗开关。开启瞬间由当前选中值推导配对索引。 */
     override suspend fun setFollowSystemTheme(value: Boolean) {
-        context.settingsDataStore.edit { it[followSystemKey] = value }
+        context.settingsDataStore.edit { prefs ->
+            prefs[followSystemKey] = value
+            if (value) {
+                val active = migrateColorPreset(prefs)
+                prefs[colorPresetPairKey] = pairIndexOf(active)
+            }
+        }
+    }
+
+    /** 23 轮：手动压缩摘要字数上限（100~1024）。 */
+    override suspend fun setCompressSummaryLimit(value: Int) {
+        context.settingsDataStore.edit { it[compressSummaryLimitKey] = value.coerceIn(100, 1024) }
     }
 
     override fun observeModeUserPrompt(modeId: String): Flow<String?> =
