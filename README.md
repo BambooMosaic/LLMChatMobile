@@ -60,7 +60,7 @@ LLMChatMobile 本身不提供 AI 服务，你需要一个 API Key。下面以 De
 
 > 以下是正在酝酿的方向，发布顺序和内容可能调整，不构成承诺。
 
-- **桌面端（1.0 之后的重头戏）**：基于 Kotlin Multiplatform + Compose Multiplatform，与 Android 端共享核心模块（双层提示词体系 / 省 Token 档位 / 手写 SSE 流式 / 模式导入导出全部复用），Windows / macOS / Linux 一套代码三端出包。分层架构当初就是为这一天准备的——领域层纯 Kotlin、网络层 OkHttp 本就跨平台，主要工作量在 Room/DataStore 的 KMP 化与依赖注入替换（Hilt → Koin）。已预留子项目目录 `LLMChatDesktop/`。
+- **桌面端（1.0 之后的重头戏）**：基于 Kotlin Multiplatform + Compose Multiplatform，与 Android 端共享核心模块（双层提示词体系 / 省 Token 档位 / 手写 SSE 流式 / 模式导入导出全部复用），Windows / macOS / Linux 一套代码三端出包。分层架构当初就是为这一天准备的——领域层纯 Kotlin、网络层 OkHttp 本就跨平台，主要工作量在 Room/DataStore 的 KMP 化与依赖注入替换（Hilt → Koin）。独立桌面壳已搭建（`LLMChatDesktop/`，可编译可运行窗口），共享核心按阶段接入。
 - **内置提示词模板库**：翻译官 / 周报生成 / 面试官 / 代码审查等一键存为模式，支持 JSON 分享。
 - **消息分叉**：从任意消息另开分支，对话变树。
 - **TTS 语音输出**：语音输入直接用输入法自带的即可。
