@@ -49,6 +49,10 @@ class SettingsStore @Inject constructor(
     private val userNicknameKey = stringPreferencesKey("user_nickname")
     private val backgroundImageUriKey = stringPreferencesKey("background_image_uri")
     private val colorPresetKey = stringPreferencesKey("color_preset")
+    // 23 轮：跟随系统 + 浅色/深色两组槽位
+    private val followSystemKey = booleanPreferencesKey("follow_system_theme")
+    private val colorPresetLightKey = stringPreferencesKey("color_preset_light")
+    private val colorPresetDarkKey = stringPreferencesKey("color_preset_dark")
 
     override fun observeSettings(): Flow<AppSettings> = context.settingsDataStore.data.map { prefs ->
         val language = AppLanguage.fromTag(prefs[languageKey])
@@ -73,18 +77,47 @@ class SettingsStore @Inject constructor(
             roleplayParenRule = prefs[roleplayParenKey] ?: true,
             userNickname = prefs[userNicknameKey] ?: "",
             backgroundImageUri = prefs[backgroundImageUriKey] ?: "",
-            colorPreset = migrateColorPreset(prefs),
+            colorPreset = effectiveColorPreset(prefs),
+            followSystemTheme = prefs[followSystemKey] ?: false,
+            colorPresetLight = migrateColorPreset(prefs, lightSlot = true),
+            colorPresetDark = migrateColorPreset(prefs, lightSlot = false),
         )
+    }
+
+    /**
+     * 23 轮：生效预设——跟随系统开启时取系统深浅对应组的槽位，关闭时取手动选中值。
+     */
+    private fun effectiveColorPreset(prefs: androidx.datastore.preferences.core.Preferences): String {
+        val follow = prefs[followSystemKey] ?: false
+        if (!follow) return migrateColorPreset(prefs)
+        val systemDark = (context.resources.configuration.uiMode and
+            android.content.res.Configuration.UI_MODE_NIGHT_MASK
+        ) == android.content.res.Configuration.UI_MODE_NIGHT_YES
+        return if (systemDark) {
+            prefs[colorPresetDarkKey] ?: migrateColorPreset(prefs, lightSlot = false)
+        } else {
+            prefs[colorPresetLightKey] ?: migrateColorPreset(prefs, lightSlot = true)
+        }
     }
 
     /**
      * 22 轮：配色预设改为自带深浅前缀的 12 套（light_ / dark_）。
      * 21 轮旧 id（default/blue/green/warm）按当时的明暗模式设置迁移到新 id，
      * 跟随系统时读一次系统夜间模式定组，之后明暗完全由所选预设决定。
+     * 23 轮：[lightSlot] 为 true 时用于浅色组槽位——旧值不是浅色组时回退 light_default。
      */
-    private fun migrateColorPreset(prefs: androidx.datastore.preferences.core.Preferences): String {
-        val stored = prefs[colorPresetKey] ?: return "dark_default"
-        if (stored.startsWith("light_") || stored.startsWith("dark_")) return stored
+    private fun migrateColorPreset(
+        prefs: androidx.datastore.preferences.core.Preferences,
+        lightSlot: Boolean = false,
+    ): String {
+        val stored = prefs[colorPresetKey] ?: return if (lightSlot) "light_default" else "dark_default"
+        if (stored.startsWith("light_") || stored.startsWith("dark_")) {
+            return if (lightSlot) {
+                if (stored.startsWith("light_")) stored else "light_default"
+            } else {
+                if (stored.startsWith("dark_")) stored else "dark_default"
+            }
+        }
         val group = when (
             runCatching { ThemeMode.valueOf(prefs[themeModeKey] ?: "") }.getOrDefault(ThemeMode.DARK)
         ) {
@@ -96,8 +129,9 @@ class SettingsStore @Inject constructor(
                 ) == android.content.res.Configuration.UI_MODE_NIGHT_YES
                 ) "dark" else "light"
         }
-        val name = if (group == "light" && stored == "warm") "yellow" else
-            if (stored == "warm") "brown" else stored
+        if (lightSlot && group != "light") return "light_default"
+        if (!lightSlot && group != "dark") return "dark_default"
+        val name = if (stored == "warm") (if (group == "light") "yellow" else "brown") else stored
         return "${group}_$name"
     }
 
@@ -166,7 +200,17 @@ class SettingsStore @Inject constructor(
     }
 
     override suspend fun setColorPreset(value: String) {
-        context.settingsDataStore.edit { it[colorPresetKey] = value }
+        context.settingsDataStore.edit { prefs ->
+            prefs[colorPresetKey] = value
+            // 23 轮：同步写入对应组的最近选择槽位（跟随系统时切换组用）
+            if (value.startsWith("light_")) prefs[colorPresetLightKey] = value
+            if (value.startsWith("dark_")) prefs[colorPresetDarkKey] = value
+        }
+    }
+
+    /** 23 轮：跟随系统明暗开关。 */
+    override suspend fun setFollowSystemTheme(value: Boolean) {
+        context.settingsDataStore.edit { it[followSystemKey] = value }
     }
 
     override fun observeModeUserPrompt(modeId: String): Flow<String?> =

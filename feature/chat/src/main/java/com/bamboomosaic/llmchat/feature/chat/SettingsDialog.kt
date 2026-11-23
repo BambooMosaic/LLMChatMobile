@@ -91,6 +91,7 @@ fun SettingsDialog(
     onSetUserNickname: (String) -> Unit,
     onDownloadLatest: () -> Unit,
     onSetColorPreset: (String) -> Unit,
+    onSetFollowSystemTheme: (Boolean) -> Unit,
     onSetBackgroundImage: (String) -> Unit,
     onSetLanguage: (AppLanguage) -> Unit,
     onSetAutoCompressEnabled: (Boolean) -> Unit,
@@ -159,6 +160,8 @@ fun SettingsDialog(
 
                         SettingsPage.APPEARANCE -> AppearancePage(
                             colorPreset = settings.colorPreset,
+                            followSystemTheme = settings.followSystemTheme,
+                            onSetFollowSystemTheme = onSetFollowSystemTheme,
                             onSetColorPreset = onSetColorPreset,
                             backgroundImageUri = settings.backgroundImageUri,
                             onSetBackgroundImage = onSetBackgroundImage,
@@ -992,12 +995,29 @@ private fun PreferencesPage(
 @Composable
 private fun AppearancePage(
     colorPreset: String,
+    followSystemTheme: Boolean,
+    onSetFollowSystemTheme: (Boolean) -> Unit,
     onSetColorPreset: (String) -> Unit,
     backgroundImageUri: String,
     onSetBackgroundImage: (String) -> Unit,
 ) {
     val s = LocalAppStrings.current
-    // 22 轮：浅色/深色模式开关取消，改为浅色预设组 + 深色预设组（选预设即定明暗）
+    // 23 轮：跟随系统开关（默认关）——开启时按系统深浅自动切换浅色/深色预设组
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(s.followSystem, style = MaterialTheme.typography.bodyLarge)
+        Switch(checked = followSystemTheme, onCheckedChange = onSetFollowSystemTheme)
+    }
+    Text(
+        text = s.followSystemHint,
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Spacer(Modifier.height(14.dp))
+    // 22 轮：浅色预设组 + 深色预设组（选预设即定明暗）
     Text(s.colorPresetLabel, style = MaterialTheme.typography.bodyLarge)
     Spacer(Modifier.height(8.dp))
     Text(s.presetLightGroup, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)

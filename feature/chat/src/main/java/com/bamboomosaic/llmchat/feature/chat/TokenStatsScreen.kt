@@ -46,6 +46,10 @@ fun TokenStatsScreen(
     days: Int,
     onSetDays: (Int) -> Unit,
     onDismiss: () -> Unit,
+    /** 23 轮：当前会话累计（金额折算"本次"用）；null = 无会话。 */
+    sessionTotals: TokenTotals? = null,
+    /** 23 轮：当前模型名（决定单价；无单价模型不展示金额行）。 */
+    currentModel: String = "",
 ) {
     val s = LocalAppStrings.current
     Surface(
@@ -84,6 +88,29 @@ fun TokenStatsScreen(
                     TokenCard(label = s.inputTokens, value = totals.promptTokens, modifier = Modifier.weight(1f))
                     TokenCard(label = s.outputTokens, value = totals.completionTokens, modifier = Modifier.weight(1f))
                     TokenCard(label = s.totalTokens, value = totals.total, modifier = Modifier.weight(1f))
+                }
+
+                // 23 轮：金额折算行（本次 = 当前会话累计 / 累计 = 全应用累计）；无单价模型不展示
+                val sessionCost = sessionTotals?.let {
+                    com.bamboomosaic.llmchat.core.domain.ModelPricing.estimateCNY(
+                        currentModel, it.promptTokens, it.completionTokens, it.cacheHitTokens,
+                    )
+                }
+                val globalCost = com.bamboomosaic.llmchat.core.domain.ModelPricing.estimateCNY(
+                    currentModel, totals.promptTokens, totals.completionTokens, totals.cacheHitTokens,
+                )
+                if (sessionCost != null && globalCost != null) {
+                    Spacer(Modifier.height(10.dp))
+                    Text(
+                        text = s.costSummary(
+                            com.bamboomosaic.llmchat.core.domain.ModelPricing.formatCNY(sessionCost),
+                            com.bamboomosaic.llmchat.core.domain.ModelPricing.formatCNY(globalCost),
+                        ),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Center,
+                    )
                 }
 
                 Spacer(Modifier.height(20.dp))

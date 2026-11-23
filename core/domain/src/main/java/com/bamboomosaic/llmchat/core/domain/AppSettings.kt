@@ -114,8 +114,14 @@ data class AppSettings(
     val userNickname: String = "",
     /** 20 轮：聊天页面自定义背景图（应用内文件路径；空 = 默认背景）。 */
     val backgroundImageUri: String = "",
-    /** 20 轮：UI 配色预设 ID（default / ocean / forest / ember）。 */
-    val colorPreset: String = "default",
+    /** 20 轮：UI 配色预设 ID。22 轮起 id 自带 light_/dark_ 前缀；跟随系统关闭时为生效值。 */
+    val colorPreset: String = "dark_default",
+    /** 23 轮：跟随系统明暗——开启时按系统深浅在浅色/深色两组预设间自动切换。 */
+    val followSystemTheme: Boolean = false,
+    /** 23 轮：浅色组最近选择的预设（跟随系统 + 系统浅色时生效）。 */
+    val colorPresetLight: String = "light_default",
+    /** 23 轮：深色组最近选择的预设（跟随系统 + 系统深色时生效）。 */
+    val colorPresetDark: String = "dark_default",
 ) {
     companion object {
         const val DEFAULT_MODEL = "deepseek-flash"
@@ -181,6 +187,9 @@ interface SettingsRepository {
 
     /** 20 轮：UI 配色预设 ID。 */
     suspend fun setColorPreset(value: String)
+
+    /** 23 轮：跟随系统明暗开关。 */
+    suspend fun setFollowSystemTheme(value: Boolean)
 
     /** 模式模板记忆：每个模式下用户最后一次填写的用户提示词。 */
     fun observeModeUserPrompt(modeId: String): kotlinx.coroutines.flow.Flow<String?>

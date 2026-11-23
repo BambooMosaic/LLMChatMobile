@@ -224,6 +224,18 @@ data class AppStrings(
     val contextInjectionHint: String,
     val regionLabel: String,
     val regionPlaceholder: String,
+    /** 23 轮：金额折算（Token 统计页）。 */
+    val costThisLabel: String,
+    val costTotalLabel: String,
+    /** 23 轮：会话内搜索。 */
+    val searchInConversation: String,
+    val searchHint: String,
+    val searchEmpty: String,
+    /** 23 轮：手动压缩预览确认。 */
+    val compressPreviewBodyFormat: String,
+    val compressConfirmBtn: String,
+    /** 23 轮：跟随系统主题开关说明。 */
+    val followSystemHint: String,
 ) {
 
     fun thisRound(prompt: Long, completion: Long, total: Long): String =
@@ -232,6 +244,14 @@ data class AppStrings(
     fun sessionTokensText(total: Long): String = "$sessionTokens: $total"
 
     fun searchedPages(n: Int): String = String.format(searchedPagesFormat, n)
+
+    /** 23 轮：金额折算摘要行（金额已含货币符号）。 */
+    fun costSummary(formattedThis: String, formattedTotal: String): String =
+        "$costThisLabel $formattedThis / $costTotalLabel $formattedTotal"
+
+    /** 23 轮：压缩预览正文。 */
+    fun compressPreviewBody(toCompress: Int): String =
+        String.format(compressPreviewBodyFormat, toCompress)
 }
 
 private val ZhCN = AppStrings(
@@ -423,6 +443,14 @@ private val ZhCN = AppStrings(
     contextInjectionHint = "在 system 末尾附带当前时间、地区与客户端信息（DS 网页版模式始终开启）",
     regionLabel = "地区",
     regionPlaceholder = "跟随设备地区，可手动填写城市名",
+    costThisLabel = "本次",
+    costTotalLabel = "累计",
+    searchInConversation = "会话内搜索",
+    searchHint = "搜索消息",
+    searchEmpty = "无匹配消息",
+    compressPreviewBodyFormat = "将保留最近 4 条消息，其余 %1\$d 条压缩为不超过 400 字的 AI 摘要，原细节不可回溯。确认执行？",
+    compressConfirmBtn = "确认压缩",
+    followSystemHint = "开启后按系统深浅自动切换浅色 / 深色预设组",
 )
 
 private val ZhTW = AppStrings(
@@ -614,6 +642,14 @@ private val ZhTW = AppStrings(
     contextInjectionHint = "在 system 末尾附帶當前時間、地區與客戶端資訊（DS 網頁版模式始終開啟）",
     regionLabel = "地區",
     regionPlaceholder = "跟隨裝置地區，可手動填寫城市名",
+    costThisLabel = "本次",
+    costTotalLabel = "累計",
+    searchInConversation = "會話內搜尋",
+    searchHint = "搜尋訊息",
+    searchEmpty = "無符合訊息",
+    compressPreviewBodyFormat = "將保留最近 4 條訊息，其餘 %1\$d 條壓縮為不超過 400 字的 AI 摘要，原細節不可回溯。確認執行？",
+    compressConfirmBtn = "確認壓縮",
+    followSystemHint = "開啟後按系統深淺自動切換淺色 / 深色配色組",
 )
 
 private val EnUS = AppStrings(
@@ -805,6 +841,14 @@ private val EnUS = AppStrings(
     contextInjectionHint = "Append current time, region and client info to the system prompt (always on for DS Web mode)",
     regionLabel = "Region",
     regionPlaceholder = "Follows device; tap to enter a city",
+    costThisLabel = "This chat",
+    costTotalLabel = "Total",
+    searchInConversation = "Search in chat",
+    searchHint = "Search messages",
+    searchEmpty = "No matching messages",
+    compressPreviewBodyFormat = "Keep the last 4 messages; the other %1\$d will be compressed into an AI digest of at most 400 characters. Details cannot be recovered. Continue?",
+    compressConfirmBtn = "Compress",
+    followSystemHint = "When on, follows system dark mode to switch between the light / dark preset groups",
 )
 
 fun stringsFor(language: AppLanguage): AppStrings = when (language) {

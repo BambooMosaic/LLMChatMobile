@@ -191,6 +191,10 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
     var showCompressConfirm by remember { mutableStateOf(false) }
     LaunchedEffect(messages.size, currentId) { viewModel.refreshContextUsage() }
 
+    // 23 轮：会话内搜索（入口：侧边栏会话长按菜单）——过滤当前会话消息并高亮关键词
+    var chatSearchActive by remember { mutableStateOf(false) }
+    var chatSearchQuery by remember { mutableStateOf("") }
+
     // 20 轮：平板/横屏（宽屏）侧边栏常驻展开，与聊天内容并排；手机保持抽屉交互
     val wideScreen = LocalConfiguration.current.screenWidthDp >= 600
     val closeDrawer: () -> Unit = { scope.launch { drawerState.close() } }
@@ -221,6 +225,13 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
             },
             onExport = { id ->
                 exportTarget = id
+                closeDrawer()
+            },
+            // 23 轮：会话内搜索——切到目标会话并唤起搜索栏
+            onSearch = { id ->
+                viewModel.selectConversation(id)
+                chatSearchActive = true
+                chatSearchQuery = ""
                 closeDrawer()
             },
             onOpenTokenStats = {
@@ -329,6 +340,36 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
                 color = MaterialTheme.colorScheme.outlineVariant,
             )
 
+            // 23 轮：会话内搜索栏（侧边栏长按会话唤起）——实时过滤 + 关键词高亮
+            if (chatSearchActive) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                ) {
+                    androidx.compose.material3.OutlinedTextField(
+                        value = chatSearchQuery,
+                        onValueChange = { chatSearchQuery = it },
+                        placeholder = { Text(s.searchHint, style = MaterialTheme.typography.bodyMedium) },
+                        singleLine = true,
+                        shape = RoundedCornerShape(20.dp),
+                        textStyle = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(onClick = {
+                        chatSearchActive = false
+                        chatSearchQuery = ""
+                    }) { Text("×", style = MaterialTheme.typography.titleLarge) }
+                }
+            }
+            // 搜索模式：过滤当前会话消息（不跨会话）；正常模式：全部消息
+            val displayMessages = if (chatSearchActive && chatSearchQuery.isNotBlank()) {
+                messages.filter { it.text.contains(chatSearchQuery, ignoreCase = true) }
+            } else {
+                messages
+            }
+
             LazyColumn(
                 state = listState,
                 modifier = Modifier
@@ -336,13 +377,30 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
                     .fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
+                if (chatSearchActive && chatSearchQuery.isNotBlank() && displayMessages.isEmpty()) {
+                    item(key = "search-empty") {
+                        Text(
+                            text = s.searchEmpty,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(vertical = 24.dp),
+                        )
+                    }
+                }
                 itemsIndexed(
-                    messages,
+                    displayMessages,
                     key = { itemIndex, msg ->
                         // 稳定 key：已持久化用 dbId+version；流式中的消息（dbId=0）在列表尾部，用 role+序号区分
-                        if (msg.dbId > 0) "m-${msg.dbId}-v${msg.version}" else "live-$itemIndex-${msg.role}"
+                        // 搜索过滤模式下前缀区分，避免与正常模式的同 key 冲突
+                        val base = if (msg.dbId > 0) "m-${msg.dbId}-v${msg.version}" else "live-$itemIndex-${msg.role}"
+                        if (chatSearchActive && chatSearchQuery.isNotBlank()) "search-$base" else base
                     },
                 ) { index, msg ->
+                    if (chatSearchActive && chatSearchQuery.isNotBlank()) {
+                        // 搜索结果：轻量纯文本渲染 + 关键词高亮（不做 Markdown 解析）
+                        Spacer(Modifier.height(MessageSpacing))
+                        SearchMessageItem(text = msg.text, query = chatSearchQuery, role = msg.role)
+                    } else {
                     val isNewTurn = msg.role == MessageRole.USER && index > 0
                     Spacer(Modifier.height(if (isNewTurn) TurnSpacing else if (index > 0) MessageSpacing else 0.dp))
                     MessageBubble(
@@ -362,6 +420,7 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
                         },
                         onSwitchVersion = { delta -> viewModel.switchVersion(index, delta) },
                     )
+                    }
                 }
                 // 底部锚点：scrollToItem 只能把某项"顶部"对齐视口，而单条消息可能很长
                 // （思考内容 + 正文），所以额外放一个空项作为真正的末尾参照。
@@ -471,6 +530,7 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
             onSetUserNickname = viewModel::setUserNickname,
             onDownloadLatest = viewModel::downloadLatestApk,
             onSetColorPreset = viewModel::setColorPreset,
+            onSetFollowSystemTheme = viewModel::setFollowSystemTheme,
             onSetBackgroundImage = viewModel::setBackgroundImage,
             onSetLanguage = viewModel::setLanguage,
             onSetAutoCompressEnabled = viewModel::setAutoCompressEnabled,
@@ -560,22 +620,29 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
     }
 
     // 21 轮：手动压缩确认弹窗（摘要替换旧消息，不可逆）
+    // 23 轮：升级为预览确认——展示将保留/压缩的条数，待压缩消息过少时禁用确认
     if (showCompressConfirm) {
+        val toCompress = (messages.count { !it.isStreaming } - 4).coerceAtLeast(0)
         androidx.compose.material3.AlertDialog(
             onDismissRequest = { showCompressConfirm = false },
             title = { Text(s.manualCompressButton) },
             text = {
-                Text(
-                    text = if (settings.language == com.bamboomosaic.llmchat.core.domain.AppLanguage.ENGLISH)
-                        "Earlier messages will be replaced with an AI-written summary (last 4 kept). Details cannot be recovered. Continue?"
-                    else "将把较早的对话压缩为一条 AI 摘要（保留最近 4 条消息），原细节不可回溯。继续？",
-                )
+                Text(text = s.compressPreviewBody(toCompress))
             },
             confirmButton = {
-                TextButton(onClick = {
-                    showCompressConfirm = false
-                    viewModel.compressContextManually()
-                }) { Text(if (settings.language == com.bamboomosaic.llmchat.core.domain.AppLanguage.ENGLISH) "Continue" else "继续") }
+                TextButton(
+                    enabled = toCompress > 0,
+                    onClick = {
+                        showCompressConfirm = false
+                        viewModel.compressContextManually()
+                    },
+                ) {
+                    Text(
+                        s.compressConfirmBtn,
+                        color = if (toCompress > 0) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             },
             dismissButton = {
                 TextButton(onClick = { showCompressConfirm = false }) {
@@ -594,6 +661,9 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
                 days = tokenStatsDays,
                 onSetDays = viewModel::setTokenStatsDays,
                 onDismiss = { showTokenStats = false },
+                // 23 轮：金额折算（本次 = 当前会话 / 累计 = 全应用，按当前模型单价）
+                sessionTotals = sessionTotals,
+                currentModel = currentConfig?.model ?: "",
             )
         }
     }
@@ -1074,3 +1144,60 @@ internal fun isDeepSeekConfig(config: com.bamboomosaic.llmchat.core.domain.ApiCo
         config.provider.equals("deepseek", ignoreCase = true) ||
             config.baseUrl.contains("deepseek", ignoreCase = true)
         )
+
+/**
+ * 23 轮：会话内搜索结果条目——轻量纯文本（不做 Markdown 解析），关键词高亮。
+ */
+@Composable
+private fun SearchMessageItem(text: String, query: String, role: MessageRole) {
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+            Text(
+                text = when (role) {
+                    MessageRole.USER -> "👤"
+                    MessageRole.ASSISTANT -> "🤖"
+                    else -> "⚙"
+                },
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = buildHighlightedText(text, query),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
+    }
+}
+
+/** 23 轮：命中关键词加高亮背景的 AnnotatedString（大小写不敏感）。 */
+private fun buildHighlightedText(text: String, query: String): androidx.compose.ui.text.AnnotatedString {
+    if (query.isBlank()) return androidx.compose.ui.text.AnnotatedString(text)
+    val highlight = androidx.compose.ui.text.SpanStyle(
+        background = androidx.compose.ui.graphics.Color(0x66FFD54F),
+        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+    )
+    return androidx.compose.ui.text.buildAnnotatedString {
+        var cursor = 0
+        val lowerText = text.lowercase()
+        val lowerQuery = query.lowercase()
+        while (cursor < text.length) {
+            val hit = lowerText.indexOf(lowerQuery, cursor)
+            if (hit < 0) {
+                append(text.substring(cursor))
+                break
+            }
+            append(text.substring(cursor, hit))
+            pushStyle(highlight)
+            append(text.substring(hit, hit + query.length))
+            pop()
+            cursor = hit + query.length
+        }
+    }
+}

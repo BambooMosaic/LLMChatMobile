@@ -52,6 +52,8 @@ fun ConversationDrawer(
     onArchive: (String) -> Unit,
     onEditPrompt: (String) -> Unit,
     onExport: (String) -> Unit,
+    /** 23 轮：会话内搜索（长按菜单入口）。 */
+    onSearch: (String) -> Unit = {},
     onOpenTokenStats: () -> Unit,
     onOpenSettings: () -> Unit,
     /** 20 轮：平板/横屏常驻模式，宽度固定且不随屏幕比例变化。 */
@@ -149,6 +151,14 @@ fun ConversationDrawer(
                                 text = { Text(s.export) },
                                 onClick = {
                                     onExport(conversation.id)
+                                    menuTarget = null
+                                },
+                            )
+                            // 23 轮：会话内搜索——过滤当前会话消息并高亮关键词
+                            DropdownMenuItem(
+                                text = { Text(s.searchInConversation) },
+                                onClick = {
+                                    onSearch(conversation.id)
                                     menuTarget = null
                                 },
                             )

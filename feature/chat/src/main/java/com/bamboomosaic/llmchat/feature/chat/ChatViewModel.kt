@@ -1196,6 +1196,11 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch { settingsRepository.setColorPreset(preset) }
     }
 
+    /** 23 轮：跟随系统明暗开关（开启时在浅色/深色两组预设间自动切换）。 */
+    fun setFollowSystemTheme(value: Boolean) {
+        viewModelScope.launch { settingsRepository.setFollowSystemTheme(value) }
+    }
+
     /**
      * 22 轮：取最新发布版 APK 直链后直接跳浏览器下载。
      * 系统下载器在部分机型/网络下无法连 GitHub（一直 0 进度），浏览器下载更可靠。
