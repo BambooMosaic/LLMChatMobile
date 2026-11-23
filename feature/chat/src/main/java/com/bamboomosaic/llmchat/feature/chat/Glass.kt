@@ -6,6 +6,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.window.DialogWindowProvider
 
@@ -47,5 +48,8 @@ fun GlassDialogEffect(enabled: Boolean = LocalExperimentalGlass.current) {
 @Composable
 fun glassSurfaceColor(): Color {
     val surface = MaterialTheme.colorScheme.surface
-    return if (LocalExperimentalGlass.current) surface.copy(alpha = 0.86f) else surface
+    if (!LocalExperimentalGlass.current) return surface
+    // 深色主题几乎不透明：半透明会让模糊后的亮色内容透上来，压暗文字对比（纯黑预设尤其明显）
+    val dark = surface.luminance() < 0.5f
+    return surface.copy(alpha = if (dark) 0.94f else 0.86f)
 }

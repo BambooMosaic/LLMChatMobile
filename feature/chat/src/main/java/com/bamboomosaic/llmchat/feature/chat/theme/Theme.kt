@@ -133,11 +133,11 @@ private val lightGray = Palette(
 private val lightPink = Palette(
     // 23 轮反馈：按钮色只比粉色背景深一档（原 D6496F 偏重）；发送键（primaryContainer）保持不变
     primary = Color(0xFFE68BA7), onPrimary = Color.White,
-    primaryContainer = Color(0xFFFFD9E5), onPrimaryContainer = Color(0xFF4A0F22),
+    // 24 轮反馈：用户气泡（primaryContainer）加深，发送键随同；AI 气泡（surfaceVariant）更浅
+    primaryContainer = Color(0xFFF8BCD2), onPrimaryContainer = Color(0xFF4A0F22),
     background = Color(0xFFFFEDF4), surface = Color(0xFFFFDFEB),
-    // 24 轮：AI 气泡（surfaceVariant）加深一档，与用户气泡（primaryContainer 浅粉）明确区分
-    surfaceVariant = Color(0xFFF3B3CE), onSurfaceVariant = Color(0xFF5C3646),
-    surfaceContainerLow = Color(0xFFFFE6EF), surfaceContainer = Color(0xFFFCDCE8),
+    surfaceVariant = Color(0xFFFFE9F2), onSurfaceVariant = Color(0xFF5C3646),
+    surfaceContainerLow = Color(0xFFFFF1F7), surfaceContainer = Color(0xFFFCDCE8),
     surfaceContainerHigh = Color(0xFFF7CBDC), outlineVariant = Color(0xFFEDA9C2),
 )
 
