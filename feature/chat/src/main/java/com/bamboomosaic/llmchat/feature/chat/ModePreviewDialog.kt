@@ -102,11 +102,7 @@ fun ModePreviewDialog(
     }
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        GlassDialogEffect()
-        Surface(
-            shape = RoundedCornerShape(24.dp),
-            color = glassSurfaceColor(),
-            contentColor = MaterialTheme.colorScheme.onSurface,
+        GlassDialogShell(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp),

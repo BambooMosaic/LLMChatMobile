@@ -56,11 +56,7 @@ fun ContextPanelDialog(
     val usedSeg = totalSeg.sumOf { it.second }.coerceAtLeast(1)
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        GlassDialogEffect()
-        Surface(
-            shape = RoundedCornerShape(24.dp),
-            color = glassSurfaceColor(),
-            contentColor = MaterialTheme.colorScheme.onSurface,
+        GlassDialogShell(
             modifier = Modifier
                 .fillMaxWidth(0.94f)
                 .heightIn(max = 560.dp),

@@ -194,12 +194,8 @@ fun SettingsDialog(
     }
 
     Dialog(onDismissRequest = onDismiss) {
-        GlassDialogEffect()
-        Surface(
-            shape = RoundedCornerShape(24.dp),
-            color = glassSurfaceColor(),
-            contentColor = MaterialTheme.colorScheme.onSurface,
-            // 20 轮：高度固定为屏幕 75%——页面切换不再因内容高度变化而抖动
+        // 24 轮：玻璃外壳（快照背景 + 表面染色 + 细边框；关闭时为普通 Surface）
+        GlassDialogShell(
             modifier = Modifier
                 .fillMaxWidth(if (wide) 0.85f else 0.94f)
                 .fillMaxHeight(0.75f),

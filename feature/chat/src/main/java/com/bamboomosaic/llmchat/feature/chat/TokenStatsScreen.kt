@@ -53,11 +53,7 @@ fun TokenStatsScreen(
 ) {
     val s = LocalAppStrings.current
     // 24 轮：实验性毛玻璃（Dialog 窗口由 ChatScreen 侧提供）
-    GlassDialogEffect()
-    Surface(
-        shape = RoundedCornerShape(24.dp),
-        color = glassSurfaceColor(),
-            contentColor = MaterialTheme.colorScheme.onSurface,
+    GlassDialogShell(
         modifier = Modifier
             .fillMaxWidth(0.94f)
             .heightIn(max = 560.dp),

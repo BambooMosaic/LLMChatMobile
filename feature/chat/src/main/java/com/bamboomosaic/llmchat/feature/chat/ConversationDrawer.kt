@@ -1,6 +1,7 @@
 package com.bamboomosaic.llmchat.feature.chat
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -70,8 +71,16 @@ fun ConversationDrawer(
     var menuTarget by remember { mutableStateOf<Conversation?>(null) }
 
     ModalDrawerSheet(
-        modifier = Modifier.width(drawerWidth),
-        // 24 轮：实验性毛玻璃——抽屉半透明（同窗口无真模糊，降级为半透明模拟）
+        modifier = if (LocalExperimentalGlass.current) {
+            // 24 轮：毛玻璃模式抽屉加细边框（无系统阴影可依赖）
+            Modifier.width(drawerWidth).border(
+                width = 0.7.dp,
+                color = MaterialTheme.colorScheme.outlineVariant,
+                shape = MaterialTheme.shapes.large,
+            )
+        } else {
+            Modifier.width(drawerWidth)
+        },
         drawerContainerColor = if (LocalExperimentalGlass.current) {
             MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)
         } else {
