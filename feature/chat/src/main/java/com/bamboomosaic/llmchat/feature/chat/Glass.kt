@@ -32,27 +32,28 @@ val LocalGlassLevel = staticCompositionLocalOf { 0 }
 
 /** 24 轮：对当前 Compose Dialog 的窗口启用系统级背后模糊（Android 12+ 生效，其他设备跳过）。 */
 @Composable
-fun GlassDialogEffect(enabled: Boolean = LocalGlassLevel.current >= 2) {
-    if (!enabled) return
+fun GlassDialogEffect(enabled: Boolean = LocalGlassLevel.current >= 1) {
+    val level = LocalGlassLevel.current
+    if (level < 1) return
     val view = LocalView.current
     DisposableEffect(enabled) {
         val window = (view.parent as? DialogWindowProvider)?.window
-        val canBlur = window != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-        val originalDim = window?.attributes?.dimAmount ?: 0f
-        if (window != null && canBlur) {
+        if (window != null) {
+            // 玻璃模式统一：窗口背景透明 + 去掉背后的黑色遮罩（用户感知的"阴影"）
             window.setBackgroundDrawableResource(android.R.color.transparent)
-            // 半透明内容窗口要用 LayoutParams.blurBehindRadius（整窗背后模糊），
-            // setBackgroundBlurRadius 只模糊"背景 drawable 区域"，透明背景下等于没模糊
             val attrs = window.attributes
-            attrs.blurBehindRadius = 90
-            attrs.dimAmount = 0.05f
+            attrs.dimAmount = 0f
+            // 毛玻璃档（2）且系统支持：叠加整窗背后实时模糊
+            if (level >= 2 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                attrs.blurBehindRadius = 90
+            }
             window.attributes = attrs
         }
         onDispose {
-            if (window != null && canBlur) {
+            if (window != null) {
                 val attrs = window.attributes
                 attrs.blurBehindRadius = 0
-                attrs.dimAmount = originalDim
+                attrs.dimAmount = 0.32f
                 window.attributes = attrs
             }
         }
@@ -97,8 +98,8 @@ fun GlassDialogShell(
 fun glassSurfaceColor(): Color {
     val surface = MaterialTheme.colorScheme.surface
     if (LocalGlassLevel.current < 1) return surface
-    val dark = surface.luminance() < 0.5f
-    return surface.copy(alpha = if (dark) 0.94f else 0.86f)
+    // 半透明档：两主题统一 0.78，效果肉眼可见；毛玻璃档背后有系统模糊，同样 0.78
+    return surface.copy(alpha = 0.78f)
 }
 
 /** 25 轮：设备是否支持系统级跨窗口模糊（毛玻璃档位可用性）。 */

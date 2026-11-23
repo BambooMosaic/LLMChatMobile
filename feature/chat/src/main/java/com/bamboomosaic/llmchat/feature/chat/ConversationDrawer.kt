@@ -159,12 +159,13 @@ fun ConversationDrawer(
                         DropdownMenu(
                             expanded = menuTarget?.id == conversation.id,
                             onDismissRequest = { menuTarget = null },
-                            // 25 轮：跟随玻璃档位——半透明容器 + 细边框
+                            // 25 轮：跟随玻璃档位——半透明容器 + 细边框 + 去投影
                             containerColor = if (LocalGlassLevel.current >= 1) {
-                                MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.9f)
+                                MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.85f)
                             } else {
-                                MaterialTheme.colorScheme.surfaceContainerLow
+                                androidx.compose.material3.MenuDefaults.containerColor
                             },
+                            shadowElevation = if (LocalGlassLevel.current >= 1) 0.dp else 8.dp,
                             border = if (LocalGlassLevel.current >= 1) {
                                 androidx.compose.foundation.BorderStroke(
                                     width = 0.7.dp,
@@ -175,6 +176,9 @@ fun ConversationDrawer(
                             },
                         ) {
                             DropdownMenuItem(
+                                colors = androidx.compose.material3.MenuDefaults.itemColors(
+                                    textColor = MaterialTheme.colorScheme.onSurface,
+                                ),
                                 text = { Text(s.rename) },
                                 onClick = {
                                     renameTarget = conversation
@@ -183,6 +187,9 @@ fun ConversationDrawer(
                             )
                             // 24 轮：置顶 / 取消置顶
                             DropdownMenuItem(
+                                colors = androidx.compose.material3.MenuDefaults.itemColors(
+                                    textColor = MaterialTheme.colorScheme.onSurface,
+                                ),
                                 text = { Text(if (conversation.pinned) s.unpinned else s.pinned) },
                                 onClick = {
                                     onTogglePinned(conversation.id)
@@ -200,6 +207,9 @@ fun ConversationDrawer(
                                 )
                             }
                             DropdownMenuItem(
+                                colors = androidx.compose.material3.MenuDefaults.itemColors(
+                                    textColor = MaterialTheme.colorScheme.onSurface,
+                                ),
                                 text = { Text(s.export) },
                                 onClick = {
                                     onExport(conversation.id)
@@ -208,6 +218,9 @@ fun ConversationDrawer(
                             )
                             // 23 轮：会话内搜索——过滤当前会话消息并高亮关键词
                             DropdownMenuItem(
+                                colors = androidx.compose.material3.MenuDefaults.itemColors(
+                                    textColor = MaterialTheme.colorScheme.onSurface,
+                                ),
                                 text = { Text(s.searchInConversation) },
                                 onClick = {
                                     onSearch(conversation.id)
@@ -215,6 +228,9 @@ fun ConversationDrawer(
                                 },
                             )
                             DropdownMenuItem(
+                                colors = androidx.compose.material3.MenuDefaults.itemColors(
+                                    textColor = MaterialTheme.colorScheme.onSurface,
+                                ),
                                 text = { Text(s.archive) },
                                 onClick = {
                                     onArchive(conversation.id)
