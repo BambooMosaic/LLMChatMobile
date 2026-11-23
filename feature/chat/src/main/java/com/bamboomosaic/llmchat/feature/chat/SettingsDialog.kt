@@ -90,6 +90,7 @@ fun SettingsDialog(
     onSetSearchEnabled: (Boolean) -> Unit,
     onSetUserNickname: (String) -> Unit,
     onSetCompressSummaryLimit: (Int) -> Unit,
+    onSetExperimentalGlass: (Boolean) -> Unit,
     onDownloadLatest: () -> Unit,
     onSetColorPreset: (String) -> Unit,
     onSetFollowSystemTheme: (Boolean) -> Unit,
@@ -179,6 +180,7 @@ fun SettingsDialog(
                 onSetSearchEnabled = onSetSearchEnabled,
                 onSetAutoCompressEnabled = onSetAutoCompressEnabled,
                 onSetCompressSummaryLimit = onSetCompressSummaryLimit,
+                onSetExperimentalGlass = onSetExperimentalGlass,
             )
 
             SettingsPage.ARCHIVED -> ArchivedPage(
@@ -192,9 +194,10 @@ fun SettingsDialog(
     }
 
     Dialog(onDismissRequest = onDismiss) {
+        GlassDialogEffect()
         Surface(
             shape = RoundedCornerShape(24.dp),
-            color = MaterialTheme.colorScheme.surface,
+            color = glassSurfaceColor(),
             // 20 轮：高度固定为屏幕 75%——页面切换不再因内容高度变化而抖动
             modifier = Modifier
                 .fillMaxWidth(if (wide) 0.85f else 0.94f)
@@ -594,9 +597,10 @@ private fun ConfigEditDialog(
     )
 
     Dialog(onDismissRequest = onDismiss) {
+        GlassDialogEffect()
         Surface(
             shape = RoundedCornerShape(24.dp),
-            color = MaterialTheme.colorScheme.surface,
+            color = glassSurfaceColor(),
             modifier = Modifier
                 .fillMaxWidth(0.94f)
                 .heightIn(max = 560.dp),
@@ -798,6 +802,7 @@ private fun OtherPage(
     onSetSearchEnabled: (Boolean) -> Unit,
     onSetAutoCompressEnabled: (Boolean) -> Unit,
     onSetCompressSummaryLimit: (Int) -> Unit,
+    onSetExperimentalGlass: (Boolean) -> Unit,
 ) {
     val s = LocalAppStrings.current
 
@@ -892,6 +897,28 @@ private fun OtherPage(
             onCheckedChange = onSetAutoCompressEnabled,
         )
     }
+
+    // 24 轮：实验性功能区域（毛玻璃，默认关）
+    HorizontalDivider()
+    Spacer(Modifier.height(12.dp))
+    Text(s.experimentalLabel, style = MaterialTheme.typography.bodyLarge)
+    Spacer(Modifier.height(8.dp))
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(s.glassLabel, style = MaterialTheme.typography.bodyLarge)
+        Switch(
+            checked = settings.experimentalGlass,
+            onCheckedChange = onSetExperimentalGlass,
+        )
+    }
+    Text(
+        text = s.glassHint,
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
 }
 
 /** 偏好设置：环境注入开关、用户称呼、新对话默认模式。 */
@@ -1312,7 +1339,7 @@ private fun CreditsDialog(onDismiss: () -> Unit) {
     androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
         Surface(
             shape = RoundedCornerShape(24.dp),
-            color = MaterialTheme.colorScheme.surface,
+            color = glassSurfaceColor(),
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp),

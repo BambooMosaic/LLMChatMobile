@@ -81,6 +81,7 @@ abstract class RepositoryModule {
                     // 22 轮补注册：v9_10 上一轮漏注册，导致从 beta0.5.0 升级会触发破坏性迁移清库
                     AppDatabase.MIGRATION_9_10,
                     AppDatabase.MIGRATION_10_11,
+                    AppDatabase.MIGRATION_11_12,
                 )
                 .fallbackToDestructiveMigration(dropAllTables = true)
                 .build()

@@ -238,6 +238,15 @@ data class AppStrings(
     val followSystemHint: String,
     val compressLimitLabel: String,
     val compressLimitHint: String,
+    /** 24 轮：置顶与分组。 */
+    val pinned: String,
+    val unpinned: String,
+    val sectionPinned: String,
+    val sectionAll: String,
+    /** 24 轮：实验性功能（毛玻璃）。 */
+    val experimentalLabel: String,
+    val glassLabel: String,
+    val glassHint: String,
 ) {
 
     fun thisRound(prompt: Long, completion: Long, total: Long): String =
@@ -455,6 +464,13 @@ private val ZhCN = AppStrings(
     followSystemHint = "开启后按系统深浅自动切换浅色 / 深色预设组",
     compressLimitLabel = "压缩摘要上限（字）",
     compressLimitHint = "手动压缩时 AI 摘要的字数上限，100~1024（默认 400）",
+    pinned = "置顶",
+    unpinned = "取消置顶",
+    sectionPinned = "置顶",
+    sectionAll = "会话",
+    experimentalLabel = "实验性功能",
+    glassLabel = "毛玻璃效果",
+    glassHint = "半透明与背景模糊材质（Android 12+ 真模糊，旧系统降级半透明）。可能影响性能、帧率或兼容性，默认关闭",
 )
 
 private val ZhTW = AppStrings(
@@ -656,6 +672,13 @@ private val ZhTW = AppStrings(
     followSystemHint = "開啟後按系統深淺自動切換淺色 / 深色配色組",
     compressLimitLabel = "壓縮摘要上限（字）",
     compressLimitHint = "手動壓縮時 AI 摘要的字數上限，100~1024（預設 400）",
+    pinned = "置頂",
+    unpinned = "取消置頂",
+    sectionPinned = "置頂",
+    sectionAll = "會話",
+    experimentalLabel = "實驗性功能",
+    glassLabel = "毛玻璃效果",
+    glassHint = "半透明與背景模糊材質（Android 12+ 真模糊，舊系統降級半透明）。可能影響效能、幀率或相容性，預設關閉",
 )
 
 private val EnUS = AppStrings(
@@ -857,6 +880,13 @@ private val EnUS = AppStrings(
     followSystemHint = "When on, follows system dark mode to switch between the light / dark preset groups",
     compressLimitLabel = "Summary size limit (chars)",
     compressLimitHint = "Max characters of the AI digest on manual compress, 100~1024 (default 400)",
+    pinned = "Pin to top",
+    unpinned = "Unpin",
+    sectionPinned = "Pinned",
+    sectionAll = "Chats",
+    experimentalLabel = "Experimental",
+    glassLabel = "Frosted glass",
+    glassHint = "Translucent & background blur material (real blur on Android 12+, fallback to translucency below). May affect performance, frame rate or compatibility; off by default",
 )
 
 fun stringsFor(language: AppLanguage): AppStrings = when (language) {

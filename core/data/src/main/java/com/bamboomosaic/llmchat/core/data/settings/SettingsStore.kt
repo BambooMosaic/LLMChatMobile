@@ -53,6 +53,7 @@ class SettingsStore @Inject constructor(
     private val followSystemKey = booleanPreferencesKey("follow_system_theme")
     private val colorPresetPairKey = intPreferencesKey("color_preset_pair")
     private val compressSummaryLimitKey = intPreferencesKey("compress_summary_limit")
+    private val experimentalGlassKey = booleanPreferencesKey("experimental_glass")
 
     override fun observeSettings(): Flow<AppSettings> = context.settingsDataStore.data.map { prefs ->
         val language = AppLanguage.fromTag(prefs[languageKey])
@@ -80,6 +81,7 @@ class SettingsStore @Inject constructor(
             colorPreset = effectiveColorPreset(prefs),
             followSystemTheme = prefs[followSystemKey] ?: false,
             compressSummaryLimit = prefs[compressSummaryLimitKey] ?: 400,
+            experimentalGlass = prefs[experimentalGlassKey] ?: false,
         )
     }
 
@@ -223,6 +225,11 @@ class SettingsStore @Inject constructor(
     /** 23 轮：手动压缩摘要字数上限（100~1024）。 */
     override suspend fun setCompressSummaryLimit(value: Int) {
         context.settingsDataStore.edit { it[compressSummaryLimitKey] = value.coerceIn(100, 1024) }
+    }
+
+    /** 24 轮：实验性毛玻璃开关。 */
+    override suspend fun setExperimentalGlass(value: Boolean) {
+        context.settingsDataStore.edit { it[experimentalGlassKey] = value }
     }
 
     override fun observeModeUserPrompt(modeId: String): Flow<String?> =

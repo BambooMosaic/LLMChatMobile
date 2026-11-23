@@ -11,7 +11,8 @@ import kotlinx.coroutines.flow.Flow
 interface ConversationDao {
 
     /** 侧边栏主列表：只看未归档。 */
-    @Query("SELECT * FROM conversations WHERE archived = 0 ORDER BY updatedAt DESC")
+    // 24 轮：置顶会话固定组优先，组内按最近更新倒序
+    @Query("SELECT * FROM conversations WHERE archived = 0 ORDER BY pinned DESC, updatedAt DESC")
     fun observeConversations(): Flow<List<ConversationEntity>>
 
     /** 「恢复对话」列表：只看已归档。 */
@@ -35,6 +36,14 @@ interface ConversationDao {
 
     @Query("UPDATE conversations SET archived = :archived WHERE id = :conversationId")
     suspend fun setArchived(conversationId: String, archived: Int)
+
+    /** 24 轮：置顶 / 取消置顶。 */
+    @Query("UPDATE conversations SET pinned = :pinned WHERE id = :id")
+    suspend fun setPinned(id: String, pinned: Int)
+
+    /** 24 轮：写标题并关闭自动标题标记（手动改名与自动生成都走这里）。 */
+    @Query("UPDATE conversations SET title = :title, titleAuto = 0, updatedAt = :updatedAt WHERE id = :id")
+    suspend fun setTitle(id: String, title: String, updatedAt: Long)
 
     @Query("UPDATE conversations SET systemPrompt = :prompt WHERE id = :conversationId")
     suspend fun setSystemPrompt(conversationId: String, prompt: String?)

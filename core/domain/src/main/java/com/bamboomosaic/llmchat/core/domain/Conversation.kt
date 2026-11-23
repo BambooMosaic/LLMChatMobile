@@ -20,6 +20,10 @@ data class Conversation(
     val effectiveTemperature: Float? = null,
     /** 实际生效的 top_p 值。 */
     val effectiveTopP: Float? = null,
+    /** 24 轮：置顶会话（侧边栏固定组展示，按置顶优先排序）。 */
+    val pinned: Boolean = false,
+    /** 24 轮：标题是否仍为自动生成（用户手动改名后为 false，不再自动覆盖）。 */
+    val titleAuto: Boolean = true,
 )
 
 /** 会话与消息的持久化仓储，ViewModel 只注入此接口。 */
@@ -45,6 +49,12 @@ interface ConversationRepository {
 
     /** 手动重命名会话标题。 */
     suspend fun renameConversation(conversationId: String, title: String)
+
+    /** 24 轮：置顶 / 取消置顶。 */
+    suspend fun setPinned(conversationId: String, pinned: Boolean)
+
+    /** 24 轮：写入自动生成的标题（同时关闭自动标记，避免重复生成）。 */
+    suspend fun setAutoTitle(conversationId: String, title: String)
 
     /** 归档 / 取消归档。 */
     suspend fun setArchived(conversationId: String, archived: Boolean)

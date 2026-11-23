@@ -13,7 +13,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ApiConfigEntity::class,
     ],
     views = [ModelStatsView::class],
-    version = 11,
+    version = 12,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -132,6 +132,17 @@ abstract class AppDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE token_usage_records ADD COLUMN reasoningTokens INTEGER NOT NULL DEFAULT 0")
                 db.execSQL("ALTER TABLE token_usage_records ADD COLUMN isSearch INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        /**
+         * v11 -> v12：会话置顶与自动标题标记（24 轮）。
+         * pinned：置顶会话固定组优先；titleAuto：1 = 标题仍为自动生成，用户手动改名后置 0。
+         */
+        val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE conversations ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE conversations ADD COLUMN titleAuto INTEGER NOT NULL DEFAULT 1")
             }
         }
     }

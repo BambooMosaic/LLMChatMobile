@@ -21,4 +21,8 @@ data class ConversationEntity(
     val effectiveTemperature: Float? = null,
     /** 实际生效的 top_p 值。 */
     val effectiveTopP: Float? = null,
+    /** 24 轮：1 = 置顶会话（侧边栏固定组）。 */
+    val pinned: Int = 0,
+    /** 24 轮：1 = 标题仍为自动生成；用户手动改名后置 0。 */
+    val titleAuto: Int = 1,
 )

@@ -131,10 +131,12 @@ private val lightGray = Palette(
 
 /** 22 轮：浅粉——菜单 UI 跟随主题色（粉）。 */
 private val lightPink = Palette(
-    primary = Color(0xFFD6496F), onPrimary = Color.White,
+    // 23 轮反馈：按钮色只比粉色背景深一档（原 D6496F 偏重）；发送键（primaryContainer）保持不变
+    primary = Color(0xFFE68BA7), onPrimary = Color.White,
     primaryContainer = Color(0xFFFFD9E5), onPrimaryContainer = Color(0xFF4A0F22),
     background = Color(0xFFFFEDF4), surface = Color(0xFFFFDFEB),
-    surfaceVariant = Color(0xFFF9C9DC), onSurfaceVariant = Color(0xFF5C3646),
+    // 24 轮：AI 气泡（surfaceVariant）加深一档，与用户气泡（primaryContainer 浅粉）明确区分
+    surfaceVariant = Color(0xFFF3B3CE), onSurfaceVariant = Color(0xFF5C3646),
     surfaceContainerLow = Color(0xFFFFE6EF), surfaceContainer = Color(0xFFFCDCE8),
     surfaceContainerHigh = Color(0xFFF7CBDC), outlineVariant = Color(0xFFEDA9C2),
 )
@@ -218,7 +220,7 @@ val lightColorPresetOptions = listOf(
     PresetOption("light_green", Color(0xFFD8F0EB), Color(0xFF2E8B7F)),
     PresetOption("light_yellow", Color(0xFFF5E9D5), Color(0xFFA87832)),
     PresetOption("light_gray", Color(0xFFFFFFFF), Color(0xFF636363)),
-    PresetOption("light_pink", Color(0xFFFFDFEB), Color(0xFFD6496F)),
+    PresetOption("light_pink", Color(0xFFFFDFEB), Color(0xFFE68BA7)),
 )
 
 val darkColorPresetOptions = listOf(

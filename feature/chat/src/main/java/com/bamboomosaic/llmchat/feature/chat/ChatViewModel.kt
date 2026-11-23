@@ -759,6 +759,51 @@ class ChatViewModel @Inject constructor(
                 )
             }
             _isGenerating.value = false
+
+            // 24 轮：首轮回复落库后自动生成简短标题（用户手动改名过的会话跳过；失败保留原标题不再重试）
+            if (savedReplyId > 0 && conversations.value.firstOrNull { it.id == conversationId }?.titleAuto == true) {
+                generateAutoTitle(conversationId, userTextForTitle, accumulated)
+            }
+        }
+    }
+
+    /** 24 轮：正在生成标题的会话集合（防重复触发）。 */
+    private val autoTitling = mutableSetOf<String>()
+
+    /**
+     * 24 轮：用当前模型为对话生成 ≤12 字标题。
+     * 成功 → setAutoTitle（titleAuto 置 0）；失败 → 保留现有标题并同样关闭自动标记（避免每轮重试）。
+     * 标题轮次会计入 Token 统计（真实消耗），输出上限 32 token，成本可忽略。
+     */
+    private fun generateAutoTitle(conversationId: String, userText: String, replyText: String) {
+        if (!autoTitling.add(conversationId)) return
+        viewModelScope.launch {
+            try {
+                val titlePrompt = "给下面的对话起一个简短标题：不超过12个字，只输出标题本身，" +
+                    "不要引号、句号或任何解释。\n用户：${userText.take(80)}\nAI：${replyText.take(120)}"
+                val title = StringBuilder()
+                chatRepository.sendChatStream(
+                    sessionId = conversationId,
+                    messages = listOf(ChatMessage(MessageRole.USER, titlePrompt)),
+                    model = currentConfig.value?.model ?: settings.value.model,
+                    maxTokens = 32,
+                    thinkingEnabled = false,
+                    temperature = 0.4f,
+                ).collect { chunk -> title.append(chunk) }
+                val cleaned = title.toString().trim()
+                    .trim('"', '“', '”', '「', '」', '。', '.', '！', '？')
+                    .take(24)
+                if (cleaned.isNotBlank()) {
+                    conversationRepository.setAutoTitle(conversationId, cleaned)
+                } else {
+                    conversationRepository.setAutoTitle(conversationId, userText.take(12))
+                }
+            } catch (_: Exception) {
+                // 失败降级：保留现有标题（首条用户消息截断），不再自动重试
+                runCatching { conversationRepository.setAutoTitle(conversationId, userText.take(12)) }
+            } finally {
+                autoTitling.remove(conversationId)
+            }
         }
     }
 
@@ -1204,6 +1249,20 @@ class ChatViewModel @Inject constructor(
     /** 23 轮：手动压缩摘要字数上限（100~1024）。 */
     fun setCompressSummaryLimit(value: Int) {
         viewModelScope.launch { settingsRepository.setCompressSummaryLimit(value) }
+    }
+
+    /** 24 轮：实验性毛玻璃开关。 */
+    fun setExperimentalGlass(value: Boolean) {
+        viewModelScope.launch { settingsRepository.setExperimentalGlass(value) }
+    }
+
+    /** 24 轮：置顶 / 取消置顶会话。 */
+    fun togglePinned(conversationId: String) {
+        viewModelScope.launch {
+            conversations.value.firstOrNull { it.id == conversationId }?.let {
+                conversationRepository.setPinned(conversationId, !it.pinned)
+            }
+        }
     }
 
     /**

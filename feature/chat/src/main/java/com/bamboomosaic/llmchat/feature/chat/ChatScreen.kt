@@ -227,6 +227,7 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
                 exportTarget = id
                 closeDrawer()
             },
+            onTogglePinned = viewModel::togglePinned,
             // 23 轮：会话内搜索——切到目标会话并唤起搜索栏
             onSearch = { id ->
                 viewModel.selectConversation(id)
@@ -296,8 +297,13 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
                 },
                 actions = {
                     // 21 轮：环形上下文进度按钮（替换原 Token 文本），点击打开统计面板
+                    // 24 轮：容量预警变色——>80% 橙色提醒，>95% 红色预警
                     val ringTrack = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
-                    val ringPrimary = MaterialTheme.colorScheme.primary
+                    val ringPrimary = when {
+                        contextUsage.fraction >= 0.95f -> MaterialTheme.colorScheme.error
+                        contextUsage.fraction >= 0.80f -> androidx.compose.ui.graphics.Color(0xFFFFB300)
+                        else -> MaterialTheme.colorScheme.primary
+                    }
                     Box(
                         modifier = Modifier
                             .size(36.dp)
@@ -535,6 +541,7 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
             onSetBackgroundImage = viewModel::setBackgroundImage,
             onSetLanguage = viewModel::setLanguage,
             onSetAutoCompressEnabled = viewModel::setAutoCompressEnabled,
+            onSetExperimentalGlass = viewModel::setExperimentalGlass,
             onRestoreConversation = viewModel::restoreConversation,
             onDeleteConversation = viewModel::deleteConversationPermanently,
             onDismiss = { showSettings = false },

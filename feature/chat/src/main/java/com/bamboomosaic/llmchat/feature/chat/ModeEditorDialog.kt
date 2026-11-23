@@ -168,9 +168,10 @@ fun ModeEditorDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
+        GlassDialogEffect()
         Surface(
             shape = RoundedCornerShape(24.dp),
-            color = MaterialTheme.colorScheme.surface,
+            color = glassSurfaceColor(),
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp),

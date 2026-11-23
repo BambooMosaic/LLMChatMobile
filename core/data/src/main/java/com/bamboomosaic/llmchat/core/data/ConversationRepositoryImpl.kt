@@ -93,7 +93,16 @@ class ConversationRepositoryImpl @Inject constructor(
     }
 
     override suspend fun renameConversation(conversationId: String, title: String) {
-        dao.updateTitle(conversationId, title.trim(), System.currentTimeMillis())
+        // 24 轮：手动改名走 setTitle，同时关闭自动标题标记
+        dao.setTitle(conversationId, title.trim(), System.currentTimeMillis())
+    }
+
+    override suspend fun setPinned(conversationId: String, pinned: Boolean) {
+        dao.setPinned(conversationId, if (pinned) 1 else 0)
+    }
+
+    override suspend fun setAutoTitle(conversationId: String, title: String) {
+        dao.setTitle(conversationId, title.take(24), System.currentTimeMillis())
     }
 
     override suspend fun setArchived(conversationId: String, archived: Boolean) {
@@ -179,6 +188,8 @@ class ConversationRepositoryImpl @Inject constructor(
         userPrompt = userPrompt,
         effectiveTemperature = effectiveTemperature,
         effectiveTopP = effectiveTopP,
+        pinned = pinned == 1,
+        titleAuto = titleAuto == 1,
     )
 
     private fun MessageEntity.toDomain() = ChatMessage(

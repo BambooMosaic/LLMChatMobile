@@ -39,6 +39,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.bamboomosaic.llmchat.core.domain.Conversation
 import com.bamboomosaic.llmchat.feature.chat.i18n.LocalAppStrings
+import com.bamboomosaic.llmchat.feature.chat.LocalExperimentalGlass
 
 /** 侧边栏：宽度为屏幕 2/3，顶部标题 + 新对话，列表，底部 Token 统计 + 设置。 */
 @OptIn(ExperimentalFoundationApi::class)
@@ -54,6 +55,8 @@ fun ConversationDrawer(
     onExport: (String) -> Unit,
     /** 23 轮：会话内搜索（长按菜单入口）。 */
     onSearch: (String) -> Unit = {},
+    /** 24 轮：置顶 / 取消置顶。 */
+    onTogglePinned: (String) -> Unit = {},
     onOpenTokenStats: () -> Unit,
     onOpenSettings: () -> Unit,
     /** 20 轮：平板/横屏常驻模式，宽度固定且不随屏幕比例变化。 */
@@ -68,7 +71,12 @@ fun ConversationDrawer(
 
     ModalDrawerSheet(
         modifier = Modifier.width(drawerWidth),
-        drawerContainerColor = MaterialTheme.colorScheme.surface,
+        // 24 轮：实验性毛玻璃——抽屉半透明（同窗口无真模糊，降级为半透明模拟）
+        drawerContainerColor = if (LocalExperimentalGlass.current) {
+            MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)
+        } else {
+            MaterialTheme.colorScheme.surface
+        },
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp)) {
@@ -97,7 +105,10 @@ fun ConversationDrawer(
             }
 
             LazyColumn(modifier = Modifier.weight(1f).padding(horizontal = 8.dp)) {
-                items(conversations, key = { it.id }) { conversation ->
+                // 24 轮：置顶组 + 普通组（DAO 已按 pinned DESC, updatedAt DESC 排序）
+                val pinnedList = conversations.filter { it.pinned }
+                val normalList = conversations.filter { !it.pinned }
+                val conversationRow: @Composable (Conversation) -> Unit = { conversation ->
                     val selected = conversation.id == currentId
                     Box {
                         Surface(
@@ -140,6 +151,14 @@ fun ConversationDrawer(
                                     menuTarget = null
                                 },
                             )
+                            // 24 轮：置顶 / 取消置顶
+                            DropdownMenuItem(
+                                text = { Text(if (conversation.pinned) s.unpinned else s.pinned) },
+                                onClick = {
+                                    onTogglePinned(conversation.id)
+                                    menuTarget = null
+                                },
+                            )
                             DropdownMenuItem(
                                 text = { Text(s.editPrompt) },
                                 onClick = {
@@ -171,6 +190,14 @@ fun ConversationDrawer(
                             )
                         }
                     }
+                }
+                if (pinnedList.isNotEmpty()) {
+                    item(key = "header-pinned") { SectionHeader(s.sectionPinned) }
+                    items(pinnedList, key = { "p-" + it.id }) { conversationRow(it) }
+                }
+                if (normalList.isNotEmpty()) {
+                    item(key = "header-all") { SectionHeader(s.sectionAll) }
+                    items(normalList, key = { it.id }) { conversationRow(it) }
                 }
             }
 
@@ -229,5 +256,17 @@ private fun RenameDialog(
         dismissButton = {
             TextButton(onClick = onDismiss) { Text(s.cancel) }
         },
+    )
+}
+
+
+/** 24 轮：侧边栏分组小标题。 */
+@Composable
+private fun SectionHeader(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(start = 8.dp, top = 8.dp, bottom = 2.dp),
     )
 }

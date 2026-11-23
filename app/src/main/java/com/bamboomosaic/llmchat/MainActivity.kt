@@ -61,7 +61,10 @@ class MainActivity : ComponentActivity() {
             // 首次启动标记（DataStore），引导完成后置 false
             val isFirstLaunch by settingsRepository.observeFirstLaunch().collectAsState(initial = true)
 
-            CompositionLocalProvider(LocalAppStrings provides stringsFor(settings.language)) {
+            CompositionLocalProvider(
+                LocalAppStrings provides stringsFor(settings.language),
+                com.bamboomosaic.llmchat.feature.chat.LocalExperimentalGlass provides settings.experimentalGlass,
+            ) {
                 LLMChatTheme(darkTheme = isDark, colorPreset = settings.colorPreset) {
                     when {
                         showSplash -> SplashScreen(onFinished = { showSplash = false })
