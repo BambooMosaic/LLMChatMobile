@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -68,7 +69,7 @@ import com.bamboomosaic.llmchat.core.domain.Conversation
 import com.bamboomosaic.llmchat.core.domain.Providers
 import com.bamboomosaic.llmchat.feature.chat.i18n.LocalAppStrings
 
-private enum class SettingsPage { HOME, API, PREFERENCES, APPEARANCE, LANGUAGE, OTHER, ARCHIVED, ABOUT }
+private enum class SettingsPage { HOME, API, PREFERENCES, APPEARANCE, LANGUAGE, OTHER, ARCHIVED, TUTORIAL, ABOUT }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -127,6 +128,7 @@ fun SettingsDialog(
         SettingsPage.PREFERENCES -> s.preferencesSetting
         SettingsPage.OTHER -> s.otherSettings
         SettingsPage.ARCHIVED -> s.archivedConversations
+        SettingsPage.TUTORIAL -> s.tutorialLabel
         SettingsPage.ABOUT -> s.about
     }
 
@@ -142,6 +144,7 @@ fun SettingsDialog(
                 onPreferences = { go(SettingsPage.PREFERENCES) },
                 onOther = { go(SettingsPage.OTHER) },
                 onArchived = { go(SettingsPage.ARCHIVED) },
+                onTutorial = { go(SettingsPage.TUTORIAL) },
                 onAbout = { go(SettingsPage.ABOUT) },
             )
 
@@ -189,6 +192,8 @@ fun SettingsDialog(
                 onRestore = onRestoreConversation,
                 onDelete = onDeleteConversation,
             )
+
+            SettingsPage.TUTORIAL -> TutorialPage()
 
             SettingsPage.ABOUT -> AboutPage(onDownloadLatest = onDownloadLatest)
         }
@@ -238,6 +243,7 @@ fun SettingsDialog(
                                 onPreferences = { go(SettingsPage.PREFERENCES) },
                                 onOther = { go(SettingsPage.OTHER) },
                                 onArchived = { go(SettingsPage.ARCHIVED) },
+                                onTutorial = { go(SettingsPage.TUTORIAL) },
                                 onAbout = { go(SettingsPage.ABOUT) },
                             )
                         }
@@ -324,6 +330,7 @@ private fun HomePage(
     onPreferences: () -> Unit,
     onOther: () -> Unit,
     onArchived: () -> Unit,
+    onTutorial: () -> Unit,
     onAbout: () -> Unit,
 ) {
     MenuRow(s.apiConfig, onApi, selected == SettingsPage.API)
@@ -332,6 +339,8 @@ private fun HomePage(
     MenuRow(s.preferencesSetting, onPreferences, selected == SettingsPage.PREFERENCES)
     MenuRow(s.otherSettings, onOther, selected == SettingsPage.OTHER)
     MenuRow(s.archivedConversations, onArchived, selected == SettingsPage.ARCHIVED)
+    // 26 轮：使用教程——置于【恢复对话】和【关于】之间
+    MenuRow(s.tutorialLabel, onTutorial, selected == SettingsPage.TUTORIAL)
     MenuRow(s.about, onAbout, selected == SettingsPage.ABOUT)
 }
 
@@ -925,9 +934,14 @@ private fun PreferencesPage(
 
     Spacer(Modifier.height(12.dp))
     // 19 轮：用户称呼（可选，DS 网页版模式不注入）
+    // 26 轮修复：本地草稿承接键入——直接绑定 DataStore 异步回流的 settings 值会滞后回填，光标跳到最前
+    var nicknameDraft by remember { mutableStateOf(settings.userNickname) }
     OutlinedTextField(
-        value = settings.userNickname,
-        onValueChange = { onSetUserNickname(it) },
+        value = nicknameDraft,
+        onValueChange = {
+            nicknameDraft = it
+            onSetUserNickname(it)
+        },
         label = { Text(s.userNicknameLabel) },
         singleLine = true,
         modifier = Modifier.fillMaxWidth(),
@@ -1306,6 +1320,63 @@ private fun AboutContent(versionName: String) {
 
     if (showCredits) {
         CreditsDialog(onDismiss = { showCredits = false })
+    }
+}
+
+/**
+ * 26 轮：使用教程二级页面——章节列表；点击章节唤起全屏弹窗渲染 Markdown 正文。
+ * 内容内置在 [TutorialContent]，随小版本迭代更新。
+ */
+@Composable
+private fun TutorialPage() {
+    var openChapter by remember { mutableStateOf<Int?>(null) }
+    Column {
+        TutorialContent.chapters.forEachIndexed { index, chapter ->
+            MenuRow("${index + 1}. ${chapter.title}", onClick = { openChapter = index })
+        }
+    }
+    openChapter?.let { index ->
+        val chapter = TutorialContent.chapters[index]
+        Dialog(
+            onDismissRequest = { openChapter = null },
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+        ) {
+            // 全屏弹窗：跟随玻璃档位（半透明/毛玻璃时为半透明表面+细边框），关闭时普通表面
+            GlassDialogShell(
+                modifier = Modifier.fillMaxSize(),
+                shape = RoundedCornerShape(0.dp),
+            ) {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                    ) {
+                        TextButton(onClick = { openChapter = null }) { Text("←") }
+                        Text(
+                            text = chapter.title,
+                            style = MaterialTheme.typography.titleMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(end = 8.dp),
+                        )
+                    }
+                    HorizontalDivider()
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .verticalScroll(rememberScrollState())
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                    ) {
+                        MarkdownText(content = chapter.markdown, enableHorizontalScroll = false)
+                        Spacer(Modifier.height(24.dp))
+                    }
+                }
+            }
+        }
     }
 }
 

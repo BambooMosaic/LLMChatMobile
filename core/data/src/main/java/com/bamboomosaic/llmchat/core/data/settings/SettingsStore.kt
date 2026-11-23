@@ -42,6 +42,8 @@ class SettingsStore @Inject constructor(
     private val autoCompressKey = booleanPreferencesKey("auto_compress_enabled")
     private val currentConfigIdKey = longPreferencesKey("current_config_id")
     private val firstLaunchKey = booleanPreferencesKey("is_first_launch")
+    // 26 轮：完成引导时记录的大版本段（major.minor，如 "0.6"）——大版本变化才重新引导
+    private val onboardVersionKey = stringPreferencesKey("onboard_version")
     private val defaultModeIdKey = stringPreferencesKey("default_mode_id")
     private val contextInjectionKey = booleanPreferencesKey("context_injection_enabled")
     private val tokenSavingKey = intPreferencesKey("token_saving_level")
@@ -283,11 +285,32 @@ class SettingsStore @Inject constructor(
         context.settingsDataStore.edit { it[currentConfigIdKey] = id }
     }
 
+    /**
+     * 26 轮：首次引导跟随大版本——从未完成过引导照常展示；已完成过引导的用户，
+     * 只在记录的大版本段（major.minor，如 "0.6"）与当前不同时重新引导，
+     * 小版本更新（0.6.4 → 0.6.5）不再触发。
+     * 老用户（26 轮前完成引导，无版本记录）首次运行时补记当前大版本段，0.7 起即可按大版本判断。
+     */
     override fun observeFirstLaunch(): Flow<Boolean> = context.settingsDataStore.data.map { prefs ->
-        prefs[firstLaunchKey] ?: true
+        if (prefs[firstLaunchKey] ?: true) return@map true
+        val stored = prefs[onboardVersionKey]
+        if (stored == null) {
+            context.settingsDataStore.edit { it[onboardVersionKey] = currentMajorMinor() }
+            return@map false
+        }
+        stored != currentMajorMinor()
     }
 
     override suspend fun setFirstLaunchDone() {
-        context.settingsDataStore.edit { it[firstLaunchKey] = false }
+        context.settingsDataStore.edit {
+            it[firstLaunchKey] = false
+            it[onboardVersionKey] = currentMajorMinor()
+        }
     }
+
+    /** 26 轮：当前版本的大版本段——versionName（如 "beta0.6.5"）取前两段数字，解析失败返回空串（视为同段）。 */
+    private fun currentMajorMinor(): String = runCatching {
+        val name = context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: ""
+        Regex("(\\d+)\\.(\\d+)").find(name)?.let { m -> "${m.groupValues[1]}.${m.groupValues[2]}" } ?: name
+    }.getOrDefault("")
 }
