@@ -120,8 +120,8 @@ data class AppSettings(
     val followSystemTheme: Boolean = false,
     /** 23 轮：手动压缩摘要的字数上限（100~1024，默认 400）。 */
     val compressSummaryLimit: Int = 400,
-    /** 24 轮：实验性毛玻璃 / 半透明磨砂材质（默认关；性能与兼容性自负）。 */
-    val experimentalGlass: Boolean = false,
+    /** 25 轮：玻璃材质档位 0=关 1=半透明 2=毛玻璃（毛玻璃需设备支持系统模糊）。 */
+    val glassLevel: Int = 0,
 ) {
     companion object {
         const val DEFAULT_MODEL = "deepseek-flash"
@@ -194,8 +194,8 @@ interface SettingsRepository {
     /** 23 轮：手动压缩摘要字数上限。 */
     suspend fun setCompressSummaryLimit(value: Int)
 
-    /** 24 轮：实验性毛玻璃开关。 */
-    suspend fun setExperimentalGlass(value: Boolean)
+    /** 25 轮：玻璃材质档位（0/1/2）。 */
+    suspend fun setGlassLevel(value: Int)
 
     /** 模式模板记忆：每个模式下用户最后一次填写的用户提示词。 */
     fun observeModeUserPrompt(modeId: String): kotlinx.coroutines.flow.Flow<String?>

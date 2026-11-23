@@ -27,11 +27,12 @@ import androidx.compose.ui.window.DialogWindowProvider
  * - 深色主题表面近乎不透明，避免模糊后的亮色内容压暗文字对比（纯黑预设尤其明显）。
  * 性能与兼容性自负：低端机开实时模糊可能掉帧，故做成默认关闭的实验性开关。
  */
-val LocalExperimentalGlass = staticCompositionLocalOf { false }
+/** 25 轮：玻璃材质档位（0=关 1=半透明 2=毛玻璃），全局由外观设置提供。 */
+val LocalGlassLevel = staticCompositionLocalOf { 0 }
 
 /** 24 轮：对当前 Compose Dialog 的窗口启用系统级背后模糊（Android 12+ 生效，其他设备跳过）。 */
 @Composable
-fun GlassDialogEffect(enabled: Boolean = LocalExperimentalGlass.current) {
+fun GlassDialogEffect(enabled: Boolean = LocalGlassLevel.current >= 2) {
     if (!enabled) return
     val view = LocalView.current
     DisposableEffect(enabled) {
@@ -69,7 +70,7 @@ fun GlassDialogShell(
     shape: Shape = RoundedCornerShape(24.dp),
     content: @Composable () -> Unit,
 ) {
-    val glass = LocalExperimentalGlass.current
+    val glass = LocalGlassLevel.current >= 1
     if (!glass) {
         Surface(
             modifier = modifier,
@@ -95,7 +96,18 @@ fun GlassDialogShell(
 @Composable
 fun glassSurfaceColor(): Color {
     val surface = MaterialTheme.colorScheme.surface
-    if (!LocalExperimentalGlass.current) return surface
+    if (LocalGlassLevel.current < 1) return surface
     val dark = surface.luminance() < 0.5f
     return surface.copy(alpha = if (dark) 0.94f else 0.86f)
+}
+
+/** 25 轮：设备是否支持系统级跨窗口模糊（毛玻璃档位可用性）。 */
+@Composable
+fun blurSupported(): Boolean {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return false
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    return runCatching {
+        (ctx.getSystemService(android.content.Context.WINDOW_SERVICE) as android.view.WindowManager)
+            .isCrossWindowBlurEnabled
+    }.getOrDefault(false)
 }

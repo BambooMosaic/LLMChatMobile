@@ -191,6 +191,12 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
     var showCompressConfirm by remember { mutableStateOf(false) }
     LaunchedEffect(messages.size, currentId) { viewModel.refreshContextUsage() }
 
+    // 25 轮：玻璃档位（抽屉 scrim 用）
+    val glassLevel = settings.glassLevel
+
+    // 25 轮：已有消息的会话集合（编辑提示词入口显隐）
+    val hasMessagesIds by viewModel.conversationsWithMessages.collectAsState()
+
     // 23 轮：会话内搜索（入口：侧边栏会话长按菜单）——过滤当前会话消息并高亮关键词
     var chatSearchActive by remember { mutableStateOf(false) }
     var chatSearchQuery by remember { mutableStateOf("") }
@@ -228,6 +234,7 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
                 closeDrawer()
             },
             onTogglePinned = viewModel::togglePinned,
+            hasMessagesIds = hasMessagesIds,
             // 23 轮：会话内搜索——切到目标会话并唤起搜索栏
             onSearch = { id ->
                 viewModel.selectConversation(id)
@@ -511,6 +518,9 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
         ModalNavigationDrawer(
             drawerState = drawerState,
             drawerContent = { drawerContent(false) },
+            // 25 轮：玻璃模式去掉打开抽屉时的黑色遮罩（视觉"阴影"的来源）
+            scrimColor = if (glassLevel >= 1) androidx.compose.ui.graphics.Color.Transparent
+            else androidx.compose.material3.DrawerDefaults.scrimColor,
         ) {
             Box(modifier = Modifier.fillMaxSize()) { chatBody(false) }
         }
@@ -541,7 +551,7 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
             onSetBackgroundImage = viewModel::setBackgroundImage,
             onSetLanguage = viewModel::setLanguage,
             onSetAutoCompressEnabled = viewModel::setAutoCompressEnabled,
-            onSetExperimentalGlass = viewModel::setExperimentalGlass,
+            onSetGlassLevel = viewModel::setGlassLevel,
             onRestoreConversation = viewModel::restoreConversation,
             onDeleteConversation = viewModel::deleteConversationPermanently,
             onDismiss = { showSettings = false },

@@ -52,7 +52,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.bamboomosaic.llmchat.core.domain.ApiConfig
 import com.bamboomosaic.llmchat.feature.chat.i18n.LocalAppStrings
-import com.bamboomosaic.llmchat.feature.chat.LocalExperimentalGlass
+import com.bamboomosaic.llmchat.feature.chat.LocalGlassLevel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -138,7 +138,7 @@ fun ChatInputBar(
         Surface(
             shape = RoundedCornerShape(24.dp),
             // 24 轮：实验性毛玻璃——输入栏半透明模拟（同窗口无真模糊）
-            color = if (LocalExperimentalGlass.current) {
+            color = if (LocalGlassLevel.current >= 1) {
                 MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.82f)
             } else {
                 MaterialTheme.colorScheme.surfaceContainerLow

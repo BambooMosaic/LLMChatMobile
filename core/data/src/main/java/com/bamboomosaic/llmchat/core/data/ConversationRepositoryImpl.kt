@@ -18,6 +18,9 @@ class ConversationRepositoryImpl @Inject constructor(
     override fun observeConversations(): Flow<List<Conversation>> =
         dao.observeConversations().map { list -> list.map { it.toDomain() } }
 
+    override fun observeConversationIdsWithMessages(): Flow<Set<String>> =
+        dao.observeConversationIdsWithMessages().map { it.toSet() }
+
     override fun observeArchivedConversations(): Flow<List<Conversation>> =
         dao.observeArchivedConversations().map { list -> list.map { it.toDomain() } }
 

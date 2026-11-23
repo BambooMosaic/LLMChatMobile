@@ -243,9 +243,11 @@ data class AppStrings(
     val unpinned: String,
     val sectionPinned: String,
     val sectionAll: String,
-    /** 24 轮：实验性功能（毛玻璃）。 */
-    val experimentalLabel: String,
+    /** 25 轮：玻璃材质三档滑块（外观设置）。 */
     val glassLabel: String,
+    val glassLevelOff: String,
+    val glassLevelTranslucent: String,
+    val glassLevelFrosted: String,
     val glassHint: String,
 ) {
 
@@ -468,9 +470,11 @@ private val ZhCN = AppStrings(
     unpinned = "取消置顶",
     sectionPinned = "置顶",
     sectionAll = "会话",
-    experimentalLabel = "实验性功能",
-    glassLabel = "毛玻璃效果",
-    glassHint = "半透明与背景模糊材质（Android 12+ 真模糊，旧系统降级半透明）。可能影响性能、帧率或兼容性，默认关闭",
+    glassLabel = "毛玻璃 / 半透明",
+    glassLevelOff = "关",
+    glassLevelTranslucent = "半透明",
+    glassLevelFrosted = "毛玻璃",
+    glassHint = "半透明：弹窗与抽屉半透明。毛玻璃：叠加系统背景模糊，需 Android 12+ 且系统允许跨窗口模糊，否则停留在半透明",
 )
 
 private val ZhTW = AppStrings(
@@ -676,9 +680,11 @@ private val ZhTW = AppStrings(
     unpinned = "取消置頂",
     sectionPinned = "置頂",
     sectionAll = "會話",
-    experimentalLabel = "實驗性功能",
-    glassLabel = "毛玻璃效果",
-    glassHint = "半透明與背景模糊材質（Android 12+ 真模糊，舊系統降級半透明）。可能影響效能、幀率或相容性，預設關閉",
+    glassLabel = "毛玻璃 / 半透明",
+    glassLevelOff = "關",
+    glassLevelTranslucent = "半透明",
+    glassLevelFrosted = "毛玻璃",
+    glassHint = "半透明：彈窗與抽屜半透明。毛玻璃：疊加系統背景模糊，需 Android 12+ 且系統允許跨視窗模糊，否則停留在半透明",
 )
 
 private val EnUS = AppStrings(
@@ -884,9 +890,11 @@ private val EnUS = AppStrings(
     unpinned = "Unpin",
     sectionPinned = "Pinned",
     sectionAll = "Chats",
-    experimentalLabel = "Experimental",
-    glassLabel = "Frosted glass",
-    glassHint = "Translucent & background blur material (real blur on Android 12+, fallback to translucency below). May affect performance, frame rate or compatibility; off by default",
+    glassLabel = "Glass material",
+    glassLevelOff = "Off",
+    glassLevelTranslucent = "Translucent",
+    glassLevelFrosted = "Frosted",
+    glassHint = "Translucent: dialogs and drawer become translucent. Frosted: adds system background blur — requires Android 12+ and cross-window blur allowed, otherwise stays translucent",
 )
 
 fun stringsFor(language: AppLanguage): AppStrings = when (language) {

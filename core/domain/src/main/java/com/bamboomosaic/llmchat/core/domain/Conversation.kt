@@ -32,6 +32,9 @@ interface ConversationRepository {
     /** 未归档的会话列表，按最近更新时间倒序。 */
     fun observeConversations(): Flow<List<Conversation>>
 
+    /** 25 轮：已有消息的会话 id 集合（用于隐藏「编辑提示词」入口）。 */
+    fun observeConversationIdsWithMessages(): Flow<Set<String>>
+
     /** 已归档的会话列表，按最近更新时间倒序。 */
     fun observeArchivedConversations(): Flow<List<Conversation>>
 

@@ -63,7 +63,7 @@ class MainActivity : ComponentActivity() {
 
             CompositionLocalProvider(
                 LocalAppStrings provides stringsFor(settings.language),
-                com.bamboomosaic.llmchat.feature.chat.LocalExperimentalGlass provides settings.experimentalGlass,
+                com.bamboomosaic.llmchat.feature.chat.LocalGlassLevel provides settings.glassLevel,
             ) {
                 LLMChatTheme(darkTheme = isDark, colorPreset = settings.colorPreset) {
                     when {

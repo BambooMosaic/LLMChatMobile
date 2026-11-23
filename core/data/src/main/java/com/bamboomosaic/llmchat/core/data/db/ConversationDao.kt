@@ -71,6 +71,10 @@ interface ConversationDao {
     @Query("SELECT * FROM messages WHERE conversationId = :conversationId ORDER BY timestamp ASC, id ASC")
     suspend fun getMessages(conversationId: String): List<MessageEntity>
 
+    /** 25 轮：已有消息的会话 id 集合（侧边栏「编辑提示词」入口的显隐依据）。 */
+    @Query("SELECT DISTINCT conversationId FROM messages")
+    fun observeConversationIdsWithMessages(): Flow<List<String>>
+
     @Insert
     suspend fun insertMessage(entity: MessageEntity): Long
 

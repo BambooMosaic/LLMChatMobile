@@ -90,7 +90,7 @@ fun SettingsDialog(
     onSetSearchEnabled: (Boolean) -> Unit,
     onSetUserNickname: (String) -> Unit,
     onSetCompressSummaryLimit: (Int) -> Unit,
-    onSetExperimentalGlass: (Boolean) -> Unit,
+    onSetGlassLevel: (Int) -> Unit,
     onDownloadLatest: () -> Unit,
     onSetColorPreset: (String) -> Unit,
     onSetFollowSystemTheme: (Boolean) -> Unit,
@@ -164,6 +164,8 @@ fun SettingsDialog(
                             colorPreset = settings.colorPreset,
                             followSystemTheme = settings.followSystemTheme,
                             onSetFollowSystemTheme = onSetFollowSystemTheme,
+                            glassLevel = settings.glassLevel,
+                            onSetGlassLevel = onSetGlassLevel,
                             onSetColorPreset = onSetColorPreset,
                             backgroundImageUri = settings.backgroundImageUri,
                             onSetBackgroundImage = onSetBackgroundImage,
@@ -180,7 +182,6 @@ fun SettingsDialog(
                 onSetSearchEnabled = onSetSearchEnabled,
                 onSetAutoCompressEnabled = onSetAutoCompressEnabled,
                 onSetCompressSummaryLimit = onSetCompressSummaryLimit,
-                onSetExperimentalGlass = onSetExperimentalGlass,
             )
 
             SettingsPage.ARCHIVED -> ArchivedPage(
@@ -799,7 +800,6 @@ private fun OtherPage(
     onSetSearchEnabled: (Boolean) -> Unit,
     onSetAutoCompressEnabled: (Boolean) -> Unit,
     onSetCompressSummaryLimit: (Int) -> Unit,
-    onSetExperimentalGlass: (Boolean) -> Unit,
 ) {
     val s = LocalAppStrings.current
 
@@ -895,29 +895,7 @@ private fun OtherPage(
         )
     }
 
-    // 24 轮：实验性功能区域（毛玻璃，默认关）
-    HorizontalDivider()
-    Spacer(Modifier.height(12.dp))
-    Text(s.experimentalLabel, style = MaterialTheme.typography.bodyLarge)
-    Spacer(Modifier.height(8.dp))
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Text(s.glassLabel, style = MaterialTheme.typography.bodyLarge)
-        Switch(
-            checked = settings.experimentalGlass,
-            onCheckedChange = onSetExperimentalGlass,
-        )
-    }
-    Text(
-        text = s.glassHint,
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
 }
-
 /** 偏好设置：环境注入开关、用户称呼、新对话默认模式。 */
 @Composable
 private fun PreferencesPage(
@@ -1052,6 +1030,8 @@ private fun AppearancePage(
     colorPreset: String,
     followSystemTheme: Boolean,
     onSetFollowSystemTheme: (Boolean) -> Unit,
+    glassLevel: Int,
+    onSetGlassLevel: (Int) -> Unit,
     onSetColorPreset: (String) -> Unit,
     backgroundImageUri: String,
     onSetBackgroundImage: (String) -> Unit,
@@ -1086,6 +1066,24 @@ private fun AppearancePage(
     }
     Text(
         text = s.followSystemHint,
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+
+    Spacer(Modifier.height(16.dp))
+    // 25 轮：玻璃材质三档滑块（关 / 半透明 / 毛玻璃）——设备不支持系统模糊时毛玻璃档锁死
+    val blurOk = com.bamboomosaic.llmchat.feature.chat.blurSupported()
+    val maxGlass = if (blurOk) 2 else 1
+    Text(s.glassLabel, style = MaterialTheme.typography.bodyLarge)
+    Spacer(Modifier.height(8.dp))
+    LevelSlider(
+        levels = listOf(s.glassLevelOff, s.glassLevelTranslucent, s.glassLevelFrosted),
+        selectedIndex = glassLevel.coerceIn(0, maxGlass),
+        onSelect = { onSetGlassLevel(it.coerceIn(0, maxGlass)) },
+    )
+    Spacer(Modifier.height(4.dp))
+    Text(
+        text = s.glassHint,
         style = MaterialTheme.typography.labelSmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )

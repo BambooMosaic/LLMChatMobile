@@ -761,7 +761,10 @@ class ChatViewModel @Inject constructor(
             _isGenerating.value = false
 
             // 24 轮：首轮回复落库后自动生成简短标题（用户手动改名过的会话跳过；失败保留原标题不再重试）
-            if (savedReplyId > 0 && conversations.value.firstOrNull { it.id == conversationId }?.titleAuto == true) {
+            // 25 轮：省 Token 最大（3）/ 终极（4）档位禁用自动标题
+            if (savedReplyId > 0 && currentSettings.tokenSavingLevel < 3 &&
+                conversations.value.firstOrNull { it.id == conversationId }?.titleAuto == true
+            ) {
                 generateAutoTitle(conversationId, userTextForTitle, accumulated)
             }
         }
@@ -851,6 +854,11 @@ class ChatViewModel @Inject constructor(
     ) { list, id, draft ->
         list.firstOrNull { it.id == id }?.userPrompt ?: draft
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    /** 25 轮：已有消息的会话 id 集合（侧边栏「编辑提示词」入口显隐）。 */
+    val conversationsWithMessages: StateFlow<Set<String>> =
+        conversationRepository.observeConversationIdsWithMessages()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
 
     /** 当前会话是否为临时空白（未入库）。 */
     val isDraftConversation: StateFlow<Boolean> = combine(
@@ -1251,9 +1259,9 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch { settingsRepository.setCompressSummaryLimit(value) }
     }
 
-    /** 24 轮：实验性毛玻璃开关。 */
-    fun setExperimentalGlass(value: Boolean) {
-        viewModelScope.launch { settingsRepository.setExperimentalGlass(value) }
+    /** 25 轮：玻璃材质档位（0 关 / 1 半透明 / 2 毛玻璃）。 */
+    fun setGlassLevel(value: Int) {
+        viewModelScope.launch { settingsRepository.setGlassLevel(value) }
     }
 
     /** 24 轮：置顶 / 取消置顶会话。 */

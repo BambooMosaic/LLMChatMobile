@@ -40,7 +40,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.bamboomosaic.llmchat.core.domain.Conversation
 import com.bamboomosaic.llmchat.feature.chat.i18n.LocalAppStrings
-import com.bamboomosaic.llmchat.feature.chat.LocalExperimentalGlass
+import com.bamboomosaic.llmchat.feature.chat.LocalGlassLevel
 
 /** 侧边栏：宽度为屏幕 2/3，顶部标题 + 新对话，列表，底部 Token 统计 + 设置。 */
 @OptIn(ExperimentalFoundationApi::class)
@@ -58,6 +58,8 @@ fun ConversationDrawer(
     onSearch: (String) -> Unit = {},
     /** 24 轮：置顶 / 取消置顶。 */
     onTogglePinned: (String) -> Unit = {},
+    /** 25 轮：已有消息的会话 id 集合（有消息时隐藏「编辑提示词」入口）。 */
+    hasMessagesIds: Set<String> = emptySet(),
     onOpenTokenStats: () -> Unit,
     onOpenSettings: () -> Unit,
     /** 20 轮：平板/横屏常驻模式，宽度固定且不随屏幕比例变化。 */
@@ -71,7 +73,7 @@ fun ConversationDrawer(
     var menuTarget by remember { mutableStateOf<Conversation?>(null) }
 
     ModalDrawerSheet(
-        modifier = if (LocalExperimentalGlass.current) {
+        modifier = if (LocalGlassLevel.current >= 1) {
             // 24 轮：毛玻璃模式抽屉加细边框（无系统阴影可依赖）
             Modifier.width(drawerWidth).border(
                 width = 0.7.dp,
@@ -81,17 +83,22 @@ fun ConversationDrawer(
         } else {
             Modifier.width(drawerWidth)
         },
-        drawerContainerColor = if (LocalExperimentalGlass.current) {
+        drawerContainerColor = if (LocalGlassLevel.current >= 1) {
             MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)
         } else {
             MaterialTheme.colorScheme.surface
         },
+        // 25 轮：玻璃模式 tonal elevation 归零——去掉色调叠加（半透明色不被混合），视觉上无阴影
+        drawerTonalElevation = if (LocalGlassLevel.current >= 1) 0.dp
+        else androidx.compose.material3.DrawerDefaults.ModalDrawerElevation,
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp)) {
                 Text(
                     text = s.appName,
                     style = MaterialTheme.typography.titleLarge,
+                    // 25 轮：显式 onSurface——玻璃半透明模式下 LocalContentColor 解析不稳定会变黑字
+                    color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.padding(bottom = 12.dp),
                 )
                 Button(
@@ -152,6 +159,20 @@ fun ConversationDrawer(
                         DropdownMenu(
                             expanded = menuTarget?.id == conversation.id,
                             onDismissRequest = { menuTarget = null },
+                            // 25 轮：跟随玻璃档位——半透明容器 + 细边框
+                            containerColor = if (LocalGlassLevel.current >= 1) {
+                                MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.9f)
+                            } else {
+                                MaterialTheme.colorScheme.surfaceContainerLow
+                            },
+                            border = if (LocalGlassLevel.current >= 1) {
+                                androidx.compose.foundation.BorderStroke(
+                                    width = 0.7.dp,
+                                    color = MaterialTheme.colorScheme.outlineVariant,
+                                )
+                            } else {
+                                null
+                            },
                         ) {
                             DropdownMenuItem(
                                 text = { Text(s.rename) },
@@ -168,13 +189,16 @@ fun ConversationDrawer(
                                     menuTarget = null
                                 },
                             )
-                            DropdownMenuItem(
-                                text = { Text(s.editPrompt) },
-                                onClick = {
-                                    onEditPrompt(conversation.id)
-                                    menuTarget = null
-                                },
-                            )
+                            // 25 轮：已有消息的会话禁止编辑提示词（空会话保留入口）
+                            if (conversation.id !in hasMessagesIds) {
+                                DropdownMenuItem(
+                                    text = { Text(s.editPrompt) },
+                                    onClick = {
+                                        onEditPrompt(conversation.id)
+                                        menuTarget = null
+                                    },
+                                )
+                            }
                             DropdownMenuItem(
                                 text = { Text(s.export) },
                                 onClick = {
