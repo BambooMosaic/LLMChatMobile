@@ -30,15 +30,27 @@ fun GlassDialogEffect(enabled: Boolean = LocalExperimentalGlass.current) {
         val canBlur = window != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
         val originalDim = window?.attributes?.dimAmount ?: 0f
         if (window != null && canBlur) {
-            // 窗口背景透明 + 背景模糊半径，让宿主窗口内容模糊透出
+            // 窗口背景透明，让宿主内容透出
             window.setBackgroundDrawableResource(android.R.color.transparent)
-            window.setBackgroundBlurRadius(90)
-            window.setDimAmount(0.05f)
+            // 关键：半透明内容窗口要用 LayoutParams.blurBehindRadius（整窗背后模糊），
+            // setBackgroundBlurRadius 只模糊"背景 drawable 区域"，透明背景下等于没模糊
+            val attrs = window.attributes
+            attrs.blurBehindRadius = 90
+            attrs.dimAmount = 0.05f
+            window.attributes = attrs
+            runCatching {
+                val wm = view.context.getSystemService(android.content.Context.WINDOW_SERVICE)
+                    as android.view.WindowManager
+                println("[Glass] crossWindowBlurEnabled=" + wm.isCrossWindowBlurEnabled)
+            }
         }
         onDispose {
             if (window != null && canBlur) {
+                val attrs = window.attributes
+                attrs.blurBehindRadius = 0
+                attrs.dimAmount = originalDim
+                window.attributes = attrs
                 window.setBackgroundBlurRadius(0)
-                window.setDimAmount(originalDim)
             }
         }
     }

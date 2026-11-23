@@ -57,6 +57,7 @@ fun TokenStatsScreen(
     Surface(
         shape = RoundedCornerShape(24.dp),
         color = glassSurfaceColor(),
+            contentColor = MaterialTheme.colorScheme.onSurface,
         modifier = Modifier
             .fillMaxWidth(0.94f)
             .heightIn(max = 560.dp),

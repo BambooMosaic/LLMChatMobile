@@ -142,7 +142,8 @@ fun ChatInputBar(
                 MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.82f)
             } else {
                 MaterialTheme.colorScheme.surfaceContainerLow
-         },
+            },
+            contentColor = MaterialTheme.colorScheme.onSurface,
             border = androidx.compose.foundation.BorderStroke(
                 width = 1.dp,
                 color = MaterialTheme.colorScheme.outlineVariant,

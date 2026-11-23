@@ -172,6 +172,7 @@ fun ModeEditorDialog(
         Surface(
             shape = RoundedCornerShape(24.dp),
             color = glassSurfaceColor(),
+            contentColor = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp),

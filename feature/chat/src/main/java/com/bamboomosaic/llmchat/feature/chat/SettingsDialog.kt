@@ -198,6 +198,7 @@ fun SettingsDialog(
         Surface(
             shape = RoundedCornerShape(24.dp),
             color = glassSurfaceColor(),
+            contentColor = MaterialTheme.colorScheme.onSurface,
             // 20 轮：高度固定为屏幕 75%——页面切换不再因内容高度变化而抖动
             modifier = Modifier
                 .fillMaxWidth(if (wide) 0.85f else 0.94f)
