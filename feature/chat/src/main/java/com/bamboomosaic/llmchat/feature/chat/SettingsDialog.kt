@@ -1325,7 +1325,7 @@ private fun AboutContent(versionName: String) {
 
 /**
  * 26 轮：使用教程二级页面——章节列表；点击章节唤起全屏弹窗渲染 Markdown 正文。
- * 内容内置在 [TutorialContent]，随小版本迭代更新。
+ * 内容内置在 [TutorialContent]，新增功能或 UI 大改时更新。
  */
 @Composable
 private fun TutorialPage() {
@@ -1341,10 +1341,12 @@ private fun TutorialPage() {
             onDismissRequest = { openChapter = null },
             properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
         ) {
-            // 全屏弹窗：跟随玻璃档位（半透明/毛玻璃时为半透明表面+细边框），关闭时普通表面
-            GlassDialogShell(
+            // 全屏弹窗：不透明表面（教程正文以阅读为主，不跟玻璃档位）
+            Surface(
                 modifier = Modifier.fillMaxSize(),
                 shape = RoundedCornerShape(0.dp),
+                color = MaterialTheme.colorScheme.surface,
+                contentColor = MaterialTheme.colorScheme.onSurface,
             ) {
                 Column(modifier = Modifier.fillMaxSize()) {
                     Row(

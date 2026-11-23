@@ -2,7 +2,7 @@ package com.bamboomosaic.llmchat.feature.chat
 
 /**
  * 26 轮：内置【使用教程】正文（设置页入口，章节列表 + 全屏 Markdown 渲染）。
- * 更新策略：教程内容跟随每一个小版本迭代更新（与首次引导的"只跟随大版本"策略区分开）。
+ * 更新策略：加入新功能或大改 UI 时更新教程内容（与首次引导的"只跟随大版本"策略区分开）。
  * 目标受众：小白 / AI 新手，语言通俗。
  */
 object TutorialContent {
