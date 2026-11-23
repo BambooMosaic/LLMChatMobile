@@ -9,6 +9,8 @@ import androidx.compose.ui.graphics.Color
 /**
  * 21 轮：UI 配色预设——深浅两套分组，预设避开主紫色系。
  * default = 原版配色；ocean 深海蓝 / forest 森绿 / ember 琥珀 为 21 轮新增（深浅同名字两组）。
+ * 22 轮：改为「浅色预设 x6 / 深色预设 x6」两组 12 套，预设 id 自带深浅前缀（light_ / dark_），
+ * 选预设即同时确定明暗模式（浅色/深色模式开关取消）。
  */
 private data class Palette(
     val primary: Color,
@@ -61,6 +63,26 @@ private val darkEmber = Palette(
     surfaceContainerHigh = Color(0xFF34281C), outlineVariant = Color(0xFF4A3A2A),
 )
 
+/** 22 轮：纯黑——UI 全黑，按钮白色。 */
+private val darkBlack = Palette(
+    primary = Color(0xFFF5F5F5), onPrimary = Color(0xFF0A0A0A),
+    primaryContainer = Color(0xFFF5F5F5), onPrimaryContainer = Color(0xFF0A0A0A),
+    background = Color(0xFF000000), surface = Color(0xFF0A0A0A),
+    surfaceVariant = Color(0xFF161616), onSurfaceVariant = Color(0xFFB5B5B5),
+    surfaceContainerLow = Color(0xFF0D0D0D), surfaceContainer = Color(0xFF111111),
+    surfaceContainerHigh = Color(0xFF181818), outlineVariant = Color(0xFF2C2C2C),
+)
+
+/** 22 轮：深红。 */
+private val darkRed = Palette(
+    primary = Color(0xFFFF8A8A), onPrimary = Color(0xFF2A0A0F),
+    primaryContainer = Color(0xFF4A1B22), onPrimaryContainer = Color(0xFFFFD9D9),
+    background = Color(0xFF140A0C), surface = Color(0xFF1F1013),
+    surfaceVariant = Color(0xFF2A1519), onSurfaceVariant = Color(0xFFD0B9BC),
+    surfaceContainerLow = Color(0xFF180D10), surfaceContainer = Color(0xFF1F1013),
+    surfaceContainerHigh = Color(0xFF271518), outlineVariant = Color(0xFF3E2226),
+)
+
 private val lightDefault = Palette(
     primary = Color(0xFF6C5CE7), onPrimary = Color.White,
     primaryContainer = Color(0xFFE6E1FF), onPrimaryContainer = Color(0xFF1F1A4D),
@@ -97,6 +119,26 @@ private val lightSand = Palette(
     surfaceContainerHigh = Color(0xFFF3EDE4), outlineVariant = Color(0xFFE5DDD0),
 )
 
+/** 22 轮：浅灰——背景与菜单纯白，仅控件按钮为灰度。 */
+private val lightGray = Palette(
+    primary = Color(0xFF636363), onPrimary = Color.White,
+    primaryContainer = Color(0xFFE8E8E8), onPrimaryContainer = Color(0xFF2A2A2A),
+    background = Color(0xFFFFFFFF), surface = Color(0xFFFFFFFF),
+    surfaceVariant = Color(0xFFF0F0F0), onSurfaceVariant = Color(0xFF4A4A4A),
+    surfaceContainerLow = Color(0xFFFAFAFA), surfaceContainer = Color(0xFFF5F5F5),
+    surfaceContainerHigh = Color(0xFFEBEBEB), outlineVariant = Color(0xFFD9D9D9),
+)
+
+/** 22 轮：浅粉——菜单 UI 跟随主题色（粉）。 */
+private val lightPink = Palette(
+    primary = Color(0xFFD9648C), onPrimary = Color.White,
+    primaryContainer = Color(0xFFFFE3EC), onPrimaryContainer = Color(0xFF4A1226),
+    background = Color(0xFFFFF7FA), surface = Color(0xFFFFFBFD),
+    surfaceVariant = Color(0xFFFCE7EF), onSurfaceVariant = Color(0xFF5C4149),
+    surfaceContainerLow = Color(0xFFFEF8FB), surfaceContainer = Color(0xFFFDF1F6),
+    surfaceContainerHigh = Color(0xFFFBE7EF), outlineVariant = Color(0xFFF2D5DF),
+)
+
 private fun darkColors(p: Palette) = darkColorScheme(
     primary = p.primary,
     onPrimary = p.onPrimary,
@@ -110,6 +152,9 @@ private fun darkColors(p: Palette) = darkColorScheme(
     onSurface = Color(0xFFEDEDED),
     surfaceVariant = p.surfaceVariant,
     onSurfaceVariant = p.onSurfaceVariant,
+    // 22 轮：surfaceTint 固定为中性表面色——默认随 primary，非默认配色下
+    // 弹出菜单等带 tonalElevation 的表面会被主色"染色"（阴影/背景偏色的根因）
+    surfaceTint = p.surfaceContainer,
     surfaceContainerLowest = p.background,
     surfaceContainerLow = p.surfaceContainerLow,
     surfaceContainer = p.surfaceContainer,
@@ -134,6 +179,7 @@ private fun lightColors(p: Palette) = lightColorScheme(
     onSurface = Color(0xFF1B1B1F),
     surfaceVariant = p.surfaceVariant,
     onSurfaceVariant = p.onSurfaceVariant,
+    surfaceTint = p.surfaceContainer,
     surfaceContainerLowest = Color(0xFFFFFFFF),
     surfaceContainerLow = p.surfaceContainerLow,
     surfaceContainer = p.surfaceContainer,
@@ -145,20 +191,54 @@ private fun lightColors(p: Palette) = lightColorScheme(
     onErrorContainer = Color(0xFF410E0B),
 )
 
-/** 应用主题：深色/浅色即时切换，按 [colorPreset] 选择配色预设。 */
+/** 22 轮：设置页色块的预览色（与上方调色板同源，避免 UI 反向 import 私有调色板）。 */
+data class PresetOption(val id: String, val swatchBg: Color, val swatchPrimary: Color)
+
+val lightColorPresetOptions = listOf(
+    PresetOption("light_default", Color(0xFFF2F2F2), Color(0xFF6C5CE7)),
+    PresetOption("light_blue", Color(0xFFDCEAFB), Color(0xFF3A6FA8)),
+    PresetOption("light_green", Color(0xFFD8F0EB), Color(0xFF2E8B7F)),
+    PresetOption("light_yellow", Color(0xFFF5E9D5), Color(0xFFA87832)),
+    PresetOption("light_gray", Color(0xFFFFFFFF), Color(0xFF636363)),
+    PresetOption("light_pink", Color(0xFFFFF1F5), Color(0xFFD9648C)),
+)
+
+val darkColorPresetOptions = listOf(
+    PresetOption("dark_default", Color(0xFF272727), Color(0xFF9B8CFF)),
+    PresetOption("dark_blue", Color(0xFF16213A), Color(0xFF7FB2FF)),
+    PresetOption("dark_green", Color(0xFF16241C), Color(0xFF8FD6A8)),
+    PresetOption("dark_brown", Color(0xFF2A2016), Color(0xFFFFB27F)),
+    PresetOption("dark_black", Color(0xFF050505), Color(0xFFF5F5F5)),
+    PresetOption("dark_red", Color(0xFF1F1013), Color(0xFFFF8A8A)),
+)
+
+/** 应用主题：按 [colorPreset] 的 light_/dark_ 前缀同时决定明暗与配色（22 轮起）。 */
 @Composable
 fun LLMChatTheme(
     darkTheme: Boolean,
-    colorPreset: String = "default",
+    colorPreset: String = "dark_default",
     content: @Composable () -> Unit,
 ) {
     val dark = mapOf(
+        "dark_default" to darkDefault,
+        "dark_blue" to darkOcean,
+        "dark_green" to darkForest,
+        "dark_brown" to darkEmber,
+        "dark_black" to darkBlack,
+        "dark_red" to darkRed,
+        // 21 轮旧 id 兜底（SettingsStore 已做迁移，历史安装升级后不会再出现）
         "default" to darkDefault,
         "blue" to darkOcean,
         "green" to darkForest,
         "warm" to darkEmber,
     )
     val light = mapOf(
+        "light_default" to lightDefault,
+        "light_blue" to lightCloud,
+        "light_green" to lightMint,
+        "light_yellow" to lightSand,
+        "light_gray" to lightGray,
+        "light_pink" to lightPink,
         "default" to lightDefault,
         "blue" to lightCloud,
         "green" to lightMint,

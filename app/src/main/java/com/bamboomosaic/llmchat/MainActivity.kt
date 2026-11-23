@@ -4,7 +4,6 @@ import android.os.Bundle
 import android.view.View
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -16,7 +15,6 @@ import androidx.navigation.compose.rememberNavController
 import com.bamboomosaic.llmchat.core.domain.AppLanguage
 import com.bamboomosaic.llmchat.core.domain.AppSettings
 import com.bamboomosaic.llmchat.core.domain.SettingsRepository
-import com.bamboomosaic.llmchat.core.domain.ThemeMode
 import com.bamboomosaic.llmchat.feature.chat.OnboardingScreen
 import com.bamboomosaic.llmchat.feature.chat.SplashScreen
 import com.bamboomosaic.llmchat.feature.chat.i18n.LocalAppStrings
@@ -40,14 +38,13 @@ class MainActivity : ComponentActivity() {
                     model = AppSettings.DEFAULT_MODEL,
                     baseUrl = AppSettings.DEFAULT_BASE_URL,
                     apiKey = AppSettings.DEFAULT_API_KEY,
-                ),
+                    // 占位值与默认主题一致（深色），避免首帧闪白
+                    colorPreset = "dark_default",
+                )
             )
 
-            val isDark = when (settings.themeMode) {
-                ThemeMode.DARK -> true
-                ThemeMode.LIGHT -> false
-                ThemeMode.SYSTEM -> isSystemInDarkTheme()
-            }
+            // 22 轮：明暗由配色预设的 light_/dark_ 前缀决定（浅色/深色模式开关已取消）
+            val isDark = settings.colorPreset.startsWith("dark")
 
             // 状态栏图标颜色跟随明暗模式
             LaunchedEffect(isDark) {

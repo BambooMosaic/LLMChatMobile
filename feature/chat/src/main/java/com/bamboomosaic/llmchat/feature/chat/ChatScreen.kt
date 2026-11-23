@@ -472,7 +472,6 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
             onDownloadLatest = viewModel::downloadLatestApk,
             onSetColorPreset = viewModel::setColorPreset,
             onSetBackgroundImage = viewModel::setBackgroundImage,
-            onSetThemeMode = viewModel::setThemeMode,
             onSetLanguage = viewModel::setLanguage,
             onSetAutoCompressEnabled = viewModel::setAutoCompressEnabled,
             onRestoreConversation = viewModel::restoreConversation,
@@ -605,8 +604,8 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
     exportTarget?.let { conversationId ->
         if (conversationId == currentId) {
             ExportFormatDialog(
-                onSelect = { markdown ->
-                    viewModel.exportConversation(markdown)
+                onSelect = { format ->
+                    viewModel.exportConversation(format)
                     exportTarget = null
                 },
                 onDismiss = { exportTarget = null },
@@ -616,7 +615,7 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
             viewModel.selectConversation(conversationId)
             exportTarget = null
             // 等切换完成后导出（简化：直接导出，因为 getMessages 按 id 读库，不依赖 UI 状态）
-            viewModel.exportConversationBy(conversationId, markdown = true)
+            viewModel.exportConversationBy(conversationId, format = "md")
         }
     }
 
@@ -664,10 +663,10 @@ private fun PromptEditDialog(
     )
 }
 
-/** 导出格式选择弹窗。 */
+/** 导出格式选择弹窗（Markdown / 纯文本 / JSON）。 */
 @Composable
 private fun ExportFormatDialog(
-    onSelect: (Boolean) -> Unit,
+    onSelect: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val s = LocalAppStrings.current
@@ -677,16 +676,23 @@ private fun ExportFormatDialog(
         text = {
             Column {
                 androidx.compose.material3.TextButton(
-                    onClick = { onSelect(true) },
+                    onClick = { onSelect("md") },
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Text(s.exportMarkdown)
                 }
                 androidx.compose.material3.TextButton(
-                    onClick = { onSelect(false) },
+                    onClick = { onSelect("txt") },
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Text(s.exportPlainText)
+                }
+                // 22 轮：会话导出 JSON（与模式导出格式一致，含模式信息与对话记录）
+                androidx.compose.material3.TextButton(
+                    onClick = { onSelect("json") },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(s.exportJson)
                 }
             }
         },

@@ -47,6 +47,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -65,7 +66,6 @@ import com.bamboomosaic.llmchat.core.domain.AppLanguage
 import com.bamboomosaic.llmchat.core.domain.AppSettings
 import com.bamboomosaic.llmchat.core.domain.Conversation
 import com.bamboomosaic.llmchat.core.domain.Providers
-import com.bamboomosaic.llmchat.core.domain.ThemeMode
 import com.bamboomosaic.llmchat.feature.chat.i18n.LocalAppStrings
 
 private enum class SettingsPage { HOME, API, PREFERENCES, APPEARANCE, LANGUAGE, OTHER, ARCHIVED, ABOUT }
@@ -92,7 +92,6 @@ fun SettingsDialog(
     onDownloadLatest: () -> Unit,
     onSetColorPreset: (String) -> Unit,
     onSetBackgroundImage: (String) -> Unit,
-    onSetThemeMode: (ThemeMode) -> Unit,
     onSetLanguage: (AppLanguage) -> Unit,
     onSetAutoCompressEnabled: (Boolean) -> Unit,
     onRestoreConversation: (String) -> Unit,
@@ -103,6 +102,19 @@ fun SettingsDialog(
     // 20 轮：平板/横屏（宽屏）双栏布局；手机保持单栏
     val wide = LocalConfiguration.current.screenWidthDp >= 600
     var page by remember { mutableStateOf(if (wide) SettingsPage.API else SettingsPage.HOME) }
+    // 22 轮：切页动画飞行锁——过渡期间忽略新的切页点击，修复快速连点导致页面"卡没消失"
+    var pageAnimating by remember { mutableStateOf(false) }
+    fun go(p: SettingsPage) {
+        if (pageAnimating || p == page) return
+        pageAnimating = true
+        page = p
+    }
+    LaunchedEffect(page) {
+        if (pageAnimating) {
+            kotlinx.coroutines.delay(240)
+            pageAnimating = false
+        }
+    }
 
     val title = when (page) {
         SettingsPage.HOME -> s.settings
@@ -121,13 +133,13 @@ fun SettingsDialog(
             SettingsPage.HOME -> HomePage(
                 s = s,
                 selected = if (wide) p else null,
-                onApi = { page = SettingsPage.API },
-                onAppearance = { page = SettingsPage.APPEARANCE },
-                onLanguage = { page = SettingsPage.LANGUAGE },
-                onPreferences = { page = SettingsPage.PREFERENCES },
-                onOther = { page = SettingsPage.OTHER },
-                onArchived = { page = SettingsPage.ARCHIVED },
-                onAbout = { page = SettingsPage.ABOUT },
+                onApi = { go(SettingsPage.API) },
+                onAppearance = { go(SettingsPage.APPEARANCE) },
+                onLanguage = { go(SettingsPage.LANGUAGE) },
+                onPreferences = { go(SettingsPage.PREFERENCES) },
+                onOther = { go(SettingsPage.OTHER) },
+                onArchived = { go(SettingsPage.ARCHIVED) },
+                onAbout = { go(SettingsPage.ABOUT) },
             )
 
             SettingsPage.API -> ApiConfigListPage(
@@ -146,8 +158,6 @@ fun SettingsDialog(
             )
 
                         SettingsPage.APPEARANCE -> AppearancePage(
-                            themeMode = settings.themeMode,
-                            onSetThemeMode = onSetThemeMode,
                             colorPreset = settings.colorPreset,
                             onSetColorPreset = onSetColorPreset,
                             backgroundImageUri = settings.backgroundImageUri,
@@ -216,13 +226,13 @@ fun SettingsDialog(
                             HomePage(
                                 s = s,
                                 selected = page.takeIf { it != SettingsPage.HOME },
-                                onApi = { page = SettingsPage.API },
-                                onAppearance = { page = SettingsPage.APPEARANCE },
-                                onLanguage = { page = SettingsPage.LANGUAGE },
-                                onPreferences = { page = SettingsPage.PREFERENCES },
-                                onOther = { page = SettingsPage.OTHER },
-                                onArchived = { page = SettingsPage.ARCHIVED },
-                                onAbout = { page = SettingsPage.ABOUT },
+                                onApi = { go(SettingsPage.API) },
+                                onAppearance = { go(SettingsPage.APPEARANCE) },
+                                onLanguage = { go(SettingsPage.LANGUAGE) },
+                                onPreferences = { go(SettingsPage.PREFERENCES) },
+                                onOther = { go(SettingsPage.OTHER) },
+                                onArchived = { go(SettingsPage.ARCHIVED) },
+                                onAbout = { go(SettingsPage.ABOUT) },
                             )
                         }
                         Box(
@@ -251,7 +261,7 @@ fun SettingsDialog(
                             .padding(horizontal = 8.dp, vertical = 4.dp),
                     ) {
                         if (page != SettingsPage.HOME) {
-                            TextButton(onClick = { page = SettingsPage.HOME }) { Text("←") }
+                            TextButton(onClick = { go(SettingsPage.HOME) }) { Text("←") }
                         } else {
                             Spacer(Modifier.width(8.dp))
                         }
@@ -270,16 +280,16 @@ fun SettingsDialog(
                     HorizontalDivider()
 
                     // 20 轮：页面切换动画——新页从右滑入，旧页原地快速淡出（避免滑动残影）
+                    // 22 轮：进出淡入淡出统一 120ms，避免过渡中段整体透明度过低看起来"消失"
                     AnimatedContent(
                         targetState = page,
                         transitionSpec = {
                             val forward = targetState != SettingsPage.HOME && initialState == SettingsPage.HOME
+                            val fade = androidx.compose.animation.core.tween<Float>(durationMillis = 120)
                             if (forward) {
-                                (slideInHorizontally { it / 4 } + fadeIn()) togetherWith
-                                    fadeOut(androidx.compose.animation.core.tween(durationMillis = 110))
+                                (slideInHorizontally { it / 4 } + fadeIn(fade)) togetherWith fadeOut(fade)
                             } else {
-                                (slideInHorizontally { -it / 4 } + fadeIn()) togetherWith
-                                    fadeOut(androidx.compose.animation.core.tween(durationMillis = 110))
+                                (slideInHorizontally { -it / 4 } + fadeIn(fade)) togetherWith fadeOut(fade)
                             }
                         },
                         label = "settingsPage",
@@ -981,85 +991,50 @@ private fun PreferencesPage(
 
 @Composable
 private fun AppearancePage(
-    themeMode: ThemeMode,
-    onSetThemeMode: (ThemeMode) -> Unit,
     colorPreset: String,
     onSetColorPreset: (String) -> Unit,
     backgroundImageUri: String,
     onSetBackgroundImage: (String) -> Unit,
 ) {
     val s = LocalAppStrings.current
-    val options = listOf(
-        ThemeMode.SYSTEM to s.followSystem,
-        ThemeMode.LIGHT to s.lightMode,
-        ThemeMode.DARK to s.darkMode,
-    )
-    options.forEach { (mode, label) ->
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { onSetThemeMode(mode) }
-                .padding(vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            RadioButton(selected = themeMode == mode, onClick = { onSetThemeMode(mode) })
-            Spacer(Modifier.width(8.dp))
-            Text(label, style = MaterialTheme.typography.bodyLarge)
-        }
-    }
-
-    Spacer(Modifier.height(16.dp))
-    // 21 轮：UI 配色预设（按当前深浅分组，避开主紫色系）
+    // 22 轮：浅色/深色模式开关取消，改为浅色预设组 + 深色预设组（选预设即定明暗）
     Text(s.colorPresetLabel, style = MaterialTheme.typography.bodyLarge)
     Spacer(Modifier.height(8.dp))
-    val isLightGroup = themeMode == ThemeMode.LIGHT ||
-        (themeMode == ThemeMode.SYSTEM && !androidx.compose.foundation.isSystemInDarkTheme())
-    val presets = if (isLightGroup) {
-        listOf(
-            Triple("default", s.presetDefault, Color(0xFFF2F2F2)),
-            Triple("blue", s.presetBlue, Color(0xFFDCEAFB)),
-            Triple("green", s.presetGreen, Color(0xFFD8F0EB)),
-            Triple("warm", s.presetWarm, Color(0xFFF5E9D5)),
-        )
-    } else {
-        listOf(
-            Triple("default", s.presetDefault, Color(0xFF272727)),
-            Triple("blue", s.presetBlue, Color(0xFF16213A)),
-            Triple("green", s.presetGreen, Color(0xFF16241C)),
-            Triple("warm", s.presetWarm, Color(0xFF2A2016)),
-        )
-    }
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        presets.forEach { (id, label, swatch) ->
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier
-                    .weight(1f)
-                    .clip(RoundedCornerShape(10.dp))
-                    .clickable { onSetColorPreset(id) }
-                    .padding(4.dp),
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(36.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(swatch)
-                        .border(
-                            width = if (colorPreset == id) 2.dp else 1.dp,
-                            color = if (colorPreset == id) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.outlineVariant,
-                            shape = RoundedCornerShape(8.dp),
-                        ),
-                )
-                Spacer(Modifier.height(2.dp))
-                Text(label, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+    Text(s.presetLightGroup, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Spacer(Modifier.height(6.dp))
+    PresetSwatchRow(
+        options = com.bamboomosaic.llmchat.feature.chat.theme.lightColorPresetOptions,
+        nameOf = {
+            when (it) {
+                "light_default" -> s.presetLightDefault
+                "light_blue" -> s.presetLightBlue
+                "light_green" -> s.presetLightGreen
+                "light_yellow" -> s.presetLightYellow
+                "light_gray" -> s.presetLightGray
+                else -> s.presetLightPink
             }
-        }
-    }
+        },
+        selectedId = colorPreset,
+        onSelect = onSetColorPreset,
+    )
+    Spacer(Modifier.height(14.dp))
+    Text(s.presetDarkGroup, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Spacer(Modifier.height(6.dp))
+    PresetSwatchRow(
+        options = com.bamboomosaic.llmchat.feature.chat.theme.darkColorPresetOptions,
+        nameOf = {
+            when (it) {
+                "dark_default" -> s.presetDarkDefault
+                "dark_blue" -> s.presetDarkBlue
+                "dark_green" -> s.presetDarkGreen
+                "dark_brown" -> s.presetDarkBrown
+                "dark_black" -> s.presetDarkBlack
+                else -> s.presetDarkRed
+            }
+        },
+        selectedId = colorPreset,
+        onSelect = onSetColorPreset,
+    )
 
     Spacer(Modifier.height(16.dp))
     // 21 轮：聊天背景图（复制到应用私有目录持久化；清除即恢复默认背景）
@@ -1130,6 +1105,57 @@ private fun rememberVersionName(): String {
         // 形如 "0.1.0-alpha01" / "0.1.0-beta02" 时去掉 alpha/beta 后的数字
         raw.replace(Regex("(alpha|beta|rc)(\\d+)$", RegexOption.IGNORE_CASE)) { m ->
             m.groupValues[1]
+        }
+    }
+}
+
+/** 22 轮：配色预设色块行——每块显示背景色 + 主色竖条预览，选中描边。 */
+@Composable
+private fun PresetSwatchRow(
+    options: List<com.bamboomosaic.llmchat.feature.chat.theme.PresetOption>,
+    nameOf: (String) -> String,
+    selectedId: String,
+    onSelect: (String) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        options.forEach { option ->
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(10.dp))
+                    .clickable { onSelect(option.id) }
+                    .padding(3.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(34.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(option.swatchBg)
+                        .border(
+                            width = if (selectedId == option.id) 2.dp else 1.dp,
+                            color = if (selectedId == option.id) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.outlineVariant,
+                            shape = RoundedCornerShape(8.dp),
+                        ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    // 主色竖条：直观预览该配色的按钮/强调色
+                    Box(
+                        modifier = Modifier
+                            .width(14.dp)
+                            .height(18.dp)
+                            .clip(RoundedCornerShape(3.dp))
+                            .background(option.swatchPrimary),
+                    )
+                }
+                Spacer(Modifier.height(2.dp))
+                Text(nameOf(option.id), style = MaterialTheme.typography.labelSmall, maxLines = 1)
+            }
         }
     }
 }

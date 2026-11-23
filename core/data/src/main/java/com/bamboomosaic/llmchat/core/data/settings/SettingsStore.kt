@@ -73,8 +73,32 @@ class SettingsStore @Inject constructor(
             roleplayParenRule = prefs[roleplayParenKey] ?: true,
             userNickname = prefs[userNicknameKey] ?: "",
             backgroundImageUri = prefs[backgroundImageUriKey] ?: "",
-            colorPreset = prefs[colorPresetKey] ?: "default",
+            colorPreset = migrateColorPreset(prefs),
         )
+    }
+
+    /**
+     * 22 轮：配色预设改为自带深浅前缀的 12 套（light_ / dark_）。
+     * 21 轮旧 id（default/blue/green/warm）按当时的明暗模式设置迁移到新 id，
+     * 跟随系统时读一次系统夜间模式定组，之后明暗完全由所选预设决定。
+     */
+    private fun migrateColorPreset(prefs: androidx.datastore.preferences.core.Preferences): String {
+        val stored = prefs[colorPresetKey] ?: return "dark_default"
+        if (stored.startsWith("light_") || stored.startsWith("dark_")) return stored
+        val group = when (
+            runCatching { ThemeMode.valueOf(prefs[themeModeKey] ?: "") }.getOrDefault(ThemeMode.DARK)
+        ) {
+            ThemeMode.LIGHT -> "light"
+            ThemeMode.DARK -> "dark"
+            ThemeMode.SYSTEM ->
+                if ((context.resources.configuration.uiMode and
+                        android.content.res.Configuration.UI_MODE_NIGHT_MASK
+                ) == android.content.res.Configuration.UI_MODE_NIGHT_YES
+                ) "dark" else "light"
+        }
+        val name = if (group == "light" && stored == "warm") "yellow" else
+            if (stored == "warm") "brown" else stored
+        return "${group}_$name"
     }
 
     override suspend fun setSystemPrompt(value: String) {

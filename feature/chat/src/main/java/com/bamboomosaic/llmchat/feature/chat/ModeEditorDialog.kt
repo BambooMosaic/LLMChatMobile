@@ -490,9 +490,11 @@ private fun parseAskPrompt(text: String): Pair<String, Int>? {
     return topic to detail
 }
 
-/** 21 轮：拼装省钱模式单层提示词模板。 */
+/** 21 轮：拼装省钱模式单层提示词模板。22 轮加严措辞（N 同时会成为硬性 max_tokens 上限）。 */
 private fun composeSavingPrompt(maxChars: Int, extra: String): String =
-    "你最多输出 $maxChars 个字符" + (if (extra.isNotBlank()) "\n用户补充：${extra.trim()}" else "")
+    "你最多输出 $maxChars 个字符。这是硬性红线，不是建议：宁可少说、拆成多条，也绝不能超字；" +
+        "回答直击要点，不要开场白、客套、免责声明和总结性废话。" +
+        (if (extra.isNotBlank()) "\n用户补充：${extra.trim()}" else "")
 
 /** 21 轮：解析省钱模式模板（返回 字符数 to 补充信息；非省钱格式返回 null）。 */
 private fun parseSavingPrompt(text: String): Pair<Int, String>? {

@@ -688,7 +688,12 @@ class ChatViewModel @Inject constructor(
                 sessionId = conversationId,
                 messages = bundle.messages,
                 model = currentConfig.value?.model ?: currentSettings.model,
-                maxTokens = effectiveMaxOutputTokens(currentSettings, modeId),
+                // 22 轮：传入生效用户提示词——省钱模式据此把「最多输出 N 字符」变成硬性 max_tokens
+                maxTokens = effectiveMaxOutputTokens(
+                    currentSettings,
+                    modeId,
+                    conversations.value.firstOrNull { it.id == conversationId }?.userPrompt,
+                ),
                 onReasoning = { chunk ->
                     // 回调在 OkHttp 线程，StateFlow 的 update 是线程安全的
                     reasoningState.update { it + chunk }
@@ -968,15 +973,15 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    /** 导出会话（markdown=true 为 Markdown，否则纯文本）。成功后在 exportMessage 回传路径。 */
+    /** 导出会话（format: "md" / "txt" / "json"）。成功后在 exportMessage 回传路径。 */
     private val _exportMessage = MutableStateFlow<String?>(null)
     val exportMessage: StateFlow<String?> = _exportMessage.asStateFlow()
 
-    fun exportConversation(markdown: Boolean) {
-        exportConversationBy(_currentConversationId.value, markdown)
+    fun exportConversation(format: String) {
+        exportConversationBy(_currentConversationId.value, format)
     }
 
-    fun exportConversationBy(conversationId: String, markdown: Boolean) {
+    fun exportConversationBy(conversationId: String, format: String) {
         viewModelScope.launch(Dispatchers.IO) {
             val conversation = conversations.value.firstOrNull { it.id == conversationId }
             val title = conversation?.title?.ifBlank { "conversation" } ?: "conversation"
@@ -986,9 +991,12 @@ class ChatViewModel @Inject constructor(
                 .groupBy { it.versionKey }
                 .mapValues { (_, group) -> group.maxByOrNull { it.version }!! }
             val messages = all.filter { it.versionKey == null || latestByKey[it.versionKey]?.id == it.id }
-            val content = buildExportContent(title, messages, markdown)
-            val ext = if (markdown) "md" else "txt"
-            val fileName = "${sanitizeFileName(title)}_${System.currentTimeMillis()}.$ext"
+            val content = when (format) {
+                // 22 轮：会话导出 JSON（与模式导出同一格式，导入端通用）
+                "json" -> buildConversationJson(conversation, messages)
+                else -> buildExportContent(title, messages, markdown = format == "md")
+            }
+            val fileName = "${sanitizeFileName(title)}_${System.currentTimeMillis()}.$format"
             val dir = android.os.Environment.getExternalStoragePublicDirectory(
                 android.os.Environment.DIRECTORY_DOWNLOADS,
             )
@@ -1001,6 +1009,41 @@ class ChatViewModel @Inject constructor(
                 _exportMessage.value = e.message ?: "export failed"
             }
         }
+    }
+
+    /**
+     * 22 轮：会话导出 JSON——复用模式导出（app/llmchat-mode v2）的载荷结构，
+     * 字段与「灰色模式按钮 → 导出」完全一致，导入端无需区分来源。
+     */
+    private fun buildConversationJson(
+        conversation: com.bamboomosaic.llmchat.core.domain.Conversation?,
+        messages: List<ChatMessage>,
+    ): String {
+        val modeId = conversation?.modeId ?: "custom"
+        val modeName = com.bamboomosaic.llmchat.core.domain.ChatModes.find(
+            modeId, settings.value.language,
+        ).localized(settings.value.language).modeName
+        val obj = org.json.JSONObject()
+        obj.put("app", "llmchat-mode")
+        obj.put("version", 2)
+        obj.put("modeId", modeId)
+        obj.put("modeName", modeName)
+        obj.put("userPrompt", conversation?.userPrompt?.trim().orEmpty())
+        obj.put("roleplayParenRule", settings.value.roleplayParenRule)
+        obj.put(
+            "conversation",
+            org.json.JSONArray().apply {
+                messages.forEach { m ->
+                    put(
+                        org.json.JSONObject()
+                            .put("role", m.role.name)
+                            .put("text", m.content)
+                            .putOpt("reasoning", m.reasoning?.takeIf { it.isNotBlank() }),
+                    )
+                }
+            },
+        )
+        return obj.toString(2)
     }
 
     fun clearExportMessage() {
@@ -1219,11 +1262,24 @@ class ChatViewModel @Inject constructor(
      * 21 轮：省 Token 档位下的单次输出上限。
      * - 终极档（4）：所有模式（含 Legacy / DS 网页版）强制 64
      * - 1~3 档：创意写作 / 代码开发 / Legacy / DS 网页版豁免，其余按档位上限
-     * - 省钱模式：自带字符上限模板，不走档位
+     * - 省钱模式：22 轮起按模板里的「最多输出 N 个字符」设置硬性 max_tokens（此前只是提示词软约束，
+     *   模型经常超字；字符近似 token，宁短勿超），并与终极档 / 全局上限取更严格者
      * - 档位上限与用户全局上限取较小值（都设置时以更严格者为准）
      */
-    private fun effectiveMaxOutputTokens(settings: AppSettings, modeId: String): Int? {
-        if (modeId == ModeConfig.SAVING) return null
+    private fun effectiveMaxOutputTokens(
+        settings: AppSettings,
+        modeId: String,
+        userPrompt: String? = null,
+    ): Int? {
+        if (modeId == ModeConfig.SAVING) {
+            val chars = parseSavingMaxChars(userPrompt)
+            val caps = listOfNotNull(
+                chars,
+                64.takeIf { settings.tokenSavingLevel == 4 },
+                settings.maxOutputTokens.takeIf { it > 0 },
+            )
+            return caps.minOrNull()
+        }
         val userCap = settings.maxOutputTokens.takeIf { it > 0 }
         fun capped(value: Int): Int = minOf(value, userCap ?: value)
         if (settings.tokenSavingLevel == 4) return capped(64)
@@ -1238,6 +1294,14 @@ class ChatViewModel @Inject constructor(
             3 -> capped(256)
             else -> userCap
         }
+    }
+
+    /** 22 轮：从省钱模式用户层提示词解析「最多输出 N 个字符」的 N（非省钱模板返回 null）。 */
+    private fun parseSavingMaxChars(userPrompt: String?): Int? {
+        val text = userPrompt?.trim() ?: return null
+        if (!text.startsWith("你最多输出")) return null
+        return Regex("\\d+").find(text.substringBefore("个字符"))?.value?.toIntOrNull()
+            ?.takeIf { it > 0 }
     }
 
     /** 21 轮：终极档模式门禁提示。 */
