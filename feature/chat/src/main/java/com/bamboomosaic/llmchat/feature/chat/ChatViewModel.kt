@@ -1537,8 +1537,11 @@ class ChatViewModel @Inject constructor(
                 mainLineNext: ChatMessage?,
             ): FlowNodeUi {
                 val label = if (m.role == MessageRole.USER) {
-                    val base = m.content.replace("\n", " ").trim().take(16).ifBlank { "[图片]" }
-                    if (siblings > 1) "改$branchIndex $base" else base
+                    // 27 轮修正：节点文字最长 8 字，避免长摘要导致节点重叠
+                    val base = m.content.replace("\n", " ").trim()
+                    val prefix = if (siblings > 1) "改$branchIndex " else ""
+                    if (prefix.isNotEmpty()) (prefix + base).take(9).ifBlank { "[图片]" }
+                    else base.take(8).ifBlank { "[图片]" }
                 } else {
                     "第 ${m.version} 次生成"
                 }
