@@ -3,13 +3,17 @@ package com.bamboomosaic.llmchat.feature.chat
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -29,10 +33,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.bamboomosaic.llmchat.core.domain.AppLanguage
 import com.bamboomosaic.llmchat.core.domain.ChatModes
 import com.bamboomosaic.llmchat.core.domain.ModeConfig
 import com.bamboomosaic.llmchat.feature.chat.i18n.LocalAppStrings
@@ -168,110 +174,17 @@ fun ModeEditorDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
+        // 27 轮：平板/宽屏两列式——左列模式直排列表（竖屏折叠菜单的展开形态），右列补充上下文/角色卡 + 确认按钮；
+        // 窄屏维持原单列折叠交互
+        val wide = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp >= 600
         GlassDialogShell(
             modifier = Modifier
                 .fillMaxWidth()
+                .wideDialogMax(760.dp)
                 .padding(16.dp),
         ) {
-            Column(
-                modifier = Modifier
-                    .verticalScroll(rememberScrollState())
-                    .padding(20.dp),
-            ) {
-                Text(s.modeSelectTitle, style = MaterialTheme.typography.titleMedium)
-                // 19 轮：导入模式配置（含对话记录），还原为自定义模式；仅新建对话场景显示
-                if (createMode) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End,
-                    ) {
-                        androidx.compose.material3.TextButton(onClick = {
-                            importLauncher.launch(arrayOf("application/json", "text/plain", "*/*"))
-                        }) {
-                            Text(s.modeImport, style = MaterialTheme.typography.labelMedium)
-                        }
-                    }
-                }
-
-                Spacer(Modifier.height(12.dp))
-                // 折叠下拉触发框（显示当前选中模式）
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { dropdownOpen = !dropdownOpen },
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                selected.localized(uiLanguage).modeName +
-                                    if (selected.modeId == ModeConfig.LEGACY) {
-                                        if (uiLanguage == com.bamboomosaic.llmchat.core.domain.AppLanguage.ENGLISH) " (not recommended)" else "（不推荐）"
-                                    } else "",
-                                style = MaterialTheme.typography.bodyMedium,
-                            )
-                            Text(
-                                text = selected.localized(uiLanguage).description,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        Text(
-                            text = if (dropdownOpen) "▾" else "▸",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-                // 独立弹出菜单（锚定触发框下方，radio + 标题 + 副标题，圆角，宽度与弹窗内容一致）
-                androidx.compose.foundation.layout.BoxWithConstraints {
-                    val menuWidth = maxWidth
-                    androidx.compose.material3.DropdownMenu(
-                        expanded = dropdownOpen,
-                        onDismissRequest = { dropdownOpen = false },
-                        shape = RoundedCornerShape(16.dp),
-                        modifier = Modifier.width(menuWidth),
-                    ) {
-                        ChatModes.all.forEach { mode ->
-                            androidx.compose.material3.DropdownMenuItem(
-                                text = {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        androidx.compose.material3.RadioButton(
-                                            selected = selectedId == mode.modeId,
-                                            onClick = { selectedId = mode.modeId },
-                                            colors = RadioButtonDefaults.colors(
-                                                selectedColor = MaterialTheme.colorScheme.primary,
-                                            ),
-                                        )
-                                        Column {
-                                            Text(
-                                                text = mode.localized(uiLanguage).modeName +
-                                        if (mode.modeId == ModeConfig.LEGACY) {
-                                            if (uiLanguage == com.bamboomosaic.llmchat.core.domain.AppLanguage.ENGLISH) " (not recommended)" else "（不推荐）"
-                                        } else "",
-                                                style = MaterialTheme.typography.bodyMedium,
-                                            )
-                                            Text(
-                                                text = mode.localized(uiLanguage).description,
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            )
-                                        }
-                                    }
-                                },
-                                onClick = {
-                                    selectedId = mode.modeId
-                                    dropdownOpen = false
-                                },
-                            )
-                        }
-                    }
-                }
-
+            // 面板与确认按钮抽成局部 Composable，单列/两列共用同一份实现
+            val panelsContent: @Composable () -> Unit = {
                 // 用户层输入：allowUserPrompt=false 的模式（ds_web）整块隐藏
                 if (selected.allowUserPrompt) {
                 // 角色扮演：双面板切换
@@ -413,7 +326,8 @@ fun ModeEditorDialog(
                         )
                     }
                 }
-
+            }
+            val confirmButton: @Composable () -> Unit = {
                 Spacer(Modifier.height(16.dp))
                 Button(
                     onClick = {
@@ -432,6 +346,162 @@ fun ModeEditorDialog(
                     Text(if (createMode) s.createConversation else if (uiLanguage == com.bamboomosaic.llmchat.core.domain.AppLanguage.ENGLISH) "OK" else "确定")
                 }
             }
+
+            if (!wide) {
+                Column(
+                    modifier = Modifier
+                        .verticalScroll(rememberScrollState())
+                        .padding(20.dp),
+                ) {
+                    Text(s.modeSelectTitle, style = MaterialTheme.typography.titleMedium)
+                    // 19 轮：导入模式配置（含对话记录），还原为自定义模式；仅新建对话场景显示
+                    if (createMode) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End,
+                        ) {
+                            androidx.compose.material3.TextButton(onClick = {
+                                importLauncher.launch(arrayOf("application/json", "text/plain", "*/*"))
+                            }) {
+                                Text(s.modeImport, style = MaterialTheme.typography.labelMedium)
+                            }
+                        }
+                    }
+
+                    Spacer(Modifier.height(12.dp))
+                    // 折叠下拉触发框（显示当前选中模式）
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { dropdownOpen = !dropdownOpen },
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    modeNameOf(selected, uiLanguage),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                )
+                                Text(
+                                    text = selected.localized(uiLanguage).description,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            Text(
+                                text = if (dropdownOpen) "▾" else "▸",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                    // 独立弹出菜单（锚定触发框下方，radio + 标题 + 副标题，圆角，宽度与弹窗内容一致）
+                    androidx.compose.foundation.layout.BoxWithConstraints {
+                        val menuWidth = maxWidth
+                        androidx.compose.material3.DropdownMenu(
+                            expanded = dropdownOpen,
+                            onDismissRequest = { dropdownOpen = false },
+                            shape = RoundedCornerShape(16.dp),
+                            modifier = Modifier.width(menuWidth),
+                        ) {
+                            ChatModes.all.forEach { mode ->
+                                androidx.compose.material3.DropdownMenuItem(
+                                    text = {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            androidx.compose.material3.RadioButton(
+                                                selected = selectedId == mode.modeId,
+                                                onClick = { selectedId = mode.modeId },
+                                                colors = RadioButtonDefaults.colors(
+                                                    selectedColor = MaterialTheme.colorScheme.primary,
+                                                ),
+                                            )
+                                            Column {
+                                                Text(
+                                                    text = modeNameOf(mode, uiLanguage),
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                )
+                                                Text(
+                                                    text = mode.localized(uiLanguage).description,
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                )
+                                            }
+                                        }
+                                    },
+                                    onClick = {
+                                        selectedId = mode.modeId
+                                        dropdownOpen = false
+                                    },
+                                )
+                            }
+                        }
+                    }
+
+                    panelsContent()
+                    confirmButton()
+                }
+            } else {
+                // 27 轮：宽屏两列——左列模式列表（不折叠），右列面板 + 确认
+                Column(modifier = Modifier.padding(20.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            s.modeSelectTitle,
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.weight(1f),
+                        )
+                        // 导入入口仅新建对话场景显示（与窄屏一致）
+                        if (createMode) {
+                            androidx.compose.material3.TextButton(onClick = {
+                                importLauncher.launch(arrayOf("application/json", "text/plain", "*/*"))
+                            }) {
+                                Text(s.modeImport, style = MaterialTheme.typography.labelMedium)
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    Row(modifier = Modifier.heightIn(max = 440.dp)) {
+                        // 左列：全部模式直排（radio + 名称 + 副标题），选中即切换右列面板
+                        Column(
+                            modifier = Modifier
+                                .width(264.dp)
+                                .verticalScroll(rememberScrollState()),
+                        ) {
+                            ChatModes.all.forEach { mode ->
+                                ModeListRow(
+                                    selected = selectedId == mode.modeId,
+                                    label = modeNameOf(mode, uiLanguage),
+                                    description = mode.localized(uiLanguage).description,
+                                    onSelect = { selectedId = mode.modeId },
+                                )
+                            }
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Box(
+                            modifier = Modifier
+                                .width(1.dp)
+                                .fillMaxHeight()
+                                .background(MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(1.dp)),
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        // 右列：补充上下文 / 角色卡 / 自定义参数 + 确认按钮
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .verticalScroll(rememberScrollState()),
+                        ) {
+                            panelsContent()
+                            confirmButton()
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -444,6 +514,46 @@ private fun FilterChipCompact(selected: Boolean, onClick: () -> Unit, label: Str
         onClick = onClick,
         label = { Text(label, style = MaterialTheme.typography.labelMedium) },
     )
+}
+
+/** 27 轮：模式显示名（Legacy 标注不推荐；窄屏折叠菜单与宽屏左列共用）。 */
+private fun modeNameOf(mode: ModeConfig, uiLanguage: AppLanguage): String =
+    mode.localized(uiLanguage).modeName + if (mode.modeId == ModeConfig.LEGACY) {
+        if (uiLanguage == AppLanguage.ENGLISH) " (not recommended)" else "（不推荐）"
+    } else ""
+
+/**
+ * 27 轮：宽屏左列的模式行——竖屏折叠菜单的展开形态（radio + 名称 + 副标题），点整行即选中。
+ */
+@Composable
+private fun ModeListRow(
+    selected: Boolean,
+    label: String,
+    description: String,
+    onSelect: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(onClick = onSelect)
+            .padding(horizontal = 4.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RadioButton(
+            selected = selected,
+            onClick = onSelect,
+            colors = RadioButtonDefaults.colors(selectedColor = MaterialTheme.colorScheme.primary),
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(label, style = MaterialTheme.typography.bodyMedium)
+            Text(
+                text = description,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
 }
 
 /**

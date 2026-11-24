@@ -105,6 +105,7 @@ fun ModePreviewDialog(
         GlassDialogShell(
             modifier = Modifier
                 .fillMaxWidth()
+                .wideDialogMax(520.dp)
                 .padding(16.dp),
         ) {
             Column(

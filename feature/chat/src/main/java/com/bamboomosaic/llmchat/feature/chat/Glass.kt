@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -111,4 +112,14 @@ fun blurSupported(): Boolean {
         (ctx.getSystemService(android.content.Context.WINDOW_SERVICE) as android.view.WindowManager)
             .isCrossWindowBlurEnabled
     }.getOrDefault(false)
+}
+
+/**
+ * 27 轮：平板/宽屏弹窗限宽——宽屏时限宽居中（保持正常比例不拉伸），窄屏原样返回。
+ * 用法：`Modifier.fillMaxWidth(0.94f).wideDialogMax(440.dp)`（窄屏按比例铺满，宽屏被 max 截断居中）。
+ */
+@Composable
+fun Modifier.wideDialogMax(maxWidth: androidx.compose.ui.unit.Dp): Modifier {
+    val wide = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp >= 600
+    return if (wide) this.then(Modifier.widthIn(max = maxWidth)) else this
 }

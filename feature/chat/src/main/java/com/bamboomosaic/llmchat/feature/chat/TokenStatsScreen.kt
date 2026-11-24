@@ -56,6 +56,7 @@ fun TokenStatsScreen(
     GlassDialogShell(
         modifier = Modifier
             .fillMaxWidth(0.94f)
+            .wideDialogMax(480.dp)
             .heightIn(max = 560.dp),
     ) {
         Column {
