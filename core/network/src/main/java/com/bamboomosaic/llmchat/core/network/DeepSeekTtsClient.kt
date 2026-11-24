@@ -25,6 +25,7 @@ class DeepSeekTtsClient {
 
     /** 合成并返回完整 WAV 字节（服务端 filter_markdown 默认开启，Markdown 格式会被去掉）。 */
     fun synthesize(apiKey: String, text: String, voiceId: String): Result<ByteArray> = runCatching {
+        println("[LLMChatTTS] request tts: text=${text.length}c voice=$voiceId key=${apiKey.take(6)}...")
         val payload = JsonObject(
             mapOf(
                 "text" to JsonPrimitive(text),
@@ -41,10 +42,12 @@ class DeepSeekTtsClient {
         client.newCall(request).execute().use { response: Response ->
             if (!response.isSuccessful) {
                 val raw = runCatching { response.body.string() }.getOrDefault("")
+                println("[LLMChatTTS] tts http ${response.code}: $raw")
                 throw IOException(ttsErrorHint(response.code, raw))
             }
             val bytes = response.body.bytes()
             check(bytes.isNotEmpty()) { "TTS 返回空音频" }
+            println("[LLMChatTTS] tts ok: ${bytes.size} bytes")
             bytes
         }
     }

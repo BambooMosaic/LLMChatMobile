@@ -1379,6 +1379,7 @@ class ChatViewModel @Inject constructor(
 
     /** 点击消息行喇叭：未在播=合成并播放；正在合成/播放同一条=停止。 */
     fun toggleTts(messageId: Long, text: String) {
+        android.util.Log.d("LLMChatTTS", "toggleTts id=$messageId len=${text.length}")
         when (val st = _ttsState.value) {
             is TtsState.Loading -> if (st.messageId == messageId) return stopTts()
             is TtsState.Playing -> if (st.messageId == messageId) return stopTts()
@@ -1399,6 +1400,7 @@ class ChatViewModel @Inject constructor(
             result.fold(
                 onSuccess = { bytes -> playWav(messageId, bytes, seq) },
                 onFailure = {
+                    android.util.Log.d("LLMChatTTS", "tts failed: ${it.message}")
                     if (seq == ttsSeq) {
                         _ttsState.value = TtsState.Idle
                         _ttsErrorTick.value++
@@ -1485,7 +1487,12 @@ class ChatViewModel @Inject constructor(
                 .filter { it.role == MessageRole.ASSISTANT && it.versionKey != null }
                 .groupBy { it.versionKey!! }
 
-            fun buildNode(m: ChatMessage, siblings: Int, branchIndex: Int): FlowNodeUi {
+            fun buildNode(
+                m: ChatMessage,
+                siblings: Int,
+                branchIndex: Int,
+                mainLineNext: ChatMessage?,
+            ): FlowNodeUi {
                 val label = if (m.role == MessageRole.USER) {
                     val base = m.content.replace("\n", " ").trim().take(16).ifBlank { "[图片]" }
                     if (siblings > 1) "改$branchIndex $base" else base
@@ -1494,13 +1501,20 @@ class ChatViewModel @Inject constructor(
                 }
                 val sub = mutableListOf<FlowNodeUi>()
                 if (m.role == MessageRole.USER) {
-                    // 回复版本组（重新生成）
+                    // 回复版本组（重新生成）；主线延续挂组内最新版本，保持单棵连贯树
                     val group = assistantByKey[m.id].orEmpty()
-                    sub += group.mapIndexed { i, a -> buildNode(a, group.size, i + 1) }
+                    val latestId = group.maxByOrNull { it.version }?.id
+                    sub += group.mapIndexed { i, a ->
+                        val next = if (a.id == latestId) mainLineNext else null
+                        buildNode(a, group.size, if (group.size > 1) i + 1 else 0, next)
+                    }
                 }
                 // 该消息下的用户分支（编辑重发）
                 val userKids = children[m.id].orEmpty().filter { it.role == MessageRole.USER }
-                sub += userKids.mapIndexed { i, k -> buildNode(k, userKids.size, i + 1) }
+                sub += userKids.mapIndexed { i, k -> buildNode(k, userKids.size, if (userKids.size > 1) i + 1 else 0, null) }
+                if (m.role == MessageRole.USER && sub.isEmpty() && mainLineNext != null) {
+                    sub += buildNode(mainLineNext, 1, 1, null)
+                }
                 return FlowNodeUi(
                     messageId = m.id,
                     isUser = m.role == MessageRole.USER,
@@ -1510,10 +1524,11 @@ class ChatViewModel @Inject constructor(
                 )
             }
 
-            // 顶层 = 主线用户消息（parent==null，按时间序）
-            val topNodes = all
-                .filter { it.role == MessageRole.USER && it.parentId == null }
-                .map { buildNode(it, 1, 1) }
+            // 顶层 = 单棵树：主线第一条用户消息为根，后续主线经「最新版本 → 下一轮」连贯成主干
+            val rootUsers = all.filter { it.role == MessageRole.USER && it.parentId == null }
+            val topNodes = if (rootUsers.isEmpty()) emptyList() else listOf(
+                buildNode(rootUsers.first(), 1, 1, rootUsers.getOrNull(1)),
+            )
             _flowDiagram.value = topNodes
         }
     }
