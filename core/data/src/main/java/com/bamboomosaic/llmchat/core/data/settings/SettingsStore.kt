@@ -59,6 +59,7 @@ class SettingsStore @Inject constructor(
     // 27 轮：语音朗读（DeepSeek TTS）
     private val ttsEnabledKey = booleanPreferencesKey("tts_enabled")
     private val ttsVoiceKey = stringPreferencesKey("tts_voice")
+    private val ttsAutoReadKey = booleanPreferencesKey("tts_auto_read")
     private val legacyExperimentalGlassKey = booleanPreferencesKey("experimental_glass")
 
     override fun observeSettings(): Flow<AppSettings> = context.settingsDataStore.data.map { prefs ->
@@ -94,6 +95,7 @@ class SettingsStore @Inject constructor(
             },
             ttsEnabled = prefs[ttsEnabledKey] ?: true,
             ttsVoice = prefs[ttsVoiceKey]?.takeIf { it == "stella" || it == "tide" } ?: "stella",
+            ttsAutoRead = prefs[ttsAutoReadKey] ?: false,
         )
     }
 
@@ -254,6 +256,11 @@ class SettingsStore @Inject constructor(
         context.settingsDataStore.edit {
             it[ttsVoiceKey] = if (voiceId == "tide") "tide" else "stella"
         }
+    }
+
+    /** 27 轮修正：自动朗读开关。 */
+    override suspend fun setTtsAutoRead(enabled: Boolean) {
+        context.settingsDataStore.edit { it[ttsAutoReadKey] = enabled }
     }
 
     override fun observeModeUserPrompt(modeId: String): Flow<String?> =

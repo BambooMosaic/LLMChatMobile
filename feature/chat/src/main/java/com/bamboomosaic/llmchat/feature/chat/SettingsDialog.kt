@@ -94,6 +94,7 @@ fun SettingsDialog(
     onSetGlassLevel: (Int) -> Unit,
     onSetTtsEnabled: (Boolean) -> Unit,
     onSetTtsVoice: (String) -> Unit,
+    onSetTtsAutoRead: (Boolean) -> Unit,
     onDownloadLatest: () -> Unit,
     onSetColorPreset: (String) -> Unit,
     onSetFollowSystemTheme: (Boolean) -> Unit,
@@ -189,6 +190,7 @@ fun SettingsDialog(
                 onSetCompressSummaryLimit = onSetCompressSummaryLimit,
                 onSetTtsEnabled = onSetTtsEnabled,
                 onSetTtsVoice = onSetTtsVoice,
+                onSetTtsAutoRead = onSetTtsAutoRead,
             )
 
             SettingsPage.ARCHIVED -> ArchivedPage(
@@ -816,6 +818,7 @@ private fun OtherPage(
     onSetCompressSummaryLimit: (Int) -> Unit,
     onSetTtsEnabled: (Boolean) -> Unit = {},
     onSetTtsVoice: (String) -> Unit = {},
+    onSetTtsAutoRead: (Boolean) -> Unit = {},
 ) {
     val s = LocalAppStrings.current
 
@@ -858,6 +861,20 @@ private fun OtherPage(
         Switch(checked = settings.ttsEnabled, onCheckedChange = { onSetTtsEnabled(it) })
     }
     if (settings.ttsEnabled) {
+        Spacer(Modifier.height(4.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(s.ttsAutoRead, style = MaterialTheme.typography.bodyMedium)
+            Switch(checked = settings.ttsAutoRead, onCheckedChange = { onSetTtsAutoRead(it) })
+        }
+        Text(
+            text = s.ttsCostHint,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
         Spacer(Modifier.height(4.dp))
         Text(s.ttsVoiceLabel, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         listOf(

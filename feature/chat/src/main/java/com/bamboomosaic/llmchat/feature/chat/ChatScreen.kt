@@ -605,6 +605,7 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
             onSetGlassLevel = viewModel::setGlassLevel,
             onSetTtsEnabled = viewModel::setTtsEnabled,
             onSetTtsVoice = viewModel::setTtsVoice,
+            onSetTtsAutoRead = viewModel::setTtsAutoRead,
             onRestoreConversation = viewModel::restoreConversation,
             onDeleteConversation = viewModel::deleteConversationPermanently,
             onDismiss = { showSettings = false },
@@ -959,6 +960,16 @@ private fun MessageBubble(
                     showMenu = false
                 },
             )
+            // 27 轮修正：朗读入口改到长按菜单（气泡下方按钮命中区太小）
+            if (showTts) {
+                DropdownMenuItem(
+                    text = { Text(if (ttsBusy == 2) s.ttsMenuStop else s.ttsMenuSpeak) },
+                    onClick = {
+                        onToggleTts()
+                        showMenu = false
+                    },
+                )
+            }
             if (onEdit != null) {
                 DropdownMenuItem(
                     text = { Text(s.edit) },
@@ -1076,39 +1087,13 @@ private fun MessageBubble(
             }
             val p = message.promptTokens
             val c = message.completionTokens
-            // 27 轮：token 行与朗读按钮同一行（无 token 数据时朗读按钮独占一行靠右）
-            if (p != null && c != null || showTts) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
+            if (p != null && c != null) {
+                Text(
+                    text = s.thisRound(p, c, p + c),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 4.dp, start = 4.dp, end = 4.dp),
-                ) {
-                    if (p != null && c != null) {
-                        Text(
-                            text = s.thisRound(p, c, p + c),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    if (showTts) {
-                        Spacer(Modifier.weight(1f))
-                        TextButton(
-                            onClick = onToggleTts,
-                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp),
-                            modifier = Modifier.height(26.dp),
-                        ) {
-                            Text(
-                                text = when (ttsBusy) {
-                                    1 -> "⏳"
-                                    2 -> "⏹"
-                                    else -> "🔊"
-                                },
-                                style = MaterialTheme.typography.labelMedium,
-                                color = if (ttsBusy == 2) MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                }
+                )
             }
             // 重新生成入口（仅最后一条已完成助手消息显示）
             if (showRegenerate) {

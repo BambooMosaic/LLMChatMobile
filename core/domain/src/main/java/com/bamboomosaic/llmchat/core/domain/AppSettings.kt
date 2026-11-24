@@ -126,6 +126,8 @@ data class AppSettings(
     val ttsEnabled: Boolean = true,
     /** 27 轮：TTS 音色（DeepSeek voice_id：stella=海星女声 / tide=暗潮男声）。 */
     val ttsVoice: String = "stella",
+    /** 27 轮修正：AI 回复完成后自动朗读（默认关——DeepSeek TTS 按字符计费，长回复消耗明显）。 */
+    val ttsAutoRead: Boolean = false,
 ) {
     companion object {
         const val DEFAULT_MODEL = "deepseek-flash"
@@ -206,6 +208,9 @@ interface SettingsRepository {
 
     /** 27 轮：TTS 音色（stella / tide）。 */
     suspend fun setTtsVoice(voiceId: String)
+
+    /** 27 轮修正：自动朗读开关。 */
+    suspend fun setTtsAutoRead(enabled: Boolean)
 
     /**
      * 27 轮修正：大版本更新公告（已完成后首次运行时观察）——

@@ -748,6 +748,10 @@ class ChatViewModel @Inject constructor(
                 )
                 savedReplyId = saved.id
                 savedVersion = saved.version
+                // 27 轮修正：自动朗读（默认关）——回复落库后自动朗读本条
+                if (currentSettings.ttsAutoRead && isDeepSeekConfig(currentConfig.value)) {
+                    toggleTts(saved.id, accumulated)
+                }
             } else if (_error.value == null) {
                 // 请求成功（可能消耗了 token）但没有任何正文：给出明确原因，而不是留一个空白气泡
                 _error.value = ApiError(ApiError.Kind.UNKNOWN, emptyResponseHint(currentSettings))
@@ -1492,6 +1496,11 @@ class ChatViewModel @Inject constructor(
 
     fun setTtsVoice(voiceId: String) {
         viewModelScope.launch { settingsRepository.setTtsVoice(voiceId) }
+    }
+
+    /** 27 轮修正：自动朗读开关。 */
+    fun setTtsAutoRead(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setTtsAutoRead(enabled) }
     }
 
     // ===== 27 轮：会话流程图（平面树）=====

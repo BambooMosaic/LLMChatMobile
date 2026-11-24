@@ -73,6 +73,14 @@ data class AppStrings(
     val ttsVoiceTide: String,
     /** TTS 合成失败 toast。 */
     val ttsFailed: String,
+    /** 自动朗读开关。 */
+    val ttsAutoRead: String,
+    /** TTS 计费提示。 */
+    val ttsCostHint: String,
+    /** 长按菜单：朗读回复。 */
+    val ttsMenuSpeak: String,
+    /** 长按菜单：停止朗读。 */
+    val ttsMenuStop: String,
     val restore: String,
     val delete: String,
     val deleteConfirmTitle: String,
@@ -346,6 +354,10 @@ private val ZhCN = AppStrings(
     ttsVoiceStella = "海星（女声）",
     ttsVoiceTide = "暗潮（男声）",
     ttsFailed = "语音合成失败，请稍后再试",
+    ttsAutoRead = "自动朗读新回复",
+    ttsCostHint = "DeepSeek TTS 按字符计费（每万字约 1.5~3 元，汉字算 2 个字符），长回复朗读消耗明显，自动朗读请酌情开启",
+    ttsMenuSpeak = "朗读这条回复",
+    ttsMenuStop = "停止朗读",
     restore = "恢复",
     delete = "删除",
     deleteConfirmTitle = "确认永久删除？",
@@ -566,6 +578,10 @@ private val ZhTW = AppStrings(
     ttsVoiceStella = "海星（女聲）",
     ttsVoiceTide = "暗潮（男聲）",
     ttsFailed = "語音合成失敗，請稍後再試",
+    ttsAutoRead = "自動朗讀新回覆",
+    ttsCostHint = "DeepSeek TTS 按字元計費（每萬字約 1.5~3 元，漢字算 2 個字元），長回覆朗讀消耗明顯，自動朗讀請酌情開啟",
+    ttsMenuSpeak = "朗讀這條回覆",
+    ttsMenuStop = "停止朗讀",
     restore = "恢復",
     delete = "刪除",
     deleteConfirmTitle = "確認永久刪除？",
@@ -786,6 +802,10 @@ private val EnUS = AppStrings(
     ttsVoiceStella = "Stella (female)",
     ttsVoiceTide = "Tide (male)",
     ttsFailed = "Speech synthesis failed, try again later",
+    ttsAutoRead = "Auto read new replies",
+    ttsCostHint = "DeepSeek TTS bills per character (~CNY 1.5-3 per 10k chars; CJK counts double). Long replies cost noticeably - enable auto-read with care.",
+    ttsMenuSpeak = "Read this reply",
+    ttsMenuStop = "Stop reading",
     restore = "Restore",
     delete = "Delete",
     deleteConfirmTitle = "Delete permanently?",
