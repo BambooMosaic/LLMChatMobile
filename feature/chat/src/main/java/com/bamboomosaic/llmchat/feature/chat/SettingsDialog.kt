@@ -92,6 +92,8 @@ fun SettingsDialog(
     onSetUserNickname: (String) -> Unit,
     onSetCompressSummaryLimit: (Int) -> Unit,
     onSetGlassLevel: (Int) -> Unit,
+    onSetTtsEnabled: (Boolean) -> Unit,
+    onSetTtsVoice: (String) -> Unit,
     onDownloadLatest: () -> Unit,
     onSetColorPreset: (String) -> Unit,
     onSetFollowSystemTheme: (Boolean) -> Unit,
@@ -185,6 +187,8 @@ fun SettingsDialog(
                 onSetSearchEnabled = onSetSearchEnabled,
                 onSetAutoCompressEnabled = onSetAutoCompressEnabled,
                 onSetCompressSummaryLimit = onSetCompressSummaryLimit,
+                onSetTtsEnabled = onSetTtsEnabled,
+                onSetTtsVoice = onSetTtsVoice,
             )
 
             SettingsPage.ARCHIVED -> ArchivedPage(
@@ -810,6 +814,8 @@ private fun OtherPage(
     onSetSearchEnabled: (Boolean) -> Unit,
     onSetAutoCompressEnabled: (Boolean) -> Unit,
     onSetCompressSummaryLimit: (Int) -> Unit,
+    onSetTtsEnabled: (Boolean) -> Unit = {},
+    onSetTtsVoice: (String) -> Unit = {},
 ) {
     val s = LocalAppStrings.current
 
@@ -840,6 +846,38 @@ private fun OtherPage(
         style = MaterialTheme.typography.labelSmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
+
+    Spacer(Modifier.height(16.dp))
+    // 27 轮：语音朗读（DeepSeek TTS）——开关控制消息行朗读按钮；音色两选
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(s.ttsSection, style = MaterialTheme.typography.bodyLarge)
+        Switch(checked = settings.ttsEnabled, onCheckedChange = { onSetTtsEnabled(it) })
+    }
+    if (settings.ttsEnabled) {
+        Spacer(Modifier.height(4.dp))
+        Text(s.ttsVoiceLabel, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        listOf(
+            "stella" to s.ttsVoiceStella,
+            "tide" to s.ttsVoiceTide,
+        ).forEach { (id, label) ->
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onSetTtsVoice(id) },
+            ) {
+                RadioButton(
+                    selected = settings.ttsVoice == id,
+                    onClick = { onSetTtsVoice(id) },
+                )
+                Text(label, style = MaterialTheme.typography.bodyMedium)
+            }
+        }
+    }
 
     Spacer(Modifier.height(16.dp))
     // 19 轮：联网搜索开关（DeepSeek 原生；其他模型经 DeepSeek-Flash 代理）

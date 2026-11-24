@@ -55,6 +55,12 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
+            // 27 轮：平板模式启动窗口标题为 LLMChatPro（仅窗口标题；应用内所有文案仍为 LLMChatMobile，手机模式不变）
+            val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+            LaunchedEffect(configuration.screenWidthDp) {
+                title = if (configuration.screenWidthDp >= 600) "LLMChatPro" else "LLMChatMobile"
+            }
+
             // 开屏动画（内存状态，每次冷启动都播放约 1 秒）
             var showSplash by remember { mutableStateOf(true) }
 

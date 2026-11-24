@@ -69,6 +69,9 @@ fun ModeEditorDialog(
     var selectedId by remember { mutableStateOf(initialModeId) }
     var dropdownOpen by remember { mutableStateOf(false) }
 
+    // 27 轮：提示词模板库浏览状态——null=关；""=一级分类页；分类名=该分类的二级模板页
+    var showTemplates by remember { mutableStateOf<String?>(null) }
+
     // 两个面板的数据互相隔离：角色卡表单 vs 自由输入
     // 18 轮修复：重开弹窗时从已保存的用户层提示词回显角色卡（保存格式：角色名：X\n角色设定：\nY）
     val initialPrompt = initialUserPrompt?.trim().orEmpty()
@@ -184,7 +187,93 @@ fun ModeEditorDialog(
                 .padding(16.dp),
         ) {
             // 面板与确认按钮抽成局部 Composable，单列/两列共用同一份实现
+            // 27 轮：模板入口只在自由输入场景显示（角色卡 / 提问 / 省钱面板有自己的结构化表单）
+            val showTemplateEntry = selected.allowUserPrompt &&
+                !isAsk && !isSaving && !(isRoleplay && useRoleCard)
+
+            // 27 轮：提示词模板库浏览视图（一级分类 → 二级模板 → 点选填入用户层提示词输入框）
+            val templateBrowser: @Composable () -> Unit = {
+                val category = showTemplates?.takeIf { it.isNotEmpty() }
+                    ?.let { name -> PromptTemplateLibrary.categories.firstOrNull { it.name == name } }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    androidx.compose.material3.TextButton(onClick = {
+                        showTemplates = if (category == null) null else ""
+                    }) { Text("←") }
+                    Text(
+                        text = if (category == null) s.promptTemplateLibrary else category.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+                if (category == null) {
+                    // 一级：分类列表
+                    PromptTemplateLibrary.categories.forEach { c ->
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 3.dp)
+                                .clickable { showTemplates = c.name },
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(c.name, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                                Text(
+                                    text = c.templates.size.toString(),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    // 二级：模板列表（点选 → 填入自由输入框并返回编辑视图）
+                    category.templates.forEach { tpl ->
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 3.dp)
+                                .clickable {
+                                    freePrompt = tpl.content
+                                    showTemplates = null
+                                },
+                        ) {
+                            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
+                                Text(tpl.name, style = MaterialTheme.typography.bodyMedium)
+                                Text(
+                                    text = tpl.content.trim().take(60),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 2,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
             val panelsContent: @Composable () -> Unit = {
+                // 27 轮：模板库入口行（仅自由输入场景）
+                if (showTemplateEntry) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
+                    ) {
+                        androidx.compose.material3.TextButton(onClick = { showTemplates = "" }) {
+                            Text(s.promptTemplateLibrary, style = MaterialTheme.typography.labelMedium)
+                        }
+                    }
+                }
                 // 用户层输入：allowUserPrompt=false 的模式（ds_web）整块隐藏
                 if (selected.allowUserPrompt) {
                 // 角色扮演：双面板切换
@@ -353,6 +442,9 @@ fun ModeEditorDialog(
                         .verticalScroll(rememberScrollState())
                         .padding(20.dp),
                 ) {
+                    if (showTemplates != null) {
+                        templateBrowser()
+                    } else {
                     Text(s.modeSelectTitle, style = MaterialTheme.typography.titleMedium)
                     // 19 轮：导入模式配置（含对话记录），还原为自定义模式；仅新建对话场景显示
                     if (createMode) {
@@ -443,6 +535,7 @@ fun ModeEditorDialog(
 
                     panelsContent()
                     confirmButton()
+                    }
                 }
             } else {
                 // 27 轮：宽屏两列——左列模式列表（不折叠），右列面板 + 确认
@@ -491,13 +584,18 @@ fun ModeEditorDialog(
                         )
                         Spacer(Modifier.width(12.dp))
                         // 右列：补充上下文 / 角色卡 / 自定义参数 + 确认按钮
+                        // 27 轮：模板库浏览时右列整体切换为模板选择
                         Column(
                             modifier = Modifier
                                 .weight(1f)
                                 .verticalScroll(rememberScrollState()),
                         ) {
-                            panelsContent()
-                            confirmButton()
+                            if (showTemplates != null) {
+                                templateBrowser()
+                            } else {
+                                panelsContent()
+                                confirmButton()
+                            }
                         }
                     }
                 }

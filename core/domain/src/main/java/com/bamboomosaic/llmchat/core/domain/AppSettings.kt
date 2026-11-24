@@ -122,6 +122,10 @@ data class AppSettings(
     val compressSummaryLimit: Int = 400,
     /** 25 轮：玻璃材质档位 0=关 1=半透明 2=毛玻璃（毛玻璃需设备支持系统模糊）。 */
     val glassLevel: Int = 0,
+    /** 27 轮：语音朗读（DeepSeek TTS）入口显示开关。 */
+    val ttsEnabled: Boolean = true,
+    /** 27 轮：TTS 音色（DeepSeek voice_id：stella=海星女声 / tide=暗潮男声）。 */
+    val ttsVoice: String = "stella",
 ) {
     companion object {
         const val DEFAULT_MODEL = "deepseek-flash"
@@ -196,6 +200,12 @@ interface SettingsRepository {
 
     /** 25 轮：玻璃材质档位（0/1/2）。 */
     suspend fun setGlassLevel(value: Int)
+
+    /** 27 轮：语音朗读开关。 */
+    suspend fun setTtsEnabled(enabled: Boolean)
+
+    /** 27 轮：TTS 音色（stella / tide）。 */
+    suspend fun setTtsVoice(voiceId: String)
 
     /** 模式模板记忆：每个模式下用户最后一次填写的用户提示词。 */
     fun observeModeUserPrompt(modeId: String): kotlinx.coroutines.flow.Flow<String?>

@@ -185,6 +185,18 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
         }
     }
 
+    // 27 轮：语音朗读状态 + 失败 toast（tick>0 时弹一次）
+    val ttsState by viewModel.ttsState.collectAsState()
+    val ttsErrorTick by viewModel.ttsErrorTick.collectAsState()
+    LaunchedEffect(ttsErrorTick) {
+        if (ttsErrorTick > 0) {
+            android.widget.Toast.makeText(screenContext, s.ttsFailed, android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // 27 轮：会话流程图面板
+    var showFlowPanel by remember { mutableStateOf(false) }
+
     // 21 轮：上下文占用（环形按钮 + 统计面板）
     val contextUsage by viewModel.contextUsage.collectAsState()
     var showContextPanel by remember { mutableStateOf(false) }
@@ -303,6 +315,31 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
                     )
                 },
                 actions = {
+                    // 27 轮：会话流程图按钮（环形统计左侧）——竖版时间线 + 多版本分支可视化
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .padding(6.dp)
+                            .clickable {
+                                showFlowPanel = true
+                            },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        // 分支图标颜色在组合层取（draw 作用域不是 @Composable）
+                        val fork = MaterialTheme.colorScheme.onSurfaceVariant
+                        Canvas(modifier = Modifier.fillMaxSize()) {
+                            val w = size.width
+                            val h = size.height
+                            val stroke = 1.6.dp.toPx()
+                            // 主干（底部中点向上）+ 两条分支 + 三个节点圆点
+                            drawLine(fork, androidx.compose.ui.geometry.Offset(w / 2, h * 0.95f), androidx.compose.ui.geometry.Offset(w / 2, h * 0.52f), strokeWidth = stroke)
+                            drawLine(fork, androidx.compose.ui.geometry.Offset(w / 2, h * 0.52f), androidx.compose.ui.geometry.Offset(w * 0.20f, h * 0.16f), strokeWidth = stroke)
+                            drawLine(fork, androidx.compose.ui.geometry.Offset(w / 2, h * 0.52f), androidx.compose.ui.geometry.Offset(w * 0.80f, h * 0.16f), strokeWidth = stroke)
+                            drawCircle(fork, radius = stroke * 1.5f, center = androidx.compose.ui.geometry.Offset(w / 2, h * 0.95f))
+                            drawCircle(fork, radius = stroke * 1.5f, center = androidx.compose.ui.geometry.Offset(w * 0.20f, h * 0.16f))
+                            drawCircle(fork, radius = stroke * 1.5f, center = androidx.compose.ui.geometry.Offset(w * 0.80f, h * 0.16f))
+                        }
+                    }
                     // 21 轮：环形上下文进度按钮（替换原 Token 文本），点击打开统计面板
                     // 24 轮：容量预警变色——>80% 橙色提醒，>95% 红色预警
                     val ringTrack = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
@@ -432,6 +469,18 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
                             null
                         },
                         onSwitchVersion = { delta -> viewModel.switchVersion(index, delta) },
+                        // 27 轮：朗读按钮（设置开启 + DeepSeek 配置 + 完成文本的助手消息）
+                        showTts = settings.ttsEnabled &&
+                            msg.role == MessageRole.ASSISTANT &&
+                            !msg.isStreaming &&
+                            msg.text.isNotBlank() &&
+                            isDeepSeekConfig(currentConfig),
+                        ttsBusy = when (val ts = ttsState) {
+                            is ChatViewModel.TtsState.Loading -> if (ts.messageId == msg.dbId) 1 else 0
+                            is ChatViewModel.TtsState.Playing -> if (ts.messageId == msg.dbId) 2 else 0
+                            else -> 0
+                        },
+                        onToggleTts = { viewModel.toggleTts(msg.dbId, msg.text) },
                     )
                     }
                 }
@@ -552,6 +601,8 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
             onSetLanguage = viewModel::setLanguage,
             onSetAutoCompressEnabled = viewModel::setAutoCompressEnabled,
             onSetGlassLevel = viewModel::setGlassLevel,
+            onSetTtsEnabled = viewModel::setTtsEnabled,
+            onSetTtsVoice = viewModel::setTtsVoice,
             onRestoreConversation = viewModel::restoreConversation,
             onDeleteConversation = viewModel::deleteConversationPermanently,
             onDismiss = { showSettings = false },
@@ -634,6 +685,20 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
                 showCompressConfirm = true
             },
             onDismiss = { showContextPanel = false },
+        )
+    }
+
+    // 27 轮：会话流程图面板（窗口式竖版时间线 + 分支切换）
+    if (showFlowPanel) {
+        val flowTurns by viewModel.flowDiagram.collectAsState()
+        androidx.compose.runtime.LaunchedEffect(Unit) { viewModel.loadFlowDiagram() }
+        FlowPanelDialog(
+            turns = flowTurns ?: emptyList(),
+            onSwitchTo = { idx, v -> viewModel.switchVersionTo(idx, v) },
+            onDismiss = {
+                viewModel.dismissFlowDiagram()
+                showFlowPanel = false
+            },
         )
     }
 
@@ -855,6 +920,11 @@ private fun MessageBubble(
     onCopy: () -> Unit = {},
     onEdit: (() -> Unit)? = null,
     onSwitchVersion: (Int) -> Unit = {},
+    /** 27 轮：朗读按钮可见性（外部判断 DeepSeek / 开关 / 角色 / 非流式）。 */
+    showTts: Boolean = false,
+    /** 0=空闲 1=合成中 2=播放中（仅本条消息的态）。 */
+    ttsBusy: Int = 0,
+    onToggleTts: () -> Unit = {},
 ) {
     val s = LocalAppStrings.current
     val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
@@ -1004,13 +1074,39 @@ private fun MessageBubble(
             }
             val p = message.promptTokens
             val c = message.completionTokens
-            if (p != null && c != null) {
-                Text(
-                    text = s.thisRound(p, c, p + c),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+            // 27 轮：token 行与朗读按钮同一行（无 token 数据时朗读按钮独占一行靠右）
+            if (p != null && c != null || showTts) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.padding(top = 4.dp, start = 4.dp, end = 4.dp),
-                )
+                ) {
+                    if (p != null && c != null) {
+                        Text(
+                            text = s.thisRound(p, c, p + c),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    if (showTts) {
+                        Spacer(Modifier.weight(1f))
+                        TextButton(
+                            onClick = onToggleTts,
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp),
+                            modifier = Modifier.height(26.dp),
+                        ) {
+                            Text(
+                                text = when (ttsBusy) {
+                                    1 -> "⏳"
+                                    2 -> "⏹"
+                                    else -> "🔊"
+                                },
+                                style = MaterialTheme.typography.labelMedium,
+                                color = if (ttsBusy == 2) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
             }
             // 重新生成入口（仅最后一条已完成助手消息显示）
             if (showRegenerate) {

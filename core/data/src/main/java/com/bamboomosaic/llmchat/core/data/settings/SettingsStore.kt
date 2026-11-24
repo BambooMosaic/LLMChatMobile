@@ -56,6 +56,9 @@ class SettingsStore @Inject constructor(
     private val colorPresetPairKey = intPreferencesKey("color_preset_pair")
     private val compressSummaryLimitKey = intPreferencesKey("compress_summary_limit")
     private val glassLevelKey = intPreferencesKey("glass_level")
+    // 27 轮：语音朗读（DeepSeek TTS）
+    private val ttsEnabledKey = booleanPreferencesKey("tts_enabled")
+    private val ttsVoiceKey = stringPreferencesKey("tts_voice")
     private val legacyExperimentalGlassKey = booleanPreferencesKey("experimental_glass")
 
     override fun observeSettings(): Flow<AppSettings> = context.settingsDataStore.data.map { prefs ->
@@ -89,6 +92,8 @@ class SettingsStore @Inject constructor(
                 // 25 轮迁移：旧实验开关 true = 半透明档
                 if (prefs[legacyExperimentalGlassKey] == true) 1 else 0
             },
+            ttsEnabled = prefs[ttsEnabledKey] ?: true,
+            ttsVoice = prefs[ttsVoiceKey]?.takeIf { it == "stella" || it == "tide" } ?: "stella",
         )
     }
 
@@ -237,6 +242,18 @@ class SettingsStore @Inject constructor(
     /** 25 轮：玻璃材质档位（0/1/2）。 */
     override suspend fun setGlassLevel(value: Int) {
         context.settingsDataStore.edit { it[glassLevelKey] = value.coerceIn(0, 2) }
+    }
+
+    /** 27 轮：语音朗读开关。 */
+    override suspend fun setTtsEnabled(enabled: Boolean) {
+        context.settingsDataStore.edit { it[ttsEnabledKey] = enabled }
+    }
+
+    /** 27 轮：TTS 音色（stella / tide）。 */
+    override suspend fun setTtsVoice(voiceId: String) {
+        context.settingsDataStore.edit {
+            it[ttsVoiceKey] = if (voiceId == "tide") "tide" else "stella"
+        }
     }
 
     override fun observeModeUserPrompt(modeId: String): Flow<String?> =

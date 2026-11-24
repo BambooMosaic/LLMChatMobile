@@ -53,6 +53,26 @@ data class AppStrings(
     val noArchivedConversations: String,
     /** 26 轮：设置页【使用教程】入口 / 页面标题。 */
     val tutorialLabel: String,
+
+    // ===== 27 轮：提示词模板库 / 流程图 / TTS =====
+    /** 模式弹窗里的提示词模板库入口 / 标题。 */
+    val promptTemplateLibrary: String,
+    /** 流程图面板标题。 */
+    val flowTitle: String,
+    /** 流程图空会话占位。 */
+    val flowEmpty: String,
+    /** 流程图非当前版本分支的提示（点按切换）。 */
+    val flowTapToSwitch: String,
+    /** 其他设置：语音朗读（TTS）区块标题 / 开关。 */
+    val ttsSection: String,
+    /** TTS 音色选择标签。 */
+    val ttsVoiceLabel: String,
+    /** 音色：stella。 */
+    val ttsVoiceStella: String,
+    /** 音色：tide。 */
+    val ttsVoiceTide: String,
+    /** TTS 合成失败 toast。 */
+    val ttsFailed: String,
     val restore: String,
     val delete: String,
     val deleteConfirmTitle: String,
@@ -317,6 +337,15 @@ private val ZhCN = AppStrings(
     archivedConversations = "恢复对话",
     noArchivedConversations = "暂无归档对话",
     tutorialLabel = "使用教程",
+    promptTemplateLibrary = "提示词模板库",
+    flowTitle = "会话流程图",
+    flowEmpty = "还没有消息，发送第一条后这里会显示对话流程。",
+    flowTapToSwitch = "点击切换到这版",
+    ttsSection = "语音朗读（DeepSeek TTS）",
+    ttsVoiceLabel = "音色",
+    ttsVoiceStella = "海星（女声）",
+    ttsVoiceTide = "暗潮（男声）",
+    ttsFailed = "语音合成失败，请稍后再试",
     restore = "恢复",
     delete = "删除",
     deleteConfirmTitle = "确认永久删除？",
@@ -528,6 +557,15 @@ private val ZhTW = AppStrings(
     archivedConversations = "恢復對話",
     noArchivedConversations = "暫無歸檔對話",
     tutorialLabel = "使用教學",
+    promptTemplateLibrary = "提示詞模板庫",
+    flowTitle = "會話流程圖",
+    flowEmpty = "還沒有訊息，傳送第一條後這裡會顯示對話流程。",
+    flowTapToSwitch = "點按切換到這版",
+    ttsSection = "語音朗讀（DeepSeek TTS）",
+    ttsVoiceLabel = "音色",
+    ttsVoiceStella = "海星（女聲）",
+    ttsVoiceTide = "暗潮（男聲）",
+    ttsFailed = "語音合成失敗，請稍後再試",
     restore = "恢復",
     delete = "刪除",
     deleteConfirmTitle = "確認永久刪除？",
@@ -739,6 +777,15 @@ private val EnUS = AppStrings(
     archivedConversations = "Restore chats",
     noArchivedConversations = "No archived chats",
     tutorialLabel = "Tutorial",
+    promptTemplateLibrary = "Prompt templates",
+    flowTitle = "Chat flow",
+    flowEmpty = "No messages yet — the flow appears after your first message.",
+    flowTapToSwitch = "Tap to switch",
+    ttsSection = "Read aloud (DeepSeek TTS)",
+    ttsVoiceLabel = "Voice",
+    ttsVoiceStella = "Stella (female)",
+    ttsVoiceTide = "Tide (male)",
+    ttsFailed = "Speech synthesis failed, try again later",
     restore = "Restore",
     delete = "Delete",
     deleteConfirmTitle = "Delete permanently?",

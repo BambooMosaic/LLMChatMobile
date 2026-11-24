@@ -29,6 +29,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -79,6 +80,7 @@ class ChatViewModel @Inject constructor(
     private val tokenUsageRepository: TokenUsageRepository,
     private val configRepository: ConfigRepository,
     @ApplicationContext private val appContext: Context,
+    private val ttsClient: com.bamboomosaic.llmchat.core.network.DeepSeekTtsClient,
 ) : ViewModel() {
 
     /** 新建对话的初始标题（发送首条消息后被占位标题逻辑替换）。 */
@@ -1237,6 +1239,195 @@ class ChatViewModel @Inject constructor(
     /** 19 轮：用户称呼（其他设置页，留空不注入）。 */
     fun setUserNickname(value: String) {
         viewModelScope.launch { settingsRepository.setUserNickname(value) }
+    }
+
+    // ===== 27 轮：语音朗读（DeepSeek TTS）=====
+
+    /** 朗读状态：空闲 / 合成中 / 播放中（携带消息 dbId，用于按钮态）。 */
+    sealed interface TtsState {
+        data object Idle : TtsState
+        data class Loading(val messageId: Long) : TtsState
+        data class Playing(val messageId: Long) : TtsState
+    }
+
+    private val _ttsState = MutableStateFlow<TtsState>(TtsState.Idle)
+    val ttsState: StateFlow<TtsState> = _ttsState.asStateFlow()
+
+    /** 合成失败计数（UI 收集后弹 toast）。 */
+    private val _ttsErrorTick = MutableStateFlow(0)
+    val ttsErrorTick: StateFlow<Int> = _ttsErrorTick.asStateFlow()
+
+    private var mediaPlayer: android.media.MediaPlayer? = null
+    private var ttsSeq = 0
+
+    override fun onCleared() {
+        stopTts()
+        super.onCleared()
+    } // 防竞态：停止/新请求后，旧的在途响应直接丢弃
+
+    /** 点击消息行喇叭：未在播=合成并播放；正在合成/播放同一条=停止。 */
+    fun toggleTts(messageId: Long, text: String) {
+        when (val st = _ttsState.value) {
+            is TtsState.Loading -> if (st.messageId == messageId) return stopTts()
+            is TtsState.Playing -> if (st.messageId == messageId) return stopTts()
+            TtsState.Idle -> {}
+        }
+        stopTts()
+        val config = currentConfig.value ?: return
+        val voice = settings.value.ttsVoice
+        // 截断：全汉字时约 8400 计费字符（低于 1 万上限），JSON 体远小于 64KiB
+        val clipped = text.take(4200)
+        val seq = ++ttsSeq
+        _ttsState.value = TtsState.Loading(messageId)
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                ttsClient.synthesize(config.apiKey, clipped, voice)
+            }
+            if (seq != ttsSeq) return@launch
+            result.fold(
+                onSuccess = { bytes -> playWav(messageId, bytes, seq) },
+                onFailure = {
+                    if (seq == ttsSeq) {
+                        _ttsState.value = TtsState.Idle
+                        _ttsErrorTick.value++
+                    }
+                },
+            )
+        }
+    }
+
+    private fun playWav(messageId: Long, bytes: ByteArray, seq: Int) {
+        stopTtsLocked()
+        val dir = java.io.File(appContext.cacheDir, "tts").apply { mkdirs() }
+        val file = java.io.File(dir, "msg_" + messageId + ".wav")
+        runCatching { file.writeBytes(bytes) }.getOrElse {
+            _ttsState.value = TtsState.Idle
+            _ttsErrorTick.value++
+            return
+        }
+        val player = android.media.MediaPlayer()
+        try {
+            player.setDataSource(file.path)
+            player.setOnCompletionListener {
+                if (_ttsState.value is TtsState.Playing) stopTts()
+            }
+            player.prepare()
+            player.start()
+            mediaPlayer = player
+            if (seq == ttsSeq) _ttsState.value = TtsState.Playing(messageId)
+        } catch (e: Exception) {
+            runCatching { player.release() }
+            file.delete()
+            _ttsState.value = TtsState.Idle
+            _ttsErrorTick.value++
+        }
+    }
+
+    /** 停止朗读并释放播放器（后台播完自动停；切换会话不主动打断）。 */
+    fun stopTts() {
+        ttsSeq++
+        stopTtsLocked()
+    }
+
+    private fun stopTtsLocked() {
+        mediaPlayer?.let { player ->
+            runCatching { player.stop() }
+            runCatching { player.release() }
+        }
+        mediaPlayer = null
+        if (_ttsState.value != TtsState.Idle) _ttsState.value = TtsState.Idle
+    }
+
+    fun setTtsEnabled(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setTtsEnabled(enabled) }
+    }
+
+    fun setTtsVoice(voiceId: String) {
+        viewModelScope.launch { settingsRepository.setTtsVoice(voiceId) }
+    }
+
+    // ===== 27 轮：会话流程图 =====
+
+    /** 流程图回复分支：一个版本一条（摘要截断展示）。 */
+    data class FlowReply(val version: Int, val text: String)
+
+    /** 流程图一轮对话：用户消息 + 该提问下全部 AI 版本（replies 为空 = 尚无回复）。 */
+    data class FlowTurn(
+        /** 助手回复在 UI 消息列表中的下标（点击分支切版本用）；无回复轮为 -1。 */
+        val uiIndex: Int,
+        val userText: String,
+        val replies: List<FlowReply>,
+        /** 当前显示的版本号（无回复轮为 0）。 */
+        val activeVersion: Int,
+    )
+
+    private val _flowDiagram = MutableStateFlow<List<FlowTurn>?>(null)
+    val flowDiagram: StateFlow<List<FlowTurn>?> = _flowDiagram.asStateFlow()
+
+    /** 打开流程图面板时构建数据：复用当前显示链，多版本组查询全部兄弟版本。 */
+    fun loadFlowDiagram() {
+        viewModelScope.launch {
+            val ui = _messages.value
+            val turns = mutableListOf<FlowTurn>()
+            var pendingUser: String? = null
+            ui.forEach { m ->
+                if (m.isStreaming) return@forEach
+                if (m.role == MessageRole.USER) {
+                    // 上一条用户消息还没等到回复（如刚发出未生成完），保留为空轮
+                    if (pendingUser != null) turns += FlowTurn(-1, pendingUser, emptyList(), 0)
+                    pendingUser = m.text.ifBlank { "[图片]" }
+                } else {
+                    val userText = pendingUser ?: ""
+                    pendingUser = null
+                    val siblings = if (m.dbId > 0 && m.latestVersion > 1) {
+                        withContext(Dispatchers.IO) { conversationRepository.getSiblingVersions(m.dbId) }
+                    } else {
+                        emptyList()
+                    }
+                    val replies = if (siblings.isEmpty()) {
+                        listOf(FlowReply(m.version, m.text.take(160)))
+                    } else {
+                        siblings.sortedBy { it.version }.map { FlowReply(it.version, it.content.take(160)) }
+                    }
+                    turns += FlowTurn(ui.indexOf(m), userText, replies, m.version)
+                }
+            }
+            pendingUser?.let { turns += FlowTurn(-1, it, emptyList(), 0) }
+            _flowDiagram.value = turns
+        }
+    }
+
+    /** 关闭流程图面板时清空数据。 */
+    fun dismissFlowDiagram() {
+        _flowDiagram.value = null
+    }
+
+    /** 27 轮：流程图分支点击——精确切换到指定版本。 */
+    fun switchVersionTo(index: Int, version: Int) {
+        val current = _messages.value.getOrNull(index) ?: return
+        if (current.version == version || current.dbId <= 0) return
+        viewModelScope.launch {
+            val siblings = conversationRepository.getSiblingVersions(current.dbId)
+            val target = siblings.firstOrNull { it.version == version } ?: return@launch
+            val versions = siblings.map { it.version }
+            val usage = target.usageId?.let { tokenUsageRepository.getUsageById(it) }
+            _messages.update { list ->
+                list.toMutableList().also { mutable ->
+                    mutable[index] = UiMessage(
+                        role = target.role,
+                        text = target.content,
+                        reasoning = target.reasoning.orEmpty(),
+                        searchPages = target.searchPages,
+                        dbId = target.id,
+                        version = target.version,
+                        latestVersion = versions.maxOrNull() ?: target.version,
+                        promptTokens = usage?.promptTokens,
+                        completionTokens = usage?.completionTokens,
+                    )
+                }
+            }
+            loadFlowDiagram() // 面板内的当前版本高亮同步刷新
+        }
     }
 
     /** 20 轮：聊天页自定义背景图（应用内路径；空串 = 默认背景）。 */

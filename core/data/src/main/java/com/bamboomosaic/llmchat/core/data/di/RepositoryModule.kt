@@ -18,6 +18,7 @@ import com.bamboomosaic.llmchat.core.domain.ContextWindowRepository
 import com.bamboomosaic.llmchat.core.domain.ConversationRepository
 import com.bamboomosaic.llmchat.core.domain.SettingsRepository
 import com.bamboomosaic.llmchat.core.domain.TokenUsageRepository
+import com.bamboomosaic.llmchat.core.network.DeepSeekTtsClient
 import com.bamboomosaic.llmchat.core.network.OpenAiSseClient
 import dagger.Binds
 import dagger.Module
@@ -64,6 +65,10 @@ abstract class RepositoryModule {
         @Provides
         @Singleton
         fun provideOpenAiSseClient(): OpenAiSseClient = OpenAiSseClient()
+
+        @Provides
+        @Singleton
+        fun provideDeepSeekTtsClient(): DeepSeekTtsClient = DeepSeekTtsClient()
 
         @Provides
         @Singleton

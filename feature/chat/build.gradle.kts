@@ -34,6 +34,8 @@ kotlin {
 
 dependencies {
     implementation(project(":core:domain"))
+    // 27 轮：TTS 直连 DeepSeek 语音合成接口（ChatViewModel 注入 DeepSeekTtsClient）
+    implementation(project(":core:network"))
 
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
