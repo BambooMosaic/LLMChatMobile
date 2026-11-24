@@ -693,8 +693,8 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
         val flowTurns by viewModel.flowDiagram.collectAsState()
         androidx.compose.runtime.LaunchedEffect(Unit) { viewModel.loadFlowDiagram() }
         FlowPanelDialog(
-            turns = flowTurns ?: emptyList(),
-            onSwitchTo = { idx, v -> viewModel.switchVersionTo(idx, v) },
+            nodes = flowTurns ?: emptyList(),
+            onSelectBranch = viewModel::selectBranch,
             onDismiss = {
                 viewModel.dismissFlowDiagram()
                 showFlowPanel = false

@@ -21,6 +21,7 @@ import com.bamboomosaic.llmchat.feature.chat.i18n.LocalAppStrings
 import com.bamboomosaic.llmchat.feature.chat.i18n.stringsFor
 import com.bamboomosaic.llmchat.feature.chat.theme.LLMChatTheme
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -28,6 +29,8 @@ class MainActivity : ComponentActivity() {
 
     @Inject
     lateinit var settingsRepository: SettingsRepository
+
+    private val scope = kotlinx.coroutines.MainScope()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -66,6 +69,13 @@ class MainActivity : ComponentActivity() {
 
             // 首次启动标记（DataStore），引导完成后置 false
             val isFirstLaunch by settingsRepository.observeFirstLaunch().collectAsState(initial = true)
+            // 27 轮修正：大版本变化 → 轻量更新公告窗口（不再重走首次引导）
+            val majorVersionChanged by settingsRepository.observeMajorVersionChanged().collectAsState(initial = false)
+            val splashVersionName = remember {
+                runCatching {
+                    packageManager.getPackageInfo(packageName, 0).versionName
+                }.getOrNull() ?: ""
+            }
 
             CompositionLocalProvider(
                 LocalAppStrings provides stringsFor(settings.language),
@@ -82,6 +92,18 @@ class MainActivity : ComponentActivity() {
                         else -> {
                             val navController = rememberNavController()
                             AppNavHost(navController = navController)
+                            // 27 轮修正：大版本更新公告覆盖在主界面之上
+                            if (majorVersionChanged) {
+                                com.bamboomosaic.llmchat.feature.chat.UpdateNoticeDialog(
+                                    versionName = splashVersionName,
+                                    onDismiss = {
+                                        // 27 轮：关闭公告记录当前大版本段（DataStore 编辑需协程）
+                                        scope.launch {
+                                            settingsRepository.markMajorVersionNoticeSeen()
+                                        }
+                                    },
+                                )
+                            }
                         }
                     }
                 }

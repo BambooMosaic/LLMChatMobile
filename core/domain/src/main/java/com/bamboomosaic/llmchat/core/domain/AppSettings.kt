@@ -207,6 +207,15 @@ interface SettingsRepository {
     /** 27 轮：TTS 音色（stella / tide）。 */
     suspend fun setTtsVoice(voiceId: String)
 
+    /**
+     * 27 轮修正：大版本更新公告（已完成后首次运行时观察）——
+     * 大版本段（major.minor）变化返回 true；首次引导本身不看这个。
+     */
+    fun observeMajorVersionChanged(): Flow<Boolean>
+
+    /** 27 轮修正：关闭更新公告后记录当前大版本段。 */
+    suspend fun markMajorVersionNoticeSeen()
+
     /** 模式模板记忆：每个模式下用户最后一次填写的用户提示词。 */
     fun observeModeUserPrompt(modeId: String): kotlinx.coroutines.flow.Flow<String?>
 

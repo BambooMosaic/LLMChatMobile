@@ -29,4 +29,9 @@ data class MessageEntity(
     val versionKey: Long? = null,
     /** 该版本对应的 token 用量记录 id（token_usage_records.id），用于按版本展示消耗。 */
     val usageId: Long? = null,
+    /**
+     * 27 轮：父消息 id（消息分叉树）。普通发送=激活链尾消息 id；编辑重发的新用户消息=被编辑用户消息的父；
+     * 助手回复=触发的用户消息 id。null=27 轮前的旧数据（按线性逻辑退化处理）。
+     */
+    val parentId: Long? = null,
 )

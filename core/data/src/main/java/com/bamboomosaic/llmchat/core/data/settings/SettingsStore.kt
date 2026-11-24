@@ -303,19 +303,29 @@ class SettingsStore @Inject constructor(
     }
 
     /**
-     * 26 轮：首次引导跟随大版本——从未完成过引导照常展示；已完成过引导的用户，
-     * 只在记录的大版本段（major.minor，如 "0.6"）与当前不同时重新引导，
-     * 小版本更新（0.6.4 → 0.6.5）不再触发。
-     * 老用户（26 轮前完成引导，无版本记录）首次运行时补记当前大版本段，0.7 起即可按大版本判断。
+     * 27 轮修正：首次引导只看「从未完成过引导」，更新不再重走大引导；
+     * 大版本变化改由 [observeMajorVersionChanged] 触发轻量更新公告。
      */
     override fun observeFirstLaunch(): Flow<Boolean> = context.settingsDataStore.data.map { prefs ->
-        if (prefs[firstLaunchKey] ?: true) return@map true
+        prefs[firstLaunchKey] ?: true
+    }
+
+    /**
+     * 27 轮修正：大版本更新公告——已完成引导的用户，大版本段（major.minor）变化时返回 true。
+     * 旧用户没有版本记录时补记当前段（不打扰），0.7 之后的下一次大版本起正常生效。
+     */
+    override fun observeMajorVersionChanged(): Flow<Boolean> = context.settingsDataStore.data.map { prefs ->
+        if (prefs[firstLaunchKey] == true) return@map false
         val stored = prefs[onboardVersionKey]
         if (stored == null) {
             context.settingsDataStore.edit { it[onboardVersionKey] = currentMajorMinor() }
             return@map false
         }
         stored != currentMajorMinor()
+    }
+
+    override suspend fun markMajorVersionNoticeSeen() {
+        context.settingsDataStore.edit { it[onboardVersionKey] = currentMajorMinor() }
     }
 
     override suspend fun setFirstLaunchDone() {

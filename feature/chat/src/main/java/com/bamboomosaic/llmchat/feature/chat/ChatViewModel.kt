@@ -209,7 +209,7 @@ class ChatViewModel @Inject constructor(
         val last = conversations.value.maxByOrNull { it.updatedAt }
         if (last != null) {
             _currentConversationId.value = last.id
-            _messages.value = loadLatestMessages(last.id)
+            _messages.value = loadActivePath(last.id)
         } else {
             newConversation()
         }
@@ -314,7 +314,7 @@ class ChatViewModel @Inject constructor(
                 )
             }
             messages.forEach { conversationRepository.appendMessage(id, it) }
-            _messages.value = loadLatestMessages(id)
+            _messages.value = loadActivePath(id)
         }
     }
 
@@ -414,23 +414,10 @@ class ChatViewModel @Inject constructor(
             val curIdx = versions.indexOf(current.version).takeIf { it >= 0 } ?: 0
             val nextIdx = ((curIdx + delta) % versions.size + versions.size) % versions.size
             val target = siblings[nextIdx]
-            // 切换版本的 token 消耗同步更新
-            val usage = target.usageId?.let { tokenUsageRepository.getUsageById(it) }
-            _messages.update { list ->
-                list.toMutableList().also { mutable ->
-                    mutable[index] = UiMessage(
-                        role = target.role,
-                        text = target.content,
-                        reasoning = target.reasoning.orEmpty(),
-                        searchPages = target.searchPages,
-                        dbId = target.id,
-                        version = target.version,
-                        latestVersion = versions.maxOrNull() ?: target.version,
-                        promptTokens = usage?.promptTokens,
-                        completionTokens = usage?.completionTokens,
-                    )
-                }
-            }
+            // 27 轮：分支切换 = 记录激活选择 + 整条路径重建（每个版本各自延伸独立子链）
+            val key = target.versionKey ?: return@launch
+            branchChoice[key] = target.id
+            rebuildActivePath(index to target)
         }
     }
 
@@ -441,8 +428,17 @@ class ChatViewModel @Inject constructor(
     fun editAndResend(messageIndex: Int, newText: String) {
         if (_isGenerating.value) return
         if (newText.isBlank()) return
+        viewModelScope.launch {
         val conversationId = _currentConversationId.value
         val currentSettings = settings.value
+
+        // 27 轮：新用户消息挂到被编辑用户消息的父下（兄弟分支，上下文隔离）
+        val editedDbId = _messages.value.getOrNull(messageIndex)?.dbId ?: 0L
+        val editedParent = if (editedDbId > 0) {
+            withContext(Dispatchers.IO) { conversationRepository.getMessageById(editedDbId)?.parentId }
+        } else {
+            null
+        }
 
         // 截断该用户消息及之后的所有 UI 消息（历史请求历史也截断到此消息之前）
         val history = _messages.value.take(messageIndex).filter { !it.isStreaming }
@@ -463,11 +459,13 @@ class ChatViewModel @Inject constructor(
             userTextForTitle = newText,
             persistUserMessage = true,
             modeId = effectiveModeId.value,
+            userParentIdOverride = editedParent,
             versionKeyOf = {
                 conversationRepository.getMessages(conversationId)
                     .lastOrNull { it.role == MessageRole.USER }?.id ?: 0L
             },
         )
+        }
     }
 
     /** 组装请求消息：system + 历史，可选压缩。 */
@@ -564,11 +562,13 @@ class ChatViewModel @Inject constructor(
         modeId: String = ModeConfig.CUSTOM,
         /** 多版本上下文：触发本次回复的用户消息 dbId（0 = 普通新消息，持久化后再取 id）。 */
         versionKeyOf: suspend () -> Long = { 0L },
+        /** 27 轮：用户消息父消息 id 覆盖（编辑重发=被编辑用户消息的父；null=自动取激活链尾）。 */
+        userParentIdOverride: Long? = null,
     ) {
         // 19 轮：请求组装挪进 streamInternal（需在会话转正之后执行搜索代理前置阶段）
         streamInternal(
             conversationId, history, currentSettings, userTextForTitle,
-            userImages, persistUserMessage, modeId, versionKeyOf,
+            userImages, persistUserMessage, modeId, versionKeyOf, userParentIdOverride,
         )
     }
 
@@ -585,6 +585,7 @@ class ChatViewModel @Inject constructor(
         persistUserMessage: Boolean,
         modeId: String = ModeConfig.CUSTOM,
         versionKeyOf: suspend () -> Long = { 0L },
+        userParentIdOverride: Long? = null,
     ) {
         // 流式渲染节流：正文很长时每个 chunk 都重建列表 + 重新排版会明显闪烁，
         // 这里限制到约 16fps，结束时再强制渲染一次完整内容。
@@ -611,9 +612,17 @@ class ChatViewModel @Inject constructor(
             conversationRepository.ensureConversation(conversationId, userTextForTitle.take(MAX_TITLE_LENGTH))
             conversationRepository.updateTitleIfPlaceholder(conversationId, userTextForTitle.take(MAX_TITLE_LENGTH))
             if (persistUserMessage) {
+                // 27 轮：分叉树——用户消息父 = 编辑重发指定父，否则当前激活链尾
+                val userParent = userParentIdOverride
+                    ?: _messages.value.lastOrNull { !it.isStreaming && it.dbId > 0 }?.dbId
                 conversationRepository.appendMessage(
                     conversationId,
-                    ChatMessage(MessageRole.USER, userTextForTitle, images = userImages),
+                    ChatMessage(
+                        MessageRole.USER,
+                        userTextForTitle,
+                        images = userImages,
+                        parentId = userParent?.takeIf { it > 0 },
+                    ),
                 )
             }
 
@@ -733,6 +742,7 @@ class ChatViewModel @Inject constructor(
                         content = accumulated,
                         reasoning = reasoningText.takeIf { it.isNotBlank() },
                         searchPages = searchPagesState.value,
+                        parentId = vk.takeIf { it > 0 }, // 27 轮：父 = 触发的用户消息
                     ),
                     versionKey = vk,
                 )
@@ -964,28 +974,75 @@ class ChatViewModel @Inject constructor(
         _draftUserPrompt.value = null
         _currentConversationId.value = conversationId
         viewModelScope.launch {
-            _messages.value = loadLatestMessages(conversationId)
+            _messages.value = loadActivePath(conversationId)
         }
     }
 
+    /** 分支激活选择：key = 用户分支组的父消息 id / 助手版本组的 versionKey；value = 选中消息 id。 */
+    private val branchChoice = mutableMapOf<Long, Long>()
+
     /**
-     * 加载会话消息并只保留每组的最新版本：
-     * 普通消息（versionKey=null）直接保留；助手多版本组只留 version 最大的一条。
+     * 27 轮：加载会话的「激活路径」——消息分叉树。
+     * - 旧数据（parentId 全 null）退化为原线性逻辑（versionKey 组取最新）；
+     * - 新数据按树走：用户分支组（编辑重发兄弟）与助手版本组（重新生成）各层选激活分支，
+     *   分支间上下文完全隔离（激活路径 = 请求历史）；Token 统计仍按全会话累计（usage 表不动）。
      */
-    private suspend fun loadLatestMessages(conversationId: String): List<UiMessage> {
+    private suspend fun loadActivePath(conversationId: String): List<UiMessage> {
         val all = conversationRepository.getMessages(conversationId)
-        val latestById = mutableMapOf<Long, ChatMessage>() // versionKey -> 最新版
-        val result = mutableListOf<UiMessage>()
+        if (all.none { it.parentId != null }) return legacyLinearPath(all)
+        val children = all.filter { it.parentId != null }.groupBy { it.parentId!! }
+        val latestByKey = HashMap<Long, ChatMessage>()
+        all.forEach { m ->
+            val k = m.versionKey ?: return@forEach
+            val cur = latestByKey[k]
+            if (cur == null || m.version > cur.version) latestByKey[k] = m
+        }
+        val out = mutableListOf<UiMessage>()
+        var enteredTree = false
+        var lastKey: Long? = null
         for (m in all) {
-            val key = m.versionKey
-            if (key == null) {
-                result += m.toUi()
+            if (m.parentId != null) continue
+            if (enteredTree) break // 进入树子链后，主线剩余部分（分叉前老链）不再追加
+            if (m.role == MessageRole.USER) {
+                out += m.toUi()
+                lastKey = null
+                val kids = children[m.id]
+                if (!kids.isNullOrEmpty()) {
+                    // 该用户消息下挂有树节点（新回复组 / 编辑分支）→ 进入树
+                    out += replyGroupFrom(m.id, all, children)
+                    enteredTree = true
+                }
             } else {
-                val cur = latestById[key]
-                if (cur == null || m.version > cur.version) latestById[key] = m
+                val k = m.versionKey
+                if (k == null) {
+                    out += m.toUi()
+                    lastKey = null
+                } else if (k != lastKey) {
+                    lastKey = k
+                    val chosen = branchChoice[k]?.let { id -> all.find { it.id == id } }
+                        ?: latestByKey[k]
+                        ?: continue
+                    val groupSize = all.count { it.versionKey == k }
+                    out += chosen.toUi(latestVersion = groupSize)
+                    val userKids = children[chosen.id]?.filter { it.role == MessageRole.USER }
+                    if (!userKids.isNullOrEmpty()) {
+                        out += userBranchFrom(chosen.id, all, children)
+                        enteredTree = true
+                    }
+                }
             }
         }
-        // 按原始顺序回填多版本组的最新版
+        return out
+    }
+
+    /** 旧数据线性退化：versionKey 组取最新（26 轮前的行为）。 */
+    private fun legacyLinearPath(all: List<ChatMessage>): List<UiMessage> {
+        val latestById = mutableMapOf<Long, ChatMessage>()
+        for (m in all) {
+            val k = m.versionKey ?: continue
+            val cur = latestById[k]
+            if (cur == null || m.version > cur.version) latestById[k] = m
+        }
         val out = mutableListOf<UiMessage>()
         var lastKey: Long? = null
         for (m in all) {
@@ -996,13 +1053,68 @@ class ChatViewModel @Inject constructor(
                 lastKey = m.versionKey
                 val latest = latestById[m.versionKey]
                 if (latest != null) {
-                    val siblings = conversationRepository.getSiblingVersions(latest.id)
-                    val maxV = siblings.maxOfOrNull { it.version } ?: latest.version
+                    val maxV = all.count { it.versionKey == m.versionKey }
                     out += latest.toUi(latestVersion = maxV)
                 }
             }
         }
         return out
+    }
+
+    /** 树递归：用户消息下的回复组（全量按 versionKey，激活选择生效）→ 回复下的用户分支 → 递归。 */
+    private fun replyGroupFrom(
+        userId: Long,
+        all: List<ChatMessage>,
+        children: Map<Long, List<ChatMessage>>,
+    ): List<UiMessage> {
+        val replies = all.filter { it.role == MessageRole.ASSISTANT && it.versionKey == userId }
+        if (replies.isEmpty()) return emptyList()
+        val chosen = branchChoice[userId]?.let { id -> replies.find { it.id == id } }
+            ?: replies.maxByOrNull { it.version }
+            ?: replies.first()
+        val maxV = replies.maxOfOrNull { it.version } ?: chosen.version
+        val out = mutableListOf(chosen.toUi(latestVersion = maxV))
+        out += userBranchFrom(chosen.id, all, children)
+        return out
+    }
+
+    /** 树递归：某消息下的用户兄弟分支组（编辑重发分叉），激活分支继续递归其回复组。 */
+    private fun userBranchFrom(
+        parentId: Long,
+        all: List<ChatMessage>,
+        children: Map<Long, List<ChatMessage>>,
+    ): List<UiMessage> {
+        val users = children[parentId]?.filter { it.role == MessageRole.USER } ?: return emptyList()
+        if (users.isEmpty()) return emptyList()
+        val activeUser = branchChoice[parentId]?.let { id -> users.find { it.id == id } }
+            ?: users.maxByOrNull { it.id }
+            ?: users.first()
+        val out = mutableListOf(activeUser.toUi())
+        out += replyGroupFrom(activeUser.id, all, children)
+        return out
+    }
+
+    /** 重建激活路径并刷新 UI；[withUsage] = (目标消息, 数据) 用于切换后补 token 行显示。 */
+    private suspend fun rebuildActivePath(withUsage: Pair<Int, ChatMessage>? = null) {
+        val list = loadActivePath(_currentConversationId.value)
+        val final = if (withUsage != null) {
+            val (index, msg) = withUsage
+            val i = list.indexOfFirst { it.dbId == msg.id }
+            if (i >= 0) {
+                val usage = msg.usageId?.let { tokenUsageRepository.getUsageById(it) }
+                list.toMutableList().also {
+                    it[i] = it[i].copy(
+                        promptTokens = usage?.promptTokens,
+                        completionTokens = usage?.completionTokens,
+                    )
+                }
+            } else {
+                list
+            }
+        } else {
+            list
+        }
+        _messages.value = final
     }
 
     private fun ChatMessage.toUi(latestVersion: Int = version): UiMessage = UiMessage(
@@ -1346,54 +1458,63 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch { settingsRepository.setTtsVoice(voiceId) }
     }
 
-    // ===== 27 轮：会话流程图 =====
+    // ===== 27 轮：会话流程图（平面树）=====
 
-    /** 流程图回复分支：一个版本一条（摘要截断展示）。 */
-    data class FlowReply(val version: Int, val text: String)
-
-    /** 流程图一轮对话：用户消息 + 该提问下全部 AI 版本（replies 为空 = 尚无回复）。 */
-    data class FlowTurn(
-        /** 助手回复在 UI 消息列表中的下标（点击分支切版本用）；无回复轮为 -1。 */
-        val uiIndex: Int,
-        val userText: String,
-        val replies: List<FlowReply>,
-        /** 当前显示的版本号（无回复轮为 0）。 */
-        val activeVersion: Int,
+    /**
+     * 流程图节点（递归树）：不展示正文，AI 节点标「第 N 次生成」、用户节点标内容摘要；
+     * children = 同层兄弟分支（重新生成版本组 / 编辑重发用户分支），点击非激活分支切换。
+     */
+    data class FlowNodeUi(
+        val messageId: Long,
+        val isUser: Boolean,
+        val label: String,
+        val active: Boolean,
+        val children: List<FlowNodeUi>,
     )
 
-    private val _flowDiagram = MutableStateFlow<List<FlowTurn>?>(null)
-    val flowDiagram: StateFlow<List<FlowTurn>?> = _flowDiagram.asStateFlow()
+    private val _flowDiagram = MutableStateFlow<List<FlowNodeUi>?>(null)
+    val flowDiagram: StateFlow<List<FlowNodeUi>?> = _flowDiagram.asStateFlow()
 
-    /** 打开流程图面板时构建数据：复用当前显示链，多版本组查询全部兄弟版本。 */
+    /** 打开流程图面板时构建平面树：老主线（parent==null 的用户消息）作顶层，逐层挂分支。 */
     fun loadFlowDiagram() {
         viewModelScope.launch {
-            val ui = _messages.value
-            val turns = mutableListOf<FlowTurn>()
-            var pendingUser: String? = null
-            ui.forEach { m ->
-                if (m.isStreaming) return@forEach
-                if (m.role == MessageRole.USER) {
-                    // 上一条用户消息还没等到回复（如刚发出未生成完），保留为空轮
-                    if (pendingUser != null) turns += FlowTurn(-1, pendingUser, emptyList(), 0)
-                    pendingUser = m.text.ifBlank { "[图片]" }
+            val all = withContext(Dispatchers.IO) { conversationRepository.getMessages(_currentConversationId.value) }
+            val activeIds = _messages.value.map { it.dbId }.toSet()
+            val children = all.filter { it.parentId != null }.groupBy { it.parentId }
+            val assistantByKey = all
+                .filter { it.role == MessageRole.ASSISTANT && it.versionKey != null }
+                .groupBy { it.versionKey!! }
+
+            fun buildNode(m: ChatMessage, siblings: Int, branchIndex: Int): FlowNodeUi {
+                val label = if (m.role == MessageRole.USER) {
+                    val base = m.content.replace("\n", " ").trim().take(16).ifBlank { "[图片]" }
+                    if (siblings > 1) "改$branchIndex $base" else base
                 } else {
-                    val userText = pendingUser ?: ""
-                    pendingUser = null
-                    val siblings = if (m.dbId > 0 && m.latestVersion > 1) {
-                        withContext(Dispatchers.IO) { conversationRepository.getSiblingVersions(m.dbId) }
-                    } else {
-                        emptyList()
-                    }
-                    val replies = if (siblings.isEmpty()) {
-                        listOf(FlowReply(m.version, m.text.take(160)))
-                    } else {
-                        siblings.sortedBy { it.version }.map { FlowReply(it.version, it.content.take(160)) }
-                    }
-                    turns += FlowTurn(ui.indexOf(m), userText, replies, m.version)
+                    "第 ${m.version} 次生成"
                 }
+                val sub = mutableListOf<FlowNodeUi>()
+                if (m.role == MessageRole.USER) {
+                    // 回复版本组（重新生成）
+                    val group = assistantByKey[m.id].orEmpty()
+                    sub += group.mapIndexed { i, a -> buildNode(a, group.size, i + 1) }
+                }
+                // 该消息下的用户分支（编辑重发）
+                val userKids = children[m.id].orEmpty().filter { it.role == MessageRole.USER }
+                sub += userKids.mapIndexed { i, k -> buildNode(k, userKids.size, i + 1) }
+                return FlowNodeUi(
+                    messageId = m.id,
+                    isUser = m.role == MessageRole.USER,
+                    label = label,
+                    active = m.id in activeIds,
+                    children = sub,
+                )
             }
-            pendingUser?.let { turns += FlowTurn(-1, it, emptyList(), 0) }
-            _flowDiagram.value = turns
+
+            // 顶层 = 主线用户消息（parent==null，按时间序）
+            val topNodes = all
+                .filter { it.role == MessageRole.USER && it.parentId == null }
+                .map { buildNode(it, 1, 1) }
+            _flowDiagram.value = topNodes
         }
     }
 
@@ -1402,31 +1523,19 @@ class ChatViewModel @Inject constructor(
         _flowDiagram.value = null
     }
 
-    /** 27 轮：流程图分支点击——精确切换到指定版本。 */
-    fun switchVersionTo(index: Int, version: Int) {
-        val current = _messages.value.getOrNull(index) ?: return
-        if (current.version == version || current.dbId <= 0) return
+    /** 27 轮：流程图分支点击——用户分支按父组 / 助手按版本组记录激活，重建整条路径。 */
+    fun selectBranch(messageId: Long) {
         viewModelScope.launch {
-            val siblings = conversationRepository.getSiblingVersions(current.dbId)
-            val target = siblings.firstOrNull { it.version == version } ?: return@launch
-            val versions = siblings.map { it.version }
-            val usage = target.usageId?.let { tokenUsageRepository.getUsageById(it) }
-            _messages.update { list ->
-                list.toMutableList().also { mutable ->
-                    mutable[index] = UiMessage(
-                        role = target.role,
-                        text = target.content,
-                        reasoning = target.reasoning.orEmpty(),
-                        searchPages = target.searchPages,
-                        dbId = target.id,
-                        version = target.version,
-                        latestVersion = versions.maxOrNull() ?: target.version,
-                        promptTokens = usage?.promptTokens,
-                        completionTokens = usage?.completionTokens,
-                    )
-                }
+            val msg = withContext(Dispatchers.IO) { conversationRepository.getMessageById(messageId) }
+                ?: return@launch
+            val key = if (msg.role == MessageRole.USER) {
+                msg.parentId ?: return@launch
+            } else {
+                msg.versionKey ?: return@launch
             }
-            loadFlowDiagram() // 面板内的当前版本高亮同步刷新
+            branchChoice[key] = messageId
+            rebuildActivePath()
+            loadFlowDiagram() // 面板高亮同步刷新
         }
     }
 
@@ -1720,7 +1829,7 @@ class ChatViewModel @Inject constructor(
                 (if (prev.isBlank()) "" else "$prev\n") + summaryText.take(4000),
             )
             conversationRepository.deleteMessagesExceptLast(id, keep)
-            _messages.value = loadLatestMessages(id)
+            _messages.value = loadActivePath(id)
             refreshContextUsage()
             showAppToast(
                 when (settings.value.language) {

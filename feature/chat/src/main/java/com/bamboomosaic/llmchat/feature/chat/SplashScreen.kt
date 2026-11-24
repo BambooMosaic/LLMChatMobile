@@ -75,6 +75,9 @@ fun SplashScreen(onFinished: () -> Unit) {
         label = "splashAlpha",
     )
 
+    // 27 轮：平板模式开屏显示 LLMChatPro（手机保持 LLMChatMobile；应用内其余文案不受影响）
+    val splashWide = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp >= 600
+
     LaunchedEffect(Unit) {
         visible = true
         kotlinx.coroutines.delay(1000)
@@ -89,7 +92,7 @@ fun SplashScreen(onFinished: () -> Unit) {
         AppIconCircular(modifier = Modifier.size(120.dp).scale(scale).alpha(alpha))
         Spacer(Modifier.height(16.dp))
         Text(
-            text = "LLMChatMobile",
+            text = if (splashWide) "LLMChatPro" else "LLMChatMobile",
             style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.alpha(alpha),

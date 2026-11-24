@@ -13,7 +13,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ApiConfigEntity::class,
     ],
     views = [ModelStatsView::class],
-    version = 12,
+    version = 13,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -139,6 +139,13 @@ abstract class AppDatabase : RoomDatabase() {
          * v11 -> v12：会话置顶与自动标题标记（24 轮）。
          * pinned：置顶会话固定组优先；titleAuto：1 = 标题仍为自动生成，用户手动改名后置 0。
          */
+        /** 27 轮：消息分叉树——messages 加 parentId 列。 */
+        val MIGRATION_12_13 = object : Migration(12, 13) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE messages ADD COLUMN parentId INTEGER")
+            }
+        }
+
         val MIGRATION_11_12 = object : Migration(11, 12) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE conversations ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0")

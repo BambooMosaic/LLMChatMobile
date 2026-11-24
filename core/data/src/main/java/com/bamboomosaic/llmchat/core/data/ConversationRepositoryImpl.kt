@@ -67,6 +67,7 @@ class ConversationRepositoryImpl @Inject constructor(
                 version = if (message.role == MessageRole.USER) 1 else nextVersion,
                 versionKey = if (message.role == MessageRole.USER) null else versionKey.takeIf { it > 0 },
                 usageId = effectiveUsageId,
+                parentId = message.parentId,
             ),
         )
         dao.touch(conversationId, now)
@@ -205,6 +206,7 @@ class ConversationRepositoryImpl @Inject constructor(
         version = version,
         versionKey = versionKey,
         usageId = usageId,
+        parentId = parentId,
     )
 
     companion object {

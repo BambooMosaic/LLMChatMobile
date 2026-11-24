@@ -19,4 +19,6 @@ data class ChatMessage(
     val versionKey: Long? = null,
     /** 该版本对应的 token 用量记录 id，用于按版本展示消耗。 */
     val usageId: Long? = null,
+    /** 27 轮：父消息 id（消息分叉树）。null=旧数据，按线性逻辑退化处理。 */
+    val parentId: Long? = null,
 )
