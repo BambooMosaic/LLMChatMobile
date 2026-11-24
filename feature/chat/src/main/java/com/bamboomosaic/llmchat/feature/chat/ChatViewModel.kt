@@ -1369,7 +1369,11 @@ class ChatViewModel @Inject constructor(
     private val _ttsErrorTick = MutableStateFlow(0)
     val ttsErrorTick: StateFlow<Int> = _ttsErrorTick.asStateFlow()
 
-    private var mediaPlayer: android.media.MediaPlayer? = null
+    /** 最近一次失败的具体原因（null=无；UI 优先展示它，否则用通用文案）。 */
+    private val _ttsErrorMessage = MutableStateFlow<String?>(null)
+    val ttsErrorMessage: StateFlow<String?> = _ttsErrorMessage.asStateFlow()
+
+    private var audioTrack: android.media.AudioTrack? = null
     private var ttsSeq = 0
 
     override fun onCleared() {
@@ -1398,7 +1402,7 @@ class ChatViewModel @Inject constructor(
             }
             if (seq != ttsSeq) return@launch
             result.fold(
-                onSuccess = { bytes -> playWav(messageId, bytes, seq) },
+                onSuccess = { bytes -> playPcm(messageId, bytes, seq) },
                 onFailure = {
                     android.util.Log.d("LLMChatTTS", "tts failed: ${it.message}")
                     if (seq == ttsSeq) {
@@ -1410,28 +1414,58 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    private fun playWav(messageId: Long, bytes: ByteArray, seq: Int) {
+    /**
+     * 27 轮修正：用 AudioTrack 直接播 PCM（24kHz 16bit mono）。
+     * 之前 MediaPlayer 播流式 WAV 因长度头不标准 prepare 失败（status=0x1）。
+     */
+    private fun playPcm(messageId: Long, pcm: ByteArray, seq: Int) {
         stopTtsLocked()
-        val dir = java.io.File(appContext.cacheDir, "tts").apply { mkdirs() }
-        val file = java.io.File(dir, "msg_" + messageId + ".wav")
-        runCatching { file.writeBytes(bytes) }.getOrElse {
-            _ttsState.value = TtsState.Idle
-            _ttsErrorTick.value++
-            return
-        }
-        val player = android.media.MediaPlayer()
+        val sampleRate = 24000
+        val minBuf = android.media.AudioTrack.getMinBufferSize(
+            sampleRate,
+            android.media.AudioFormat.CHANNEL_OUT_MONO,
+            android.media.AudioFormat.ENCODING_PCM_16BIT,
+        )
+        val track = android.media.AudioTrack.Builder()
+            .setAudioAttributes(
+                android.media.AudioAttributes.Builder()
+                    .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
+                    .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SPEECH)
+                    .build(),
+            )
+            .setAudioFormat(
+                android.media.AudioFormat.Builder()
+                    .setEncoding(android.media.AudioFormat.ENCODING_PCM_16BIT)
+                    .setSampleRate(sampleRate)
+                    .setChannelMask(android.media.AudioFormat.CHANNEL_OUT_MONO)
+                    .build(),
+            )
+            .setTransferMode(android.media.AudioTrack.MODE_STATIC)
+            .setBufferSizeInBytes(maxOf(minBuf, pcm.size))
+            .build()
         try {
-            player.setDataSource(file.path)
-            player.setOnCompletionListener {
-                if (_ttsState.value is TtsState.Playing) stopTts()
-            }
-            player.prepare()
-            player.start()
-            mediaPlayer = player
+            val written = track.write(pcm, 0, pcm.size)
+            check(written == pcm.size) { "AudioTrack 写入不完整: $written/${pcm.size}" }
+            // 播完标记：帧数 = 16bit mono 字节数 / 2
+            track.setNotificationMarkerPosition(pcm.size / 2)
+            track.setPlaybackPositionUpdateListener(
+                object : android.media.AudioTrack.OnPlaybackPositionUpdateListener {
+                    override fun onMarkerReached(t: android.media.AudioTrack?) {
+                        println("[LLMChatTTS] playback completed")
+                        if (_ttsState.value is TtsState.Playing) stopTts()
+                    }
+
+                    override fun onPeriodicNotification(t: android.media.AudioTrack?) = Unit
+                },
+            )
+            track.play()
+            audioTrack = track
+            println("[LLMChatTTS] playback started: ${pcm.size} bytes pcm")
             if (seq == ttsSeq) _ttsState.value = TtsState.Playing(messageId)
         } catch (e: Exception) {
-            runCatching { player.release() }
-            file.delete()
+            println("[LLMChatTTS] playback FAILED: " + e.javaClass.simpleName + ": " + e.message)
+            runCatching { track.release() }
+            _ttsErrorMessage.value = e.message
             _ttsState.value = TtsState.Idle
             _ttsErrorTick.value++
         }
@@ -1444,11 +1478,11 @@ class ChatViewModel @Inject constructor(
     }
 
     private fun stopTtsLocked() {
-        mediaPlayer?.let { player ->
-            runCatching { player.stop() }
-            runCatching { player.release() }
+        audioTrack?.let { track ->
+            runCatching { track.stop() }
+            runCatching { track.release() }
         }
-        mediaPlayer = null
+        audioTrack = null
         if (_ttsState.value != TtsState.Idle) _ttsState.value = TtsState.Idle
     }
 

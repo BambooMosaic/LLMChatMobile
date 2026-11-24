@@ -185,12 +185,14 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
         }
     }
 
-    // 27 轮：语音朗读状态 + 失败 toast（tick>0 时弹一次）
+    // 27 轮：语音朗读状态 + 失败 toast（tick>0 时弹一次；优先展示具体原因如余额不足）
     val ttsState by viewModel.ttsState.collectAsState()
     val ttsErrorTick by viewModel.ttsErrorTick.collectAsState()
+    val ttsErrorMessage by viewModel.ttsErrorMessage.collectAsState()
     LaunchedEffect(ttsErrorTick) {
         if (ttsErrorTick > 0) {
-            android.widget.Toast.makeText(screenContext, s.ttsFailed, android.widget.Toast.LENGTH_SHORT).show()
+            val msg = ttsErrorMessage?.takeIf { it.isNotBlank() } ?: s.ttsFailed
+            android.widget.Toast.makeText(screenContext, msg, android.widget.Toast.LENGTH_LONG).show()
         }
     }
 
