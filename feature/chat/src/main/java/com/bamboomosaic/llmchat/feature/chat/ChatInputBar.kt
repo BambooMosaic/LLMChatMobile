@@ -221,8 +221,8 @@ fun ChatInputBar(
                                     Text(s.inputPlaceholder, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 },
                                 maxLines = 6,
-                                // 31 轮：键盘右下角改为换行（与补充提示词等多行输入一致），发送仅通过发送按钮
-                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.NewLine),
+                                // 31 轮：键盘右下角恢复默认换行（与补充提示词等多行输入一致），发送仅通过发送按钮
+                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Default),
                                 colors = TextFieldDefaults.colors(
                                     focusedContainerColor = Color.Transparent,
                                     unfocusedContainerColor = Color.Transparent,
