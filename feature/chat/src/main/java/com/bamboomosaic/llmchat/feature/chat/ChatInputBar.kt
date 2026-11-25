@@ -88,6 +88,8 @@ fun ChatInputBar(
     contextFraction: Float = 0f,
     /** 27 轮修正：点击环形打开统计面板。 */
     onOpenContextPanel: () -> Unit = {},
+    /** 27 轮修正：平板/宽屏时环形改到下层功能栏搜索按钮左侧。 */
+    wideScreen: Boolean = false,
 ) {
     val s = LocalAppStrings.current
     val context = LocalContext.current
@@ -230,7 +232,8 @@ fun ChatInputBar(
                             )
                         }
 
-                        // 27 轮修正：环形上下文统计（发送键左侧缩小版；>80% 橙、>95% 红）——顶栏已移除
+                        // 27 轮修正：环形上下文统计（发送键左侧，直径=发送键 50%；>80% 橙、>95% 红）——宽屏时改在下层功能栏
+                        if (!wideScreen) {
                         val ringTrack = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
                         val ringPrimary = when {
                             contextFraction >= 0.95f -> androidx.compose.ui.graphics.Color(0xFFE57373)
@@ -240,8 +243,8 @@ fun ChatInputBar(
                         Box(
                             modifier = Modifier
                                 .align(Alignment.BottomEnd)
-                                .padding(end = 50.dp, bottom = 2.dp)
-                                .size(32.dp)
+                                .padding(end = 56.dp, bottom = 12.dp)
+                                .size(20.dp)
                                 .clip(androidx.compose.foundation.shape.CircleShape)
                                 .clickable { onOpenContextPanel() },
                             contentAlignment = Alignment.Center,
@@ -263,6 +266,7 @@ fun ChatInputBar(
                                 )
                             }
                         }
+                        } // !wideScreen
 
                         // 发送按钮：锚定在输入区最后一行右侧（BottomEnd），不随文字增加上移
                         // 20 轮：按压缩放反馈
@@ -394,6 +398,41 @@ fun ChatInputBar(
                     }
 
                     Spacer(Modifier.weight(1f))
+
+                    // 27 轮修正：宽屏（平板）时环形上下文统计放在搜索按钮左侧
+                    if (wideScreen) {
+                        val ringTrack = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
+                        val ringPrimary = when {
+                            contextFraction >= 0.95f -> androidx.compose.ui.graphics.Color(0xFFE57373)
+                            contextFraction >= 0.80f -> androidx.compose.ui.graphics.Color(0xFFFFB300)
+                            else -> MaterialTheme.colorScheme.primary
+                        }
+                        Box(
+                            modifier = Modifier
+                                .size(24.dp)
+                                .clip(androidx.compose.foundation.shape.CircleShape)
+                                .clickable { onOpenContextPanel() },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Canvas(modifier = Modifier.fillMaxSize()) {
+                                drawArc(
+                                    color = ringTrack,
+                                    startAngle = -90f,
+                                    sweepAngle = 360f,
+                                    useCenter = false,
+                                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx()),
+                                )
+                                drawArc(
+                                    color = ringPrimary,
+                                    startAngle = -90f,
+                                    sweepAngle = 360f * contextFraction,
+                                    useCenter = false,
+                                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx()),
+                                )
+                            }
+                        }
+                        Spacer(Modifier.width(6.dp))
+                    }
 
                     // 3. 联网搜索开关（仅 DeepSeek 支持时可用）
                     FilterChip(

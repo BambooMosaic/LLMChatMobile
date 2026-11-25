@@ -530,6 +530,7 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
                 viewModel.refreshContextUsage()
                 showContextPanel = true
             },
+            wideScreen = wideScreen,
             isGenerating = isGenerating,
                 visionSupported = Providers.supportsVision(currentConfig?.model ?: ""),
                 pendingImages = pendingImages,
