@@ -79,16 +79,15 @@ fun ConversationDrawer(
 
     ModalDrawerSheet(
         modifier = if (LocalGlassLevel.current >= 1) {
-            // 24 轮：毛玻璃模式抽屉加细边框。
-            // 30 轮迭代记录：shadow 阴影会绕抽屉四周一整圈绘制（顶部横带+侧缘竖带），
-            // 浅色主题下形成明显色差条，已移除；半透明底色（0.78/0.92）也因透出背后
-            // 不同内容（顶栏实色/聊天背景图）造成内部色差——抽屉改为完全实色，
-            // 玻璃质感仅以细边框点缀，保证内部观感绝对均匀。
-            Modifier.width(drawerWidth).border(
-                width = 0.7.dp,
-                color = MaterialTheme.colorScheme.outlineVariant,
-                shape = MaterialTheme.shapes.large,
-            )
+            // 24 轮：毛玻璃模式抽屉加细边框；30 轮：抽屉完全实色（消除半透明色差）后，
+            // 恢复柔和外阴影（用户确认实色底上外阴影观感良好，色差只来自半透明底）
+            Modifier.width(drawerWidth)
+                .shadow(elevation = 12.dp, shape = MaterialTheme.shapes.large)
+                .border(
+                    width = 0.7.dp,
+                    color = MaterialTheme.colorScheme.outlineVariant,
+                    shape = MaterialTheme.shapes.large,
+                )
         } else {
             Modifier.width(drawerWidth)
         },
