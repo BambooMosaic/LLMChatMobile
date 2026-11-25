@@ -72,6 +72,16 @@ abstract class RepositoryModule {
 
         @Provides
         @Singleton
+        fun provideQwenTtsClient(): com.bamboomosaic.llmchat.core.network.QwenTtsClient =
+            com.bamboomosaic.llmchat.core.network.QwenTtsClient()
+
+        @Provides
+        @Singleton
+        fun provideGlmTtsClient(): com.bamboomosaic.llmchat.core.network.GlmTtsClient =
+            com.bamboomosaic.llmchat.core.network.GlmTtsClient()
+
+        @Provides
+        @Singleton
         fun provideAppDatabase(@ApplicationContext context: Context): AppDatabase =
             Room.databaseBuilder(context, AppDatabase::class.java, "llmchat.db")
                 // 显式迁移保留用户已有对话；未覆盖到的版本变更才走重建兜底

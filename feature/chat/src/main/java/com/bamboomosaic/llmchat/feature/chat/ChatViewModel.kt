@@ -81,6 +81,9 @@ class ChatViewModel @Inject constructor(
     private val configRepository: ConfigRepository,
     @ApplicationContext private val appContext: Context,
     private val ttsClient: com.bamboomosaic.llmchat.core.network.DeepSeekTtsClient,
+    private val qwenTtsClient: com.bamboomosaic.llmchat.core.network.QwenTtsClient,
+    private val glmTtsClient: com.bamboomosaic.llmchat.core.network.GlmTtsClient,
+    private val backupManager: com.bamboomosaic.llmchat.core.data.backup.BackupManager,
 ) : ViewModel() {
 
     /** 新建对话的初始标题（发送首条消息后被占位标题逻辑替换）。 */
@@ -811,7 +814,7 @@ class ChatViewModel @Inject constructor(
                 savedReplyId = saved.id
                 savedVersion = saved.version
                 // 27 轮修正：自动朗读（默认关）——回复落库后自动朗读本条
-                if (currentSettings.ttsAutoRead && isDeepSeekConfig(currentConfig.value)) {
+                if (currentSettings.ttsAutoRead && ttsEngineReady()) {
                     toggleTts(saved.id, accumulated)
                 }
             } else if (_error.value == null) {
@@ -1491,6 +1494,8 @@ class ChatViewModel @Inject constructor(
     val ttsErrorMessage: StateFlow<String?> = _ttsErrorMessage.asStateFlow()
 
     private var audioTrack: android.media.AudioTrack? = null
+    private var mediaPlayer: android.media.MediaPlayer? = null
+    private var ttsWavFile: java.io.File? = null
     private var ttsSeq = 0
 
     override fun onCleared() {
@@ -1507,19 +1512,61 @@ class ChatViewModel @Inject constructor(
             TtsState.Idle -> {}
         }
         stopTts()
-        val config = currentConfig.value ?: return
-        val voice = settings.value.ttsVoice
-        // 截断：全汉字时约 8400 计费字符（低于 1 万上限），JSON 体远小于 64KiB
-        val clipped = text.take(4200)
+        // 29 轮：按引擎取客户端/key/音色/截断——qwen、glm 的 key 来自对应供应商的已保存配置
+        val st = settings.value
+        val client: com.bamboomosaic.llmchat.core.network.TtsClient
+        val key: String
+        val voice: String
+        val clipLimit: Int
+        when (st.ttsProvider) {
+            "qwen" -> {
+                val cfg = apiConfigs.value.firstOrNull { isQwenConfig(it) && it.apiKey.isNotBlank() }
+                if (cfg == null) {
+                    return notifyTtsMissing("请先在设置中添加通义千问 API 配置并填写 Key，才能使用千问朗读")
+                }
+                client = qwenTtsClient
+                key = cfg.apiKey
+                voice = st.ttsVoiceQwen
+                clipLimit = QWEN_TTS_CLIP
+            }
+            "glm" -> {
+                val cfg = apiConfigs.value.firstOrNull { isGlmConfig(it) && it.apiKey.isNotBlank() }
+                if (cfg == null) {
+                    return notifyTtsMissing("请先在设置中添加智谱 GLM API 配置并填写 Key，才能使用 GLM 朗读")
+                }
+                client = glmTtsClient
+                key = cfg.apiKey
+                voice = st.ttsVoiceGlm
+                clipLimit = GLM_TTS_CLIP
+            }
+            else -> {
+                val cfg = currentConfig.value
+                if (cfg == null || !isDeepSeekConfig(cfg)) {
+                    return notifyTtsMissing("请先在设置中选择 DeepSeek API 配置，才能使用 DeepSeek 朗读")
+                }
+                client = ttsClient
+                key = cfg.apiKey
+                voice = st.ttsVoice
+                clipLimit = DEEPSEEK_TTS_CLIP
+            }
+        }
+        val clipped = text.take(clipLimit)
         val seq = ++ttsSeq
         _ttsState.value = TtsState.Loading(messageId)
         viewModelScope.launch {
             val result = withContext(Dispatchers.IO) {
-                ttsClient.synthesize(config.apiKey, clipped, voice)
+                client.synthesize(key, clipped, voice)
             }
             if (seq != ttsSeq) return@launch
             result.fold(
-                onSuccess = { bytes -> playPcm(messageId, bytes, seq) },
+                onSuccess = { audio ->
+                    when (audio) {
+                        is com.bamboomosaic.llmchat.core.network.TtsAudio.Pcm ->
+                            playPcm(messageId, audio.bytes, seq)
+                        is com.bamboomosaic.llmchat.core.network.TtsAudio.Wav ->
+                            playWav(messageId, audio.bytes, seq)
+                    }
+                },
                 onFailure = {
                     android.util.Log.d("LLMChatTTS", "tts failed: ${it.message}")
                     if (seq == ttsSeq) {
@@ -1588,6 +1635,67 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+    /** 29 轮：TTS 引擎配置缺失时的明确提示（复用朗读失败 toast）。 */
+    private fun notifyTtsMissing(hint: String) {
+        _ttsErrorMessage.value = hint
+        _ttsErrorTick.value++
+    }
+
+    /** 29 轮：当前 TTS 引擎是否就绪（对应供应商配置存在且 key 非空）——自动朗读前置条件。 */
+    private fun ttsEngineReady(): Boolean = when (settings.value.ttsProvider) {
+        "qwen" -> apiConfigs.value.any { isQwenConfig(it) && it.apiKey.isNotBlank() }
+        "glm" -> apiConfigs.value.any { isGlmConfig(it) && it.apiKey.isNotBlank() }
+        else -> isDeepSeekConfig(currentConfig.value)
+    }
+
+    /**
+     * 29 轮：播放标准 WAV（Qwen/GLM）——写 cacheDir 临时文件交 MediaPlayer，
+     * ttsSeq 防竞态；播完自动释放并清理临时文件。
+     */
+    private fun playWav(messageId: Long, wav: ByteArray, seq: Int) {
+        stopTtsLocked()
+        try {
+            val file = java.io.File(appContext.cacheDir, "llmchat_tts.wav")
+            file.writeBytes(wav)
+            val player = android.media.MediaPlayer()
+            player.setAudioAttributes(
+                android.media.AudioAttributes.Builder()
+                    .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
+                    .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SPEECH)
+                    .build(),
+            )
+            player.setDataSource(file.absolutePath)
+            player.setOnCompletionListener {
+                println("[LLMChatTTS] wav playback completed")
+                runCatching { it.release() }
+                runCatching { file.delete() }
+                if (_ttsState.value is TtsState.Playing) stopTts()
+            }
+            player.setOnErrorListener { mp, what, extra ->
+                println("[LLMChatTTS] wav playback FAILED: what=$what extra=$extra")
+                runCatching { mp.release() }
+                runCatching { file.delete() }
+                if (seq == ttsSeq) {
+                    _ttsErrorMessage.value = "音频播放失败"
+                    _ttsState.value = TtsState.Idle
+                    _ttsErrorTick.value++
+                }
+                true
+            }
+            player.prepare()
+            player.start()
+            mediaPlayer = player
+            ttsWavFile = file
+            println("[LLMChatTTS] wav playback started: ${wav.size} bytes")
+            if (seq == ttsSeq) _ttsState.value = TtsState.Playing(messageId)
+        } catch (e: Exception) {
+            println("[LLMChatTTS] wav playback FAILED: " + e.javaClass.simpleName + ": " + e.message)
+            _ttsErrorMessage.value = e.message
+            _ttsState.value = TtsState.Idle
+            _ttsErrorTick.value++
+        }
+    }
+
     /** 停止朗读并释放播放器（后台播完自动停；切换会话不主动打断）。 */
     fun stopTts() {
         ttsSeq++
@@ -1600,6 +1708,13 @@ class ChatViewModel @Inject constructor(
             runCatching { track.release() }
         }
         audioTrack = null
+        mediaPlayer?.let { player ->
+            runCatching { player.stop() }
+            runCatching { player.release() }
+        }
+        mediaPlayer = null
+        runCatching { ttsWavFile?.delete() }
+        ttsWavFile = null
         if (_ttsState.value != TtsState.Idle) _ttsState.value = TtsState.Idle
     }
 
@@ -1611,6 +1726,21 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch { settingsRepository.setTtsVoice(voiceId) }
     }
 
+    /** 29 轮：TTS 朗读引擎切换（deepseek / qwen / glm）。 */
+    fun setTtsProvider(providerId: String) {
+        viewModelScope.launch { settingsRepository.setTtsProvider(providerId) }
+    }
+
+    /** 29 轮：通义千问音色。 */
+    fun setTtsVoiceQwen(voiceId: String) {
+        viewModelScope.launch { settingsRepository.setTtsVoiceQwen(voiceId) }
+    }
+
+    /** 29 轮：智谱 GLM 音色。 */
+    fun setTtsVoiceGlm(voiceId: String) {
+        viewModelScope.launch { settingsRepository.setTtsVoiceGlm(voiceId) }
+    }
+
     /** 27 轮修正：自动朗读开关。 */
     fun setTtsAutoRead(enabled: Boolean) {
         viewModelScope.launch { settingsRepository.setTtsAutoRead(enabled) }
@@ -1619,6 +1749,63 @@ class ChatViewModel @Inject constructor(
     /** 28 轮：网络 / 429 自动重试次数（0 = 不重试）。 */
     fun setNetRetryCount(count: Int) {
         viewModelScope.launch { settingsRepository.setNetRetryCount(count.coerceIn(0, 5)) }
+    }
+
+    // ===== 29 轮：一键导出 / 导入全量数据 =====
+
+    /** 备份结果提示（一次性，UI 弹 toast 后消费）。 */
+    private val _backupEvent = MutableStateFlow<String?>(null)
+    val backupEvent: StateFlow<String?> = _backupEvent.asStateFlow()
+
+    /** 导入完成信号（一次性）：true=成功（UI 弹重启确认）；false=失败（原因见 backupEvent）。 */
+    private val _importDone = MutableStateFlow<Boolean?>(null)
+    val importDone: StateFlow<Boolean?> = _importDone.asStateFlow()
+
+    fun consumeBackupEvent() {
+        _backupEvent.value = null
+    }
+
+    fun consumeImportDone() {
+        _importDone.value = null
+    }
+
+    /** 导出全部数据（设置 + API 配置 + 会话 + 消息 + token 统计）到所选 SAF 文件。 */
+    fun exportAllData(uri: android.net.Uri) {
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    val json = backupManager.export()
+                    appContext.contentResolver.openOutputStream(uri)?.use { out ->
+                        out.write(json.toByteArray(Charsets.UTF_8))
+                    } ?: throw java.io.IOException("无法写入所选文件")
+                }
+            }
+            _backupEvent.value = result.fold(
+                onSuccess = { "备份已导出" },
+                onFailure = { "导出失败：${it.message}" },
+            )
+        }
+    }
+
+    /** 导入全量数据（全量替换）；完成经 importDone 通知，UI 据此提示重启生效。 */
+    fun importAllData(uri: android.net.Uri) {
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    val text = appContext.contentResolver.openInputStream(uri)?.use { input ->
+                        input.bufferedReader().readText()
+                    } ?: throw java.io.IOException("无法读取所选文件")
+                    backupManager.import(text).getOrThrow()
+                }
+            }
+            result.fold(
+                onSuccess = { _importDone.value = true },
+                onFailure = {
+                    _backupEvent.value = "导入失败：${it.message}"
+                    _importDone.value = false
+                },
+            )
+        }
     }
 
     // ===== 27 轮：会话流程图（平面树）=====
@@ -2076,5 +2263,10 @@ class ChatViewModel @Inject constructor(
     private companion object {
         const val MAX_TITLE_LENGTH = 24
         const val RENDER_INTERVAL_MS = 60L
+
+        /** 29 轮：TTS 截断上限——DeepSeek 4200 字（≈8400 计费字符）、Qwen 600、GLM 1024。 */
+        const val DEEPSEEK_TTS_CLIP = 4200
+        const val QWEN_TTS_CLIP = 600
+        const val GLM_TTS_CLIP = 1024
     }
 }

@@ -130,6 +130,12 @@ data class AppSettings(
     val ttsAutoRead: Boolean = false,
     /** 28 轮：网络 / 429 自动重试次数（0 = 不重试，默认 2）。 */
     val netRetryCount: Int = 2,
+    /** 29 轮：TTS 朗读引擎（deepseek / qwen / glm）。 */
+    val ttsProvider: String = "deepseek",
+    /** 29 轮：通义千问 TTS 音色（预置如 Cherry/Serena/Ethan，大小写敏感）。 */
+    val ttsVoiceQwen: String = "Cherry",
+    /** 29 轮：智谱 GLM TTS 音色（预置 tongtong/chuichui…）。 */
+    val ttsVoiceGlm: String = "tongtong",
 ) {
     companion object {
         const val DEFAULT_MODEL = "deepseek-flash"
@@ -216,6 +222,15 @@ interface SettingsRepository {
 
     /** 28 轮：网络重试次数（0~5）。 */
     suspend fun setNetRetryCount(count: Int)
+
+    /** 29 轮：TTS 朗读引擎（deepseek / qwen / glm）。 */
+    suspend fun setTtsProvider(providerId: String)
+
+    /** 29 轮：通义千问 TTS 音色。 */
+    suspend fun setTtsVoiceQwen(voiceId: String)
+
+    /** 29 轮：智谱 GLM TTS 音色。 */
+    suspend fun setTtsVoiceGlm(voiceId: String)
 
     /** 28 轮：会话草稿（空串清除）。 */
     suspend fun setDraft(conversationId: String, text: String)

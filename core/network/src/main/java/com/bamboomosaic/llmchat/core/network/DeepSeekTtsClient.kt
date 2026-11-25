@@ -18,15 +18,15 @@ import java.util.concurrent.TimeUnit
  * 27 轮修正：要 PCM 裸流（24kHz 16bit mono）而非 WAV——流式 WAV 的长度头不标准会导致
  * MediaPlayer prepare 失败（status=0x1），PCM 配 AudioTrack 直接播放最可靠。
  */
-class DeepSeekTtsClient {
+class DeepSeekTtsClient : TtsClient {
 
     private val client: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(180, TimeUnit.SECONDS) // 长文本合成 + 下载可能超过一分钟
         .build()
 
-    /** 合成并返回完整 PCM 字节（24kHz 16bit 单声道；服务端 filter_markdown 默认开启）。 */
-    fun synthesize(apiKey: String, text: String, voiceId: String): Result<ByteArray> = runCatching {
+    /** 合成并返回完整 PCM 音频（24kHz 16bit 单声道；服务端 filter_markdown 默认开启）。 */
+    override fun synthesize(apiKey: String, text: String, voiceId: String): Result<TtsAudio> = runCatching {
         println("[LLMChatTTS] request tts: text=${text.length}c voice=$voiceId key=${apiKey.take(6)}...")
         val payload = JsonObject(
             mapOf(
@@ -50,7 +50,7 @@ class DeepSeekTtsClient {
             val bytes = response.body.bytes()
             check(bytes.isNotEmpty()) { "TTS 返回空音频" }
             println("[LLMChatTTS] tts ok pcm: ${bytes.size} bytes")
-            bytes
+            TtsAudio.Pcm(bytes)
         }
     }
 

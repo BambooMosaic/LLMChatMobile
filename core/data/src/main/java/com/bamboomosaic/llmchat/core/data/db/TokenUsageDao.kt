@@ -48,6 +48,17 @@ interface TokenUsageDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(record: TokenUsageRecordEntity)
 
+    // ===== 29 轮：全量备份 =====
+
+    @Query("SELECT * FROM token_usage_records")
+    suspend fun getAllRecords(): List<TokenUsageRecordEntity>
+
+    @Query("DELETE FROM token_usage_records")
+    suspend fun deleteAllRecords()
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAllRecords(records: List<TokenUsageRecordEntity>)
+
     /** 某会话累计 token（prompt + completion），用 SQL SUM 聚合，不手动累加。 */
     @Query(
         """

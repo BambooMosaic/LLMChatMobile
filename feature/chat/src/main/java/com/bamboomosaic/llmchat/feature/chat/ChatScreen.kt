@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -209,6 +210,33 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
             android.widget.Toast.makeText(screenContext, msg, android.widget.Toast.LENGTH_LONG).show()
         }
     }
+
+    // 29 轮：一键导出 / 导入——SAF 选文件后交给 ViewModel；备份结果 toast，导入成功弹重启确认
+    val backupEvent by viewModel.backupEvent.collectAsState()
+    LaunchedEffect(backupEvent) {
+        backupEvent?.let {
+            android.widget.Toast.makeText(screenContext, it, android.widget.Toast.LENGTH_LONG).show()
+            viewModel.consumeBackupEvent()
+        }
+    }
+    val importDone by viewModel.importDone.collectAsState()
+    var showImportRestart by remember { mutableStateOf(false) }
+    LaunchedEffect(importDone) {
+        when (importDone) {
+            true -> {
+                showImportRestart = true
+                viewModel.consumeImportDone()
+            }
+            false -> viewModel.consumeImportDone()
+            null -> {}
+        }
+    }
+    val exportBackupLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/json"),
+    ) { uri -> uri?.let(viewModel::exportAllData) }
+    val importBackupLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.OpenDocument(),
+    ) { uri -> uri?.let(viewModel::importAllData) }
 
     // 27 轮：会话流程图面板
     var showFlowPanel by remember { mutableStateOf(false) }
@@ -622,10 +650,40 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
             onSetTtsEnabled = viewModel::setTtsEnabled,
             onSetTtsVoice = viewModel::setTtsVoice,
             onSetTtsAutoRead = viewModel::setTtsAutoRead,
+            onSetTtsProvider = viewModel::setTtsProvider,
+            onSetTtsVoiceQwen = viewModel::setTtsVoiceQwen,
+            onSetTtsVoiceGlm = viewModel::setTtsVoiceGlm,
             onSetNetRetryCount = viewModel::setNetRetryCount,
+            onExportBackup = { exportBackupLauncher.launch("llmchat_backup.json") },
+            onImportBackup = { importBackupLauncher.launch(arrayOf("application/json")) },
             onRestoreConversation = viewModel::restoreConversation,
             onDeleteConversation = viewModel::deleteConversationPermanently,
             onDismiss = { showSettings = false },
+        )
+    }
+
+    // 29 轮：导入成功——重启应用使全量替换后的状态生效（VM/数据库连接全部重建）
+    if (showImportRestart) {
+        AlertDialog(
+            onDismissRequest = { showImportRestart = false },
+            title = { Text(s.importRestartTitle) },
+            text = { Text(s.importRestartBody) },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    showImportRestart = false
+                    val launch = screenContext.packageManager
+                        .getLaunchIntentForPackage(screenContext.packageName)
+                    launch?.addFlags(
+                        android.content.Intent.FLAG_ACTIVITY_NEW_TASK or
+                            android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK,
+                    )
+                    screenContext.startActivity(launch)
+                    Runtime.getRuntime().exit(0)
+                }) { Text(s.importRestartButton) }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { showImportRestart = false }) { Text(s.cancel) }
+            },
         )
     }
 
@@ -1046,9 +1104,16 @@ private fun MessageBubble(
                     if (message.isStreaming && message.text.isEmpty()) {
                         SkeletonBubble()
                     } else if (isUser) {
-                        // 用户消息：先展示图片（可点击放大），再展示文字
-                        message.images.forEach { base64 ->
-                            ImageMessageContent(base64 = base64)
+                        // 29 轮：多图水平一行（上限 4 张）均分气泡宽度，点击放大不变
+                        if (message.images.isNotEmpty()) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                message.images.forEach { base64 ->
+                                    ImageMessageContent(
+                                        base64 = base64,
+                                        modifier = Modifier.weight(1f).aspectRatio(1f),
+                                    )
+                                }
+                            }
                             Spacer(Modifier.height(8.dp))
                         }
                         if (message.text.isNotBlank()) {
@@ -1211,7 +1276,7 @@ private fun SkeletonBubble() {
 
 /** 聊天历史中的图片：展示缩略图，点击放大查看。 */
 @Composable
-private fun ImageMessageContent(base64: String) {
+private fun ImageMessageContent(base64: String, modifier: Modifier = Modifier) {
     var showFull by remember { mutableStateOf(false) }
     val bitmap = remember(base64) {
         runCatching {
@@ -1219,11 +1284,10 @@ private fun ImageMessageContent(base64: String) {
             android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
         }.getOrNull()
     }
-    // 解码期间显示等尺寸占位，避免 item 高度从 0 跳到 160dp 造成列表二次测量抖动
+    // 解码期间显示同尺寸占位，避免 item 高度从 0 跳变造成列表二次测量抖动
     if (bitmap == null) {
         Box(
-            modifier = Modifier
-                .size(160.dp)
+            modifier = modifier
                 .clip(RoundedCornerShape(8.dp))
                 .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.15f)),
         )
@@ -1234,8 +1298,7 @@ private fun ImageMessageContent(base64: String) {
         bitmap = bitmap.asImageBitmap(),
         contentDescription = null,
         contentScale = ContentScale.Crop,
-        modifier = Modifier
-            .size(160.dp)
+        modifier = modifier
             .clip(RoundedCornerShape(8.dp))
             .clickable { showFull = true },
     )
@@ -1261,6 +1324,20 @@ internal fun isDeepSeekConfig(config: com.bamboomosaic.llmchat.core.domain.ApiCo
     config != null && (
         config.provider.equals("deepseek", ignoreCase = true) ||
             config.baseUrl.contains("deepseek", ignoreCase = true)
+        )
+
+/** 29 轮：通义千问配置识别（provider=qwen 或 DashScope 域名）——Qwen 朗读取其 key。 */
+internal fun isQwenConfig(config: com.bamboomosaic.llmchat.core.domain.ApiConfig?): Boolean =
+    config != null && (
+        config.provider.equals("qwen", ignoreCase = true) ||
+            config.baseUrl.contains("dashscope", ignoreCase = true)
+        )
+
+/** 29 轮：智谱 GLM 配置识别（provider=glm 或 bigmodel 域名）——GLM 朗读取其 key。 */
+internal fun isGlmConfig(config: com.bamboomosaic.llmchat.core.domain.ApiConfig?): Boolean =
+    config != null && (
+        config.provider.equals("glm", ignoreCase = true) ||
+            config.baseUrl.contains("bigmodel", ignoreCase = true)
         )
 
 /**

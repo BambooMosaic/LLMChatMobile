@@ -1,5 +1,6 @@
 package com.bamboomosaic.llmchat.feature.chat
 
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
@@ -118,25 +119,28 @@ fun ChatInputBar(
         }
     }
 
-    // 图片选择：单选一张图片，读成 base64
+    // 29 轮：图片选择——多选（上限 4 张），逐张压缩（最长边 1600 / JPEG 80）后追加
     val imagePicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent(),
-    ) { uri ->
-        if (uri == null) return@rememberLauncherForActivityResult
+        contract = ActivityResultContracts.PickMultipleVisualMedia(maxItems = 4),
+    ) { uris ->
+        if (uris.isEmpty()) return@rememberLauncherForActivityResult
         scope.launch {
-            val base64 = withContext(Dispatchers.IO) {
-                runCatching {
-                    context.contentResolver.openInputStream(uri)?.use { input ->
-                        val bytes = input.readBytes()
-                        android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
-                    }
-                }.getOrNull()
+            val room = MAX_PENDING_IMAGES - pendingImages.size
+            if (room <= 0) {
+                Toast.makeText(context, s.imageLimitHint, Toast.LENGTH_SHORT).show()
+                return@launch
             }
-            if (base64.isNullOrBlank()) {
+            if (uris.size > room) {
+                Toast.makeText(context, s.imageLimitHint, Toast.LENGTH_SHORT).show()
+            }
+            val encoded = withContext(Dispatchers.IO) {
+                uris.take(room).mapNotNull { uri -> compressImageToBase64(context, uri) }
+            }
+            if (encoded.isEmpty()) {
                 readError = s.requestFailed
             } else {
                 readError = null
-                onImagesChange(listOf(base64))
+                onImagesChange((pendingImages + encoded).distinct().take(MAX_PENDING_IMAGES))
             }
         }
     }
@@ -475,7 +479,12 @@ fun ChatInputBar(
                                 enabled = visionSupported,
                                 onClick = {
                                     uploadMenuExpanded = false
-                                    imagePicker.launch("image/*")
+                                    imagePicker.launch(
+                                        androidx.activity.result.PickVisualMediaRequest(
+                                            androidx.activity.result.contract.ActivityResultContracts
+                                                .PickVisualMedia.ImageOnly,
+                                        ),
+                                    )
                                 },
                             )
                             DropdownMenuItem(
@@ -506,6 +515,43 @@ fun ChatInputBar(
         }
     }
 }
+
+/** 29 轮：单条消息最多附带图片数。 */
+private const val MAX_PENDING_IMAGES = 4
+
+/**
+ * 29 轮：选图压缩——最长边压到 1600px（inSampleSize 粗压 + 精确缩放），JPEG 80 转 base64。
+ * 多图时请求体不再失控；配合请求侧统一的 image/jpeg data URI 也更准确。
+ */
+private fun compressImageToBase64(context: android.content.Context, uri: android.net.Uri): String? =
+    runCatching {
+        val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        context.contentResolver.openInputStream(uri)?.use { input ->
+            android.graphics.BitmapFactory.decodeStream(input, null, bounds)
+        } ?: return null
+        var sample = 1
+        while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= 1600) sample *= 2
+        val opts = android.graphics.BitmapFactory.Options().apply { inSampleSize = sample }
+        val bitmap = context.contentResolver.openInputStream(uri)?.use { input ->
+            android.graphics.BitmapFactory.decodeStream(input, null, opts)
+        } ?: return null
+        val scaled = if (maxOf(bitmap.width, bitmap.height) > 1600) {
+            val scale = 1600f / maxOf(bitmap.width, bitmap.height)
+            android.graphics.Bitmap.createScaledBitmap(
+                bitmap,
+                (bitmap.width * scale).toInt().coerceAtLeast(1),
+                (bitmap.height * scale).toInt().coerceAtLeast(1),
+                true,
+            )
+        } else {
+            bitmap
+        }
+        val out = java.io.ByteArrayOutputStream()
+        scaled.compress(android.graphics.Bitmap.CompressFormat.JPEG, 80, out)
+        if (scaled !== bitmap) scaled.recycle()
+        bitmap.recycle()
+        android.util.Base64.encodeToString(out.toByteArray(), android.util.Base64.NO_WRAP)
+    }.getOrNull()
 
 /** 把 base64 图片解码并展示为缩略图。 */
 @Composable

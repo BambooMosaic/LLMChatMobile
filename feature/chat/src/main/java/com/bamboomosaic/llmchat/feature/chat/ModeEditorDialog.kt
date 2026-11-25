@@ -69,8 +69,9 @@ fun ModeEditorDialog(
     var selectedId by remember { mutableStateOf(initialModeId) }
     var dropdownOpen by remember { mutableStateOf(false) }
 
-    // 27 轮：提示词模板库浏览状态——null=关；""=一级分类页；分类名=该分类的二级模板页
-    var showTemplates by remember { mutableStateOf<String?>(null) }
+    // 29 轮：模板库浏览状态——showTemplates=开关；templatePreview=非空时为 Markdown 预览页
+    var showTemplates by remember { mutableStateOf(false) }
+    var templatePreview by remember { mutableStateOf<PromptTemplateLibrary.Template?>(null) }
 
     // 两个面板的数据互相隔离：角色卡表单 vs 自由输入
     // 18 轮修复：重开弹窗时从已保存的用户层提示词回显角色卡（保存格式：角色名：X\n角色设定：\nY）
@@ -187,70 +188,44 @@ fun ModeEditorDialog(
                 .padding(16.dp),
         ) {
             // 面板与确认按钮抽成局部 Composable，单列/两列共用同一份实现
-            // 27 轮：模板入口只在自由输入场景显示（角色卡 / 提问 / 省钱面板有自己的结构化表单）
+            // 29 轮：模板入口改为四个池模式（聊天/办公/写作/开发）都显示，按当前模式加载专属池
             val showTemplateEntry = selected.allowUserPrompt &&
+                PromptTemplateLibrary.hasPool(selectedId) &&
                 !isAsk && !isSaving && !(isRoleplay && useRoleCard)
 
-            // 27 轮：提示词模板库浏览视图（一级分类 → 二级模板 → 点选填入用户层提示词输入框）
+            // 29 轮：模板库浏览视图（当前模式的模板列表 → Markdown 全文预览 → 应用填入用户层提示词）
             val templateBrowser: @Composable () -> Unit = {
-                val category = showTemplates?.takeIf { it.isNotEmpty() }
-                    ?.let { name -> PromptTemplateLibrary.categories.firstOrNull { it.name == name } }
+                val pool = PromptTemplateLibrary.poolFor(selectedId).orEmpty()
+                val preview = templatePreview
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     androidx.compose.material3.TextButton(onClick = {
-                        showTemplates = if (category == null) null else ""
+                        if (preview != null) templatePreview = null else showTemplates = false
                     }) { Text("←") }
                     Text(
-                        text = if (category == null) s.promptTemplateLibrary else category.name,
+                        text = preview?.title ?: s.promptTemplateLibrary,
                         style = MaterialTheme.typography.titleMedium,
                         modifier = Modifier.weight(1f),
                     )
                 }
                 Spacer(Modifier.height(8.dp))
-                if (category == null) {
-                    // 一级：分类列表
-                    PromptTemplateLibrary.categories.forEach { c ->
+                if (preview == null) {
+                    // 列表页：当前模式的专属模板池
+                    pool.forEach { tpl ->
                         Surface(
                             shape = RoundedCornerShape(12.dp),
                             color = MaterialTheme.colorScheme.surfaceVariant,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(vertical = 3.dp)
-                                .clickable { showTemplates = c.name },
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Text(c.name, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-                                Text(
-                                    text = c.templates.size.toString(),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        }
-                    }
-                } else {
-                    // 二级：模板列表（点选 → 填入自由输入框并返回编辑视图）
-                    category.templates.forEach { tpl ->
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 3.dp)
-                                .clickable {
-                                    freePrompt = tpl.content
-                                    showTemplates = null
-                                },
+                                .clickable { templatePreview = tpl },
                         ) {
                             Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
-                                Text(tpl.name, style = MaterialTheme.typography.bodyMedium)
+                                Text(tpl.title, style = MaterialTheme.typography.bodyMedium)
                                 Text(
-                                    text = tpl.content.trim().take(60),
+                                    text = tpl.markdown.removePrefix("# ${tpl.title}").trim().take(60),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     maxLines = 2,
@@ -258,6 +233,35 @@ fun ModeEditorDialog(
                                 )
                             }
                         }
+                    }
+                } else {
+                    // 预览页：Markdown 全文渲染，确认后应用（填入用户层提示词输入框）
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 320.dp)
+                            .verticalScroll(rememberScrollState()),
+                    ) {
+                        MarkdownText(content = preview.markdown, enableHorizontalScroll = false)
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        androidx.compose.material3.TextButton(onClick = {
+                            templatePreview = null
+                            showTemplates = false
+                        }) { Text(s.cancel) }
+                        Spacer(Modifier.width(8.dp))
+                        Button(
+                            onClick = {
+                                freePrompt = preview.markdown
+                                templatePreview = null
+                                showTemplates = false
+                            },
+                        ) { Text(s.save) }
                     }
                 }
             }
@@ -269,7 +273,10 @@ fun ModeEditorDialog(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.End,
                     ) {
-                        androidx.compose.material3.TextButton(onClick = { showTemplates = "" }) {
+                        androidx.compose.material3.TextButton(onClick = {
+                            templatePreview = null
+                            showTemplates = true
+                        }) {
                             Text(s.promptTemplateLibrary, style = MaterialTheme.typography.labelMedium)
                         }
                     }
@@ -442,7 +449,7 @@ fun ModeEditorDialog(
                         .verticalScroll(rememberScrollState())
                         .padding(20.dp),
                 ) {
-                    if (showTemplates != null) {
+                    if (showTemplates) {
                         templateBrowser()
                     } else {
                     Text(s.modeSelectTitle, style = MaterialTheme.typography.titleMedium)
@@ -590,7 +597,7 @@ fun ModeEditorDialog(
                                 .weight(1f)
                                 .verticalScroll(rememberScrollState()),
                         ) {
-                            if (showTemplates != null) {
+                            if (showTemplates) {
                                 templateBrowser()
                             } else {
                                 panelsContent()

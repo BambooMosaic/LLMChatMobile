@@ -22,6 +22,27 @@ interface ConversationDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertConversation(entity: ConversationEntity)
 
+    // ===== 29 轮：全量备份（导出读取 / 导入清空重插）=====
+
+    @Query("SELECT * FROM conversations")
+    suspend fun getAllConversations(): List<ConversationEntity>
+
+    @Query("SELECT * FROM messages")
+    suspend fun getAllMessages(): List<MessageEntity>
+
+    @Query("DELETE FROM conversations")
+    suspend fun deleteAllConversations()
+
+    @Query("DELETE FROM messages")
+    suspend fun deleteAllMessages()
+
+    /** 导入重插：会话 id 为业务 UUID，REPLACE 防碰撞；消息用显式 id，parentId 树不断链。 */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAllConversations(entities: List<ConversationEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAllMessages(entities: List<MessageEntity>)
+
     @Update
     suspend fun updateConversation(entity: ConversationEntity)
 

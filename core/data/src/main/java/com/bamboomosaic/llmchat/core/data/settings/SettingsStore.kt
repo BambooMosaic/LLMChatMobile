@@ -4,10 +4,12 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.doublePreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
+import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.bamboomosaic.llmchat.core.domain.AppLanguage
@@ -62,6 +64,10 @@ class SettingsStore @Inject constructor(
     private val ttsVoiceKey = stringPreferencesKey("tts_voice")
     private val ttsAutoReadKey = booleanPreferencesKey("tts_auto_read")
     private val netRetryCountKey = intPreferencesKey("net_retry_count")
+    // 29 轮：多引擎 TTS——引擎选择 + 各引擎音色独立记忆
+    private val ttsProviderKey = stringPreferencesKey("tts_provider")
+    private val ttsVoiceQwenKey = stringPreferencesKey("tts_voice_qwen")
+    private val ttsVoiceGlmKey = stringPreferencesKey("tts_voice_glm")
     private val legacyExperimentalGlassKey = booleanPreferencesKey("experimental_glass")
 
     override fun observeSettings(): Flow<AppSettings> = context.settingsDataStore.data.map { prefs ->
@@ -99,6 +105,10 @@ class SettingsStore @Inject constructor(
             ttsVoice = prefs[ttsVoiceKey]?.takeIf { it == "stella" || it == "tide" } ?: "stella",
             ttsAutoRead = prefs[ttsAutoReadKey] ?: false,
             netRetryCount = (prefs[netRetryCountKey] ?: 2).coerceIn(0, 5),
+            ttsProvider = prefs[ttsProviderKey]?.takeIf { it == "deepseek" || it == "qwen" || it == "glm" }
+                ?: "deepseek",
+            ttsVoiceQwen = prefs[ttsVoiceQwenKey]?.takeIf { it.isNotBlank() } ?: "Cherry",
+            ttsVoiceGlm = prefs[ttsVoiceGlmKey]?.takeIf { it.isNotBlank() } ?: "tongtong",
         )
     }
 
@@ -271,6 +281,23 @@ class SettingsStore @Inject constructor(
         context.settingsDataStore.edit { it[netRetryCountKey] = count.coerceIn(0, 5) }
     }
 
+    /** 29 轮：TTS 朗读引擎（deepseek / qwen / glm）。 */
+    override suspend fun setTtsProvider(providerId: String) {
+        context.settingsDataStore.edit {
+            it[ttsProviderKey] = if (providerId == "qwen" || providerId == "glm") providerId else "deepseek"
+        }
+    }
+
+    /** 29 轮：通义千问 TTS 音色。 */
+    override suspend fun setTtsVoiceQwen(voiceId: String) {
+        context.settingsDataStore.edit { it[ttsVoiceQwenKey] = voiceId.ifBlank { "Cherry" } }
+    }
+
+    /** 29 轮：智谱 GLM TTS 音色。 */
+    override suspend fun setTtsVoiceGlm(voiceId: String) {
+        context.settingsDataStore.edit { it[ttsVoiceGlmKey] = voiceId.ifBlank { "tongtong" } }
+    }
+
     /** 28 轮：会话草稿（空串 = 清除键）。 */
     override suspend fun setDraft(conversationId: String, text: String) {
         context.settingsDataStore.edit { prefs ->
@@ -360,6 +387,55 @@ class SettingsStore @Inject constructor(
         context.settingsDataStore.edit {
             it[firstLaunchKey] = false
             it[onboardVersionKey] = currentMajorMinor()
+        }
+    }
+
+    // ===== 29 轮：全量备份（导出/导入所有设置键）=====
+
+    /** 备份导出：全部设置键编码为字符串映射（"b:/i:/f:/l:/d:/s:" 类型前缀 + 值）。 */
+    suspend fun backupSettings(): Map<String, String> {
+        val prefs = context.settingsDataStore.data.first()
+        return prefs.asMap().entries.associate { (key, value) ->
+            key.name to when (value) {
+                is Boolean -> "b:$value"
+                is Int -> "i:$value"
+                is Float -> "f:$value"
+                is Long -> "l:$value"
+                is Double -> "d:$value"
+                else -> "s:$value"
+            }
+        }
+    }
+
+    /**
+     * 备份导入：清空全部设置键后写回备份内容，再按导入语义修正三类例外——
+     * is_first_launch 强制置已完成（导入方必是老用户）、onboard_version 用本机现值
+     * （不因导入弹更新公告）、背景图跨设备无效强制清空；其余键与导出设备一致。
+     */
+    suspend fun restoreSettings(backup: Map<String, String>) {
+        val currentOnboard = context.settingsDataStore.data.first()[onboardVersionKey]
+        context.settingsDataStore.edit { target ->
+            target.asMap().keys.forEach { target.remove(it) }
+            backup.forEach { (name, encoded) -> writeEncodedSetting(target, name, encoded) }
+            target[firstLaunchKey] = false
+            target[onboardVersionKey] = currentOnboard ?: currentMajorMinor()
+            target[backgroundImageUriKey] = ""
+        }
+    }
+
+    /** 按"类型前缀+值"编码写回单个设置键（编码失败静默跳过，不阻塞导入）。 */
+    private fun writeEncodedSetting(target: MutablePreferences, name: String, encoded: String) {
+        val prefix = encoded.take(2)
+        val value = encoded.drop(2)
+        runCatching {
+            when (prefix) {
+                "b:" -> target[booleanPreferencesKey(name)] = value == "true"
+                "i:" -> target[intPreferencesKey(name)] = value.toInt()
+                "f:" -> target[floatPreferencesKey(name)] = value.toFloat()
+                "l:" -> target[longPreferencesKey(name)] = value.toLong()
+                "d:" -> target[doublePreferencesKey(name)] = value.toDouble()
+                else -> target[stringPreferencesKey(name)] = value
+            }
         }
     }
 

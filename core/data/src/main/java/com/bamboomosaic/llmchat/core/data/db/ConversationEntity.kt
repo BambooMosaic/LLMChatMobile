@@ -2,7 +2,10 @@ package com.bamboomosaic.llmchat.core.data.db
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
+import kotlinx.serialization.Serializable
 
+/** @Serializable：29 轮全量备份直接序列化实体。 */
+@Serializable
 @Entity(tableName = "conversations")
 data class ConversationEntity(
     @PrimaryKey val id: String,

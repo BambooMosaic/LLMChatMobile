@@ -12,6 +12,17 @@ interface ApiConfigDao {
     @Query("SELECT * FROM api_configs ORDER BY id ASC")
     fun observeAll(): Flow<List<ApiConfigEntity>>
 
+    // ===== 29 轮：全量备份 =====
+
+    @Query("SELECT * FROM api_configs ORDER BY id ASC")
+    suspend fun getAllConfigs(): List<ApiConfigEntity>
+
+    @Query("DELETE FROM api_configs")
+    suspend fun deleteAll()
+
+    @Insert(onConflict = androidx.room.OnConflictStrategy.REPLACE)
+    suspend fun insertAll(entities: List<ApiConfigEntity>)
+
     @Query("SELECT * FROM api_configs WHERE id = :id LIMIT 1")
     suspend fun getById(id: Long): ApiConfigEntity?
 

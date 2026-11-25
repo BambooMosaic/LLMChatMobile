@@ -36,6 +36,8 @@ dependencies {
     implementation(project(":core:domain"))
     // 27 轮：TTS 直连 DeepSeek 语音合成接口（ChatViewModel 注入 DeepSeekTtsClient）
     implementation(project(":core:network"))
+    // 29 轮：一键导出/导入（ChatViewModel 注入 BackupManager）
+    implementation(project(":core:data"))
 
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)

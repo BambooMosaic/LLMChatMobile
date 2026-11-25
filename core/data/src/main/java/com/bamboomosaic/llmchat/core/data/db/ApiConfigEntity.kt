@@ -2,8 +2,10 @@ package com.bamboomosaic.llmchat.core.data.db
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
+import kotlinx.serialization.Serializable
 
-/** 一套可保存的 API 配置。 */
+/** 一套可保存的 API 配置。@Serializable：29 轮全量备份直接序列化实体。 */
+@Serializable
 @Entity(tableName = "api_configs")
 data class ApiConfigEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
