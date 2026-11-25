@@ -79,20 +79,21 @@ fun ConversationDrawer(
 
     ModalDrawerSheet(
         modifier = if (LocalGlassLevel.current >= 1) {
-            // 24 轮：毛玻璃模式抽屉加细边框；30 轮：补柔和外阴影模拟玻璃悬浮质感
-            // （侧边栏与聊天内容同窗口，系统跨窗模糊够不到，半透明+阴影+边框即玻璃降级形态）
-            Modifier.width(drawerWidth)
-                .shadow(elevation = 12.dp, shape = MaterialTheme.shapes.large)
-                .border(
-                    width = 0.7.dp,
-                    color = MaterialTheme.colorScheme.outlineVariant,
-                    shape = MaterialTheme.shapes.large,
-                )
+            // 24 轮：毛玻璃模式抽屉加细边框。
+            // 30 轮迭代记录：shadow 阴影会绕抽屉四周一整圈绘制（顶部横带+侧缘竖带），
+            // 浅色主题下形成明显色差条，已移除；半透明底色（0.78/0.92）也因透出背后
+            // 不同内容（顶栏实色/聊天背景图）造成内部色差——抽屉改为完全实色，
+            // 玻璃质感仅以细边框点缀，保证内部观感绝对均匀。
+            Modifier.width(drawerWidth).border(
+                width = 0.7.dp,
+                color = MaterialTheme.colorScheme.outlineVariant,
+                shape = MaterialTheme.shapes.large,
+            )
         } else {
             Modifier.width(drawerWidth)
         },
-        // 29 轮：统一走 glassSurfaceColor（0.78 半透明；抽屉与主窗同 window 无系统模糊，靠透底色呈现玻璃感）
-        drawerContainerColor = glassSurfaceColor(),
+        // 30 轮：抽屉完全实色（见上注释——半透明必然透出背景差异形成色差）
+        drawerContainerColor = MaterialTheme.colorScheme.surface,
         // 25 轮：玻璃模式 tonal elevation 归零——去掉色调叠加（半透明色不被混合），视觉上无阴影
         drawerTonalElevation = if (LocalGlassLevel.current >= 1) 0.dp
         else androidx.compose.material3.DrawerDefaults.ModalDrawerElevation,
