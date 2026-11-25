@@ -50,6 +50,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -467,7 +468,13 @@ fun ChatInputBar(
                             modifier = Modifier.height(24.dp),
                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
                         ) {
-                            Text("📎", style = MaterialTheme.typography.titleMedium)
+                            // 29 轮修正：加号图标（跟随配色预设主色），替代 📎 emoji
+                            Text(
+                                text = "+",
+                                color = MaterialTheme.colorScheme.primary,
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold,
+                            )
                         }
                         DropdownMenu(
                             expanded = uploadMenuExpanded,
@@ -526,9 +533,10 @@ private const val MAX_PENDING_IMAGES = 4
 private fun compressImageToBase64(context: android.content.Context, uri: android.net.Uri): String? =
     runCatching {
         val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        context.contentResolver.openInputStream(uri)?.use { input ->
-            android.graphics.BitmapFactory.decodeStream(input, null, bounds)
-        } ?: return null
+        // 注意：inJustDecodeBounds 的 decodeStream 恒返回 null——必须判流本身，否则永远走到 return null
+        // （29 轮修正：「上传图片提示请求失败」的根因）
+        val boundsInput = context.contentResolver.openInputStream(uri) ?: return null
+        boundsInput.use { android.graphics.BitmapFactory.decodeStream(it, null, bounds) }
         var sample = 1
         while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= 1600) sample *= 2
         val opts = android.graphics.BitmapFactory.Options().apply { inSampleSize = sample }
