@@ -95,6 +95,7 @@ fun SettingsDialog(
     onSetTtsEnabled: (Boolean) -> Unit,
     onSetTtsVoice: (String) -> Unit,
     onSetTtsAutoRead: (Boolean) -> Unit,
+    onSetNetRetryCount: (Int) -> Unit,
     onDownloadLatest: () -> Unit,
     onSetColorPreset: (String) -> Unit,
     onSetFollowSystemTheme: (Boolean) -> Unit,
@@ -191,6 +192,7 @@ fun SettingsDialog(
                 onSetTtsEnabled = onSetTtsEnabled,
                 onSetTtsVoice = onSetTtsVoice,
                 onSetTtsAutoRead = onSetTtsAutoRead,
+                onSetNetRetryCount = onSetNetRetryCount,
             )
 
             SettingsPage.ARCHIVED -> ArchivedPage(
@@ -819,9 +821,37 @@ private fun OtherPage(
     onSetTtsEnabled: (Boolean) -> Unit = {},
     onSetTtsVoice: (String) -> Unit = {},
     onSetTtsAutoRead: (Boolean) -> Unit = {},
+    onSetNetRetryCount: (Int) -> Unit = {},
 ) {
     val s = LocalAppStrings.current
 
+    // 28 轮：网络 / 429 自动重试次数（0~5，0 = 不重试，默认 2）——输入合法即生效
+    var retryText by remember { mutableStateOf(settings.netRetryCount.toString()) }
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(s.netRetryLabel, style = MaterialTheme.typography.bodyLarge)
+        OutlinedTextField(
+            value = retryText,
+            onValueChange = { raw ->
+                val digits = raw.filter { it.isDigit() }.take(1)
+                retryText = digits
+                digits.toIntOrNull()?.let { v -> onSetNetRetryCount(v.coerceIn(0, 5)) }
+            },
+            singleLine = true,
+            textStyle = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.width(120.dp),
+        )
+    }
+    Text(
+        text = s.netRetryHint,
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+
+    Spacer(Modifier.height(16.dp))
     // 23 轮：手动压缩摘要字数上限（100~1024，默认 400）——输入合法即生效
     var limitText by remember { mutableStateOf(settings.compressSummaryLimit.toString()) }
     Row(

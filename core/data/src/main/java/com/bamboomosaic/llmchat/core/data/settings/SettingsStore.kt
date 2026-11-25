@@ -16,6 +16,7 @@ import com.bamboomosaic.llmchat.core.domain.SettingsRepository
 import com.bamboomosaic.llmchat.core.domain.ThemeMode
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 
@@ -60,6 +61,7 @@ class SettingsStore @Inject constructor(
     private val ttsEnabledKey = booleanPreferencesKey("tts_enabled")
     private val ttsVoiceKey = stringPreferencesKey("tts_voice")
     private val ttsAutoReadKey = booleanPreferencesKey("tts_auto_read")
+    private val netRetryCountKey = intPreferencesKey("net_retry_count")
     private val legacyExperimentalGlassKey = booleanPreferencesKey("experimental_glass")
 
     override fun observeSettings(): Flow<AppSettings> = context.settingsDataStore.data.map { prefs ->
@@ -96,6 +98,7 @@ class SettingsStore @Inject constructor(
             ttsEnabled = prefs[ttsEnabledKey] ?: true,
             ttsVoice = prefs[ttsVoiceKey]?.takeIf { it == "stella" || it == "tide" } ?: "stella",
             ttsAutoRead = prefs[ttsAutoReadKey] ?: false,
+            netRetryCount = (prefs[netRetryCountKey] ?: 2).coerceIn(0, 5),
         )
     }
 
@@ -262,6 +265,24 @@ class SettingsStore @Inject constructor(
     override suspend fun setTtsAutoRead(enabled: Boolean) {
         context.settingsDataStore.edit { it[ttsAutoReadKey] = enabled }
     }
+
+    /** 28 轮：网络重试次数（0~5）。 */
+    override suspend fun setNetRetryCount(count: Int) {
+        context.settingsDataStore.edit { it[netRetryCountKey] = count.coerceIn(0, 5) }
+    }
+
+    /** 28 轮：会话草稿（空串 = 清除键）。 */
+    override suspend fun setDraft(conversationId: String, text: String) {
+        context.settingsDataStore.edit { prefs ->
+            val key = stringPreferencesKey("draft_" + conversationId)
+            if (text.isBlank()) prefs.remove(key) else prefs[key] = text
+        }
+    }
+
+    override suspend fun getDraft(conversationId: String): String =
+        context.settingsDataStore.data
+            .map { prefs -> prefs[stringPreferencesKey("draft_" + conversationId)] ?: "" }
+            .first()
 
     override fun observeModeUserPrompt(modeId: String): Flow<String?> =
         context.settingsDataStore.data.map { prefs ->

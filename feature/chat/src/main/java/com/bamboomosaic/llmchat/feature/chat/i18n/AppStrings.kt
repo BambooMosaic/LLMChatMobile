@@ -81,6 +81,11 @@ data class AppStrings(
     val ttsMenuSpeak: String,
     /** 长按菜单：停止朗读。 */
     val ttsMenuStop: String,
+    /** 28 轮：网络重试次数标签 / 提示。 */
+    val netRetryLabel: String,
+    val netRetryHint: String,
+    /** 28 轮：网络重试横幅文案（%1$d=本次第几次，%2$d=上限）。 */
+    val netRetryBannerFormat: String,
     val restore: String,
     val delete: String,
     val deleteConfirmTitle: String,
@@ -286,6 +291,9 @@ data class AppStrings(
 
     fun sessionTokensText(total: Long): String = "$sessionTokens: $total"
 
+    fun netRetryBanner(attempt: Int, max: Int): String =
+        String.format(netRetryBannerFormat, attempt, max)
+
     fun searchedPages(n: Int): String = String.format(searchedPagesFormat, n)
 
     /** 23 轮：金额折算摘要行（金额已含货币符号）。 */
@@ -358,6 +366,9 @@ private val ZhCN = AppStrings(
     ttsCostHint = "DeepSeek TTS 按字符计费（每万字约 1.5~3 元，汉字算 2 个字符），长回复朗读消耗明显，自动朗读请酌情开启",
     ttsMenuSpeak = "朗读这条回复",
     ttsMenuStop = "停止朗读",
+    netRetryLabel = "网络重试次数（0~5，0=不重试）",
+    netRetryHint = "网络波动或限流时自动重试，次数可调；超过上限后正常报错",
+    netRetryBannerFormat = "网络异常，正在重试（第 %1$\$d 次 / 最多 %2$\$d 次）…",
     restore = "恢复",
     delete = "删除",
     deleteConfirmTitle = "确认永久删除？",
@@ -582,6 +593,9 @@ private val ZhTW = AppStrings(
     ttsCostHint = "DeepSeek TTS 按字元計費（每萬字約 1.5~3 元，漢字算 2 個字元），長回覆朗讀消耗明顯，自動朗讀請酌情開啟",
     ttsMenuSpeak = "朗讀這條回覆",
     ttsMenuStop = "停止朗讀",
+    netRetryLabel = "網路重試次數（0~5，0=不重試）",
+    netRetryHint = "網路波動或限流時自動重試，次數可調；超過上限後正常報錯",
+    netRetryBannerFormat = "網路異常，正在重試（第 %1$\$d 次 / 最多 %2$\$d 次）…",
     restore = "恢復",
     delete = "刪除",
     deleteConfirmTitle = "確認永久刪除？",
@@ -806,6 +820,9 @@ private val EnUS = AppStrings(
     ttsCostHint = "DeepSeek TTS bills per character (~CNY 1.5-3 per 10k chars; CJK counts double). Long replies cost noticeably - enable auto-read with care.",
     ttsMenuSpeak = "Read this reply",
     ttsMenuStop = "Stop reading",
+    netRetryLabel = "Network retries (0-5, 0 = off)",
+    netRetryHint = "Auto-retries on network errors or rate limits; normal error after the limit",
+    netRetryBannerFormat = "Network error, retrying (attempt %1\$d of %2\$d)...",
     restore = "Restore",
     delete = "Delete",
     deleteConfirmTitle = "Delete permanently?",

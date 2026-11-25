@@ -137,6 +137,16 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
             viewModel.consumeEditDraft()
         }
     }
+    // 28 轮：切会话 / 冷启动恢复该会话输入草稿
+    val draftRestore by viewModel.draftRestore.collectAsState()
+    LaunchedEffect(draftRestore) {
+        draftRestore?.let {
+            input = it
+            viewModel.consumeDraftRestore()
+        }
+    }
+    // 28 轮：网络重试状态横幅
+    val retryState by viewModel.retryState.collectAsState()
     var showSettings by remember { mutableStateOf(false) }
     var showTokenStats by remember { mutableStateOf(false) }
     var exportTarget by remember { mutableStateOf<String?>(null) }
@@ -473,6 +483,23 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
                 }
             }
 
+            // 28 轮：网络 / 429 自动重试状态横幅
+            retryState?.let { rs ->
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                ) {
+                    Text(
+                        text = s.netRetryBanner(rs.attempt, rs.max),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    )
+                }
+            }
+
             if (error != null) {
                 val err = error!! // 委托属性不能 smart cast，显式断言（17 轮已知坑）
                 val guide = when (err.kind) {
@@ -502,7 +529,10 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
             // 模型切换 + 深度思考已整合进输入栏底栏
             ChatInputBar(
                 input = input,
-                onInputChange = { input = it },
+                onInputChange = {
+                    input = it
+                    viewModel.updateDraft(it)
+                },
                 thinkingEnabled = settings.thinkingEnabled,
                 thinkingSupported = currentConfig?.supportReasoning ?: false,
                 onToggleThinking = viewModel::setThinkingEnabled,
@@ -592,6 +622,7 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
             onSetTtsEnabled = viewModel::setTtsEnabled,
             onSetTtsVoice = viewModel::setTtsVoice,
             onSetTtsAutoRead = viewModel::setTtsAutoRead,
+            onSetNetRetryCount = viewModel::setNetRetryCount,
             onRestoreConversation = viewModel::restoreConversation,
             onDeleteConversation = viewModel::deleteConversationPermanently,
             onDismiss = { showSettings = false },

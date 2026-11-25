@@ -90,7 +90,7 @@ fun FlowPanelDialog(
                 } else {
                     val measurer = rememberTextMeasurer()
                     val density = LocalDensity.current
-                    val nodeW = with(density) { 96.dp.toPx() }
+                    val baseNodeW = with(density) { 96.dp.toPx() }
                     val nodeH = with(density) { 30.dp.toPx() }
                     val colW = with(density) { 106.dp.toPx() }
                     val rowH = with(density) { 56.dp.toPx() }
@@ -149,7 +149,9 @@ fun FlowPanelDialog(
                             val styleNum = TextStyle(fontSize = 9.sp, color = numColor)
 
                             fun drawLaid(laid: TreeLaid, rowOffset: Int) {
-                                val x = padL + laid.col * colW
+                                // 28 轮：AI 节点无文字 → 半宽小方块（居中于连线）
+                                val nodeW = if (laid.node.label.isEmpty()) baseNodeW * 0.45f else baseNodeW
+                                val x = padL + laid.col * colW + (baseNodeW - nodeW) / 2f
                                 val y = padT + rowOffset * rowH + laid.depthInRoot * rowH
                                 val fill = if (laid.node.active) activeFill else idleFill
                                 val border = if (laid.node.active) activeBorder else Color.Transparent
@@ -168,20 +170,22 @@ fun FlowPanelDialog(
                                         style = Stroke(width = 1.5.dp.toPx()),
                                     )
                                 }
-                                val tl = measurer.measure(
-                                    laid.node.label,
-                                    style = if (laid.node.active) styleActive else styleIdle,
-                                    maxLines = 1,
-                                    softWrap = false,
-                                )
-                                drawText(tl, topLeft = Offset(x + (nodeW - tl.size.width) / 2f, y + (nodeH - tl.size.height) / 2f))
+                                if (laid.node.label.isNotEmpty()) {
+                                    val tl = measurer.measure(
+                                        laid.node.label,
+                                        style = if (laid.node.active) styleActive else styleIdle,
+                                        maxLines = 1,
+                                        softWrap = false,
+                                    )
+                                    drawText(tl, topLeft = Offset(x + (nodeW - tl.size.width) / 2f, y + (nodeH - tl.size.height) / 2f))
+                                }
                                 hitRects += laid.node.messageId to Rect(Offset(x, y), Size(nodeW, nodeH))
 
                                 // 子分支：折线（父底 → midY → 横 → 子顶），分支边标序号
                                 val bx = x + nodeW / 2
                                 val by = y + nodeH
                                 laid.kids.forEach { child ->
-                                    val cx = padL + child.col * colW + nodeW / 2
+                                    val cx = padL + child.col * colW + baseNodeW / 2
                                     val cyTop = padT + rowOffset * rowH + child.depthInRoot * rowH
                                     val midY = (by + cyTop) / 2f
                                     drawLine(lineColor, Offset(bx, by), Offset(bx, midY), strokeWidth = 1.5.dp.toPx(), cap = StrokeCap.Round)

@@ -128,6 +128,8 @@ data class AppSettings(
     val ttsVoice: String = "stella",
     /** 27 轮修正：AI 回复完成后自动朗读（默认关——DeepSeek TTS 按字符计费，长回复消耗明显）。 */
     val ttsAutoRead: Boolean = false,
+    /** 28 轮：网络 / 429 自动重试次数（0 = 不重试，默认 2）。 */
+    val netRetryCount: Int = 2,
 ) {
     companion object {
         const val DEFAULT_MODEL = "deepseek-flash"
@@ -211,6 +213,14 @@ interface SettingsRepository {
 
     /** 27 轮修正：自动朗读开关。 */
     suspend fun setTtsAutoRead(enabled: Boolean)
+
+    /** 28 轮：网络重试次数（0~5）。 */
+    suspend fun setNetRetryCount(count: Int)
+
+    /** 28 轮：会话草稿（空串清除）。 */
+    suspend fun setDraft(conversationId: String, text: String)
+
+    suspend fun getDraft(conversationId: String): String
 
     /**
      * 27 轮修正：大版本更新公告（已完成后首次运行时观察）——

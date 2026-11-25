@@ -615,6 +615,8 @@ class ChatViewModel @Inject constructor(
                 // 27 轮：分叉树——用户消息父 = 编辑重发指定父，否则当前激活链尾
                 val userParent = userParentIdOverride
                     ?: _messages.value.lastOrNull { !it.isStreaming && it.dbId > 0 }?.dbId
+                drafts[conversationId] = ""
+                settingsRepository.setDraft(conversationId, "")
                 conversationRepository.appendMessage(
                     conversationId,
                     ChatMessage(
@@ -695,6 +697,8 @@ class ChatViewModel @Inject constructor(
                 _truncatedToast.tryEmit(Unit)
             }
 
+            // 28 轮：流式错误捕获（供重试循环判断）
+            var streamError: Throwable? = null
             chatRepository.sendChatStream(
                 sessionId = conversationId,
                 messages = bundle.messages,
@@ -720,11 +724,69 @@ class ChatViewModel @Inject constructor(
                     render(force = false)
                 },
             )
-                .catch { e -> _error.value = ApiError.from(e.message) }
+                .catch { e -> streamError = e }
                 .collect { chunk ->
                     accumulated += chunk
                     render(force = false)
                 }
+
+            // 28 轮：网络 / 429 自动退避重试——失败且可重试（IOException / 限流 / 超时）时从头重发
+            if (streamError != null) {
+                val cfgAtRetry = currentConfig.value
+                val maxRetry = currentSettings.netRetryCount
+                var attempt = 0
+                while (true) {
+                    attempt++
+                    val err = streamError
+                    val apiErr = ApiError.from(err?.message)
+                    val retryable = err is java.io.IOException ||
+                        apiErr.kind == ApiError.Kind.RATE_LIMIT ||
+                        apiErr.kind == ApiError.Kind.TIMEOUT
+                    if (!retryable || attempt > maxRetry) {
+                        _error.value = apiErr
+                        break
+                    }
+                    _retryState.value = RetryState(attempt, maxRetry)
+                    // 退避：3s → 6s → 9s（封顶 9s）
+                    kotlinx.coroutines.delay((3000L * attempt).coerceAtMost(9000L))
+                    if (_currentConversationId.value != conversationId) break // 期间切走了会话
+                    // 重置已渲染内容，从头重发
+                    accumulated = ""
+                    reasoningState.value = ""
+                    render(force = true)
+                    streamError = null
+                    // 28 轮：流式错误捕获（供重试循环判断）
+            chatRepository.sendChatStream(
+                        sessionId = conversationId,
+                        messages = bundle.messages,
+                        model = currentConfig.value?.model ?: currentSettings.model,
+                        maxTokens = effectiveMaxOutputTokens(
+                            currentSettings,
+                            modeId,
+                            conversations.value.firstOrNull { it.id == conversationId }?.userPrompt,
+                        ),
+                        onReasoning = { chunk ->
+                            reasoningState.update { it + chunk }
+                            render(force = false)
+                        },
+                        searchEnabled = currentSettings.searchEnabled && !tierDisablesFeatures(currentSettings, modeId),
+                        thinkingEnabled = currentSettings.thinkingEnabled && !tierDisablesFeatures(currentSettings, modeId),
+                        temperature = bundle.temperature,
+                        topP = bundle.topP,
+                        onSearchPages = { count ->
+                            searchPagesState.update { (it ?: 0) + count }
+                            render(force = false)
+                        },
+                    )
+                        .catch { e -> streamError = e }
+                        .collect { chunk ->
+                            accumulated += chunk
+                            render(force = false)
+                        }
+                    if (streamError == null) break
+                }
+            }
+            _retryState.value = null
 
             // 流结束，强制渲染一次完整内容（避免节流丢掉最后一段）
             render(force = true)
@@ -969,6 +1031,32 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+    /** 28 轮：会话草稿（运行期内存 + 当前会话持久化到 DataStore，冷启动恢复）。 */
+    private val drafts = mutableMapOf<String, String>()
+
+    private val _draftRestore = MutableStateFlow<String?>(null)
+    val draftRestore: StateFlow<String?> = _draftRestore.asStateFlow()
+
+    fun consumeDraftRestore() {
+        _draftRestore.value = null
+    }
+
+    init {
+        // 28 轮：冷启动恢复上次会话的草稿
+        viewModelScope.launch {
+            val id = _currentConversationId.value
+            if (!drafts.containsKey(id)) {
+                drafts[id] = settingsRepository.getDraft(id)
+                if (drafts[id]?.isNotEmpty() == true) _draftRestore.value = drafts[id]
+            }
+        }
+    }
+
+    /** 输入变化时同步草稿（内存）。 */
+    fun updateDraft(text: String) {
+        drafts[_currentConversationId.value] = text
+    }
+
     fun selectConversation(conversationId: String) {
         if (conversationId == _currentConversationId.value) return
         streamJob?.cancel()
@@ -976,9 +1064,16 @@ class ChatViewModel @Inject constructor(
         // 切走临时会话：草稿直接丢弃（未转正的不留任何数据）
         _draftModeId.value = ModeConfig.CHAT
         _draftUserPrompt.value = null
+        val oldId = _currentConversationId.value
         _currentConversationId.value = conversationId
         viewModelScope.launch {
+            // 28 轮：持久化切走会话的草稿；恢复目标会话草稿
+            settingsRepository.setDraft(oldId, drafts[oldId] ?: "")
+            if (!drafts.containsKey(conversationId)) {
+                drafts[conversationId] = settingsRepository.getDraft(conversationId)
+            }
             _messages.value = loadActivePath(conversationId)
+            _draftRestore.value = drafts[conversationId] ?: ""
         }
     }
 
@@ -1287,6 +1382,8 @@ class ChatViewModel @Inject constructor(
     fun deleteConversationPermanently(conversationId: String) {
         viewModelScope.launch {
             conversationRepository.deleteConversation(conversationId)
+            drafts.remove(conversationId)
+            settingsRepository.setDraft(conversationId, "")
             if (conversationId == _currentConversationId.value) {
                 newConversation()
             }
@@ -1372,6 +1469,14 @@ class ChatViewModel @Inject constructor(
     /** 合成失败计数（UI 收集后弹 toast）。 */
     private val _ttsErrorTick = MutableStateFlow(0)
     val ttsErrorTick: StateFlow<Int> = _ttsErrorTick.asStateFlow()
+
+    // ===== 28 轮：网络 / 429 自动重试 =====
+
+    /** 重试状态（非空 = 正在重试）：当前第 attempt 次 / 上限 max。UI 显示横幅。 */
+    data class RetryState(val attempt: Int, val max: Int)
+
+    private val _retryState = MutableStateFlow<RetryState?>(null)
+    val retryState: StateFlow<RetryState?> = _retryState.asStateFlow()
 
     /** 最近一次失败的具体原因（null=无；UI 优先展示它，否则用通用文案）。 */
     private val _ttsErrorMessage = MutableStateFlow<String?>(null)
@@ -1503,6 +1608,11 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch { settingsRepository.setTtsAutoRead(enabled) }
     }
 
+    /** 28 轮：网络 / 429 自动重试次数（0 = 不重试）。 */
+    fun setNetRetryCount(count: Int) {
+        viewModelScope.launch { settingsRepository.setNetRetryCount(count.coerceIn(0, 5)) }
+    }
+
     // ===== 27 轮：会话流程图（平面树）=====
 
     /**
@@ -1537,13 +1647,14 @@ class ChatViewModel @Inject constructor(
                 mainLineNext: ChatMessage?,
             ): FlowNodeUi {
                 val label = if (m.role == MessageRole.USER) {
-                    // 27 轮修正：节点文字最长 8 字，避免长摘要导致节点重叠
+                    // 28 轮：节点文字上限 10 字
                     val base = m.content.replace("\n", " ").trim()
                     val prefix = if (siblings > 1) "改$branchIndex " else ""
-                    if (prefix.isNotEmpty()) (prefix + base).take(9).ifBlank { "[图片]" }
-                    else base.take(8).ifBlank { "[图片]" }
+                    if (prefix.isNotEmpty()) (prefix + base).take(11).ifBlank { "[图片]" }
+                    else base.take(10).ifBlank { "[图片]" }
                 } else {
-                    "第 ${m.version} 次生成"
+                    // 28 轮：AI 节点不再写「第 N 次生成」，靠边线分支编号标识（省空间更清爽）
+                    ""
                 }
                 val sub = mutableListOf<FlowNodeUi>()
                 if (m.role == MessageRole.USER) {

@@ -34,7 +34,7 @@ class ConfigRepositoryImpl @Inject constructor(
     }
 
     override suspend fun save(config: ApiConfig): Long {
-        val entity = config.toEntity()
+        val entity = config.toEntity().copy(apiKey = ApiKeyCrypto.encrypt(config.apiKey))
         return if (config.id == 0L) {
             // 第一条配置自动成为默认
             val isFirst = dao.count() == 0
@@ -98,6 +98,16 @@ class ConfigRepositoryImpl @Inject constructor(
             ),
         )
         settingsRepository.setCurrentConfigId(newId)
+        migratePlainKeys()
+    }
+
+    /** 28 轮：旧明文 API Key 一次性加密回写（无明文行时零写入，幂等）。 */
+    private suspend fun migratePlainKeys() {
+        val all = dao.observeAll().first()
+        all.filter { !ApiKeyCrypto.isEncrypted(it.apiKey) && it.apiKey.isNotBlank() }
+            .forEach { entity ->
+                dao.update(entity.copy(apiKey = ApiKeyCrypto.encrypt(entity.apiKey)))
+            }
     }
 
     /** 选中 id → 默认配置 → 第一条，三级兜底。 */
@@ -111,7 +121,7 @@ class ConfigRepositoryImpl @Inject constructor(
         name = name,
         provider = provider,
         baseUrl = baseUrl,
-        apiKey = apiKey,
+        apiKey = ApiKeyCrypto.decrypt(apiKey),
         model = model,
         supportReasoning = supportReasoning == 1,
         isDefault = isDefault == 1,
