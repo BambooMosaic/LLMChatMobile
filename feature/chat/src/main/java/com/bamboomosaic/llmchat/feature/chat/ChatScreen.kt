@@ -496,6 +496,17 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
                             messages.lastOrNull()?.role == MessageRole.ASSISTANT,
                         onRegenerate = viewModel::regenerateLast,
                         onCopy = { viewModel.copyMessage(index) },
+                        // 31 轮：引用——完整内容不截断，多行逐行加引用前缀，可叠加
+                        onQuote = {
+                            val quoteBlock = buildString {
+                                append("\n> \n> ")
+                                append(s.quote)
+                                append(":\n> 【")
+                                append(msg.text.replace("\n", "\n> "))
+                                append("】\n")
+                            }
+                            input = if (input.isBlank()) quoteBlock.trimStart('\n') else input + quoteBlock
+                        },
                         onEdit = if (msg.role == MessageRole.USER && !msg.isStreaming) {
                             { viewModel.startEditMessage(index) }
                         } else {
@@ -1015,6 +1026,8 @@ private fun MessageBubble(
     showRegenerate: Boolean = false,
     onRegenerate: () -> Unit = {},
     onCopy: () -> Unit = {},
+    /** 31 轮：引用消息（null = 不显示入口）。 */
+    onQuote: (() -> Unit)? = null,
     onEdit: (() -> Unit)? = null,
     onSwitchVersion: (Int) -> Unit = {},
     /** 27 轮：朗读按钮可见性（外部判断 DeepSeek / 开关 / 角色 / 非流式）。 */
@@ -1049,6 +1062,16 @@ private fun MessageBubble(
             shadowElevation = if (LocalGlassLevel.current >= 1) 0.dp else 8.dp,
         ) {
             GlassPopupEffect()
+            // 31 轮：引用——放复制上方，把消息完整内容以引用块插入输入框
+            if (onQuote != null) {
+                DropdownMenuItem(
+                    text = { Text(s.quote) },
+                    onClick = {
+                        showMenu = false
+                        onQuote?.invoke()
+                    },
+                )
+            }
             DropdownMenuItem(
                 text = { Text(s.copy) },
                 onClick = {

@@ -58,9 +58,15 @@ android {
             } else {
                 signingConfigs.getByName("debug")
             }
-            // 暂不开混淆：Hilt / Room / kotlinx-serialization 需要配套 keep 规则，alpha 阶段先保稳
-            isMinifyEnabled = false
-            isShrinkResources = false
+            // 31 轮：启用 R8（混淆 + 裁剪）——keep 规则见 proguard-rules.pro，覆盖
+            // Hilt / Room / kotlinx-serialization 序列化实体 / SSE 数据模型，防运行时反射失效。
+            // 仅 release 变体开启，debug 保持不混淆（调试堆栈可读）。
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
         }
     }
 }
