@@ -9,6 +9,10 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Canvas
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.clickable
@@ -317,7 +321,8 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
                     )
                 },
                 actions = {
-                    // 27 轮：会话流程图按钮（环形统计左侧）——竖版时间线 + 多版本分支可视化
+                    // 27 轮修正：顶部只留流程图入口（环形统计移到输入栏发送键左侧，Token 文本删除——点环形即可看）
+                    // 图标 = 对齐的 T 形分叉树（参考用户手绘形式重画，居中对称）
                     Box(
                         modifier = Modifier
                             .size(36.dp)
@@ -327,64 +332,39 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
                             },
                         contentAlignment = Alignment.Center,
                     ) {
-                        // 分支图标颜色在组合层取（draw 作用域不是 @Composable）
                         val fork = MaterialTheme.colorScheme.onSurfaceVariant
                         Canvas(modifier = Modifier.fillMaxSize()) {
                             val w = size.width
                             val h = size.height
-                            val stroke = 1.6.dp.toPx()
-                            // 主干（底部中点向上）+ 两条分支 + 三个节点圆点
-                            drawLine(fork, androidx.compose.ui.geometry.Offset(w / 2, h * 0.95f), androidx.compose.ui.geometry.Offset(w / 2, h * 0.52f), strokeWidth = stroke)
-                            drawLine(fork, androidx.compose.ui.geometry.Offset(w / 2, h * 0.52f), androidx.compose.ui.geometry.Offset(w * 0.20f, h * 0.16f), strokeWidth = stroke)
-                            drawLine(fork, androidx.compose.ui.geometry.Offset(w / 2, h * 0.52f), androidx.compose.ui.geometry.Offset(w * 0.80f, h * 0.16f), strokeWidth = stroke)
-                            drawCircle(fork, radius = stroke * 1.5f, center = androidx.compose.ui.geometry.Offset(w / 2, h * 0.95f))
-                            drawCircle(fork, radius = stroke * 1.5f, center = androidx.compose.ui.geometry.Offset(w * 0.20f, h * 0.16f))
-                            drawCircle(fork, radius = stroke * 1.5f, center = androidx.compose.ui.geometry.Offset(w * 0.80f, h * 0.16f))
+                            val stroke = 1.5.dp.toPx()
+                            val boxW = w * 0.26f
+                            val boxH = h * 0.24f
+                            val r = CornerRadius(2.5.dp.toPx())
+                            val lineStyle = Stroke(width = stroke)
+
+                            // 顶部节点：居中
+                            val topX = (w - boxW) / 2f
+                            val topY = h * 0.08f
+                            drawRoundRect(fork, Offset(topX, topY), Size(boxW, boxH), r, style = lineStyle)
+                            val topCX = w / 2f
+                            val topBottom = topY + boxH
+
+                            // 两个子节点：左右对称
+                            val botY = h * 0.66f
+                            val leftCX = w * 0.25f
+                            val rightCX = w * 0.75f
+                            val midY = (topBottom + botY) / 2f
+
+                            // 连线：顶节点底 → 竖到 midY → 横到两端 → 竖到子节点顶（正交 T 形）
+                            drawLine(fork, Offset(topCX, topBottom), Offset(topCX, midY), strokeWidth = stroke)
+                            drawLine(fork, Offset(leftCX, midY), Offset(rightCX, midY), strokeWidth = stroke)
+                            drawLine(fork, Offset(leftCX, midY), Offset(leftCX, botY), strokeWidth = stroke)
+                            drawLine(fork, Offset(rightCX, midY), Offset(rightCX, botY), strokeWidth = stroke)
+
+                            drawRoundRect(fork, Offset(leftCX - boxW / 2, botY), Size(boxW, boxH), r, style = lineStyle)
+                            drawRoundRect(fork, Offset(rightCX - boxW / 2, botY), Size(boxW, boxH), r, style = lineStyle)
                         }
                     }
-                    // 21 轮：环形上下文进度按钮（替换原 Token 文本），点击打开统计面板
-                    // 24 轮：容量预警变色——>80% 橙色提醒，>95% 红色预警
-                    val ringTrack = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
-                    val ringPrimary = when {
-                        contextUsage.fraction >= 0.95f -> MaterialTheme.colorScheme.error
-                        contextUsage.fraction >= 0.80f -> androidx.compose.ui.graphics.Color(0xFFFFB300)
-                        else -> MaterialTheme.colorScheme.primary
-                    }
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .padding(4.dp)
-                            .clip(androidx.compose.foundation.shape.CircleShape)
-                            .clickable {
-                                viewModel.refreshContextUsage()
-                                showContextPanel = true
-                            },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Canvas(modifier = Modifier.fillMaxSize()) {
-                            val stroke = 2.5.dp.toPx()
-                            drawArc(
-                                color = ringTrack,
-                                startAngle = -90f,
-                                sweepAngle = 360f,
-                                useCenter = false,
-                                style = androidx.compose.ui.graphics.drawscope.Stroke(width = stroke),
-                            )
-                            drawArc(
-                                color = ringPrimary,
-                                startAngle = -90f,
-                                sweepAngle = 360f * contextUsage.fraction,
-                                useCenter = false,
-                                style = androidx.compose.ui.graphics.drawscope.Stroke(width = stroke),
-                            )
-                        }
-                    }
-                    Text(
-                        text = s.sessionTokensText(sessionTotals.total),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(end = 16.dp),
-                    )
                 },
             )
             HorizontalDivider(
@@ -545,7 +525,12 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
                     val locked = messages.any { m -> m.role == MessageRole.ASSISTANT && m.dbId > 0 }
                     if (locked) showModePreview = true else showModeEditor = true
                 },
-                isGenerating = isGenerating,
+                contextFraction = contextUsage.fraction,
+            onOpenContextPanel = {
+                viewModel.refreshContextUsage()
+                showContextPanel = true
+            },
+            isGenerating = isGenerating,
                 visionSupported = Providers.supportsVision(currentConfig?.model ?: ""),
                 pendingImages = pendingImages,
                 onImagesChange = viewModel::setPendingImages,

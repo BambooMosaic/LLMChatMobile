@@ -2,6 +2,7 @@ package com.bamboomosaic.llmchat.feature.chat
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Spacer
@@ -82,6 +84,10 @@ fun ChatInputBar(
     onImagesChange: (List<String>) -> Unit,
     onStop: () -> Unit,
     onSend: () -> Unit,
+    /** 27 轮修正：上下文占用比例（发送键左侧缩小环形）。 */
+    contextFraction: Float = 0f,
+    /** 27 轮修正：点击环形打开统计面板。 */
+    onOpenContextPanel: () -> Unit = {},
 ) {
     val s = LocalAppStrings.current
     val context = LocalContext.current
@@ -222,6 +228,40 @@ fun ChatInputBar(
                                     .heightIn(min = 84.dp, max = 165.dp)
                                     .padding(end = 52.dp),
                             )
+                        }
+
+                        // 27 轮修正：环形上下文统计（发送键左侧缩小版；>80% 橙、>95% 红）——顶栏已移除
+                        val ringTrack = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
+                        val ringPrimary = when {
+                            contextFraction >= 0.95f -> androidx.compose.ui.graphics.Color(0xFFE57373)
+                            contextFraction >= 0.80f -> androidx.compose.ui.graphics.Color(0xFFFFB300)
+                            else -> MaterialTheme.colorScheme.primary
+                        }
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(end = 50.dp, bottom = 2.dp)
+                                .size(32.dp)
+                                .clip(androidx.compose.foundation.shape.CircleShape)
+                                .clickable { onOpenContextPanel() },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Canvas(modifier = Modifier.fillMaxSize()) {
+                                drawArc(
+                                    color = ringTrack,
+                                    startAngle = -90f,
+                                    sweepAngle = 360f,
+                                    useCenter = false,
+                                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx()),
+                                )
+                                drawArc(
+                                    color = ringPrimary,
+                                    startAngle = -90f,
+                                    sweepAngle = 360f * contextFraction,
+                                    useCenter = false,
+                                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx()),
+                                )
+                            }
                         }
 
                         // 发送按钮：锚定在输入区最后一行右侧（BottomEnd），不随文字增加上移
