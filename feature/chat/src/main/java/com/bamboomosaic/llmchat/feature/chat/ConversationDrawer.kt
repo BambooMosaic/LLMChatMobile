@@ -6,6 +6,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.draw.shadow
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -78,12 +79,15 @@ fun ConversationDrawer(
 
     ModalDrawerSheet(
         modifier = if (LocalGlassLevel.current >= 1) {
-            // 24 轮：毛玻璃模式抽屉加细边框（无系统阴影可依赖）
-            Modifier.width(drawerWidth).border(
-                width = 0.7.dp,
-                color = MaterialTheme.colorScheme.outlineVariant,
-                shape = MaterialTheme.shapes.large,
-            )
+            // 24 轮：毛玻璃模式抽屉加细边框；30 轮：补柔和外阴影模拟玻璃悬浮质感
+            // （侧边栏与聊天内容同窗口，系统跨窗模糊够不到，半透明+阴影+边框即玻璃降级形态）
+            Modifier.width(drawerWidth)
+                .shadow(elevation = 12.dp, shape = MaterialTheme.shapes.large)
+                .border(
+                    width = 0.7.dp,
+                    color = MaterialTheme.colorScheme.outlineVariant,
+                    shape = MaterialTheme.shapes.large,
+                )
         } else {
             Modifier.width(drawerWidth)
         },

@@ -50,12 +50,14 @@ class MainActivity : ComponentActivity() {
             val isDark = settings.colorPreset.startsWith("dark")
 
             // 状态栏图标颜色跟随明暗模式
-            LaunchedEffect(isDark) {
-                window.decorView.systemUiVisibility = if (isDark) {
-                    0
-                } else {
-                    View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
-                }
+            // 30 轮：targetSdk 35 强制 edge-to-edge 后旧 systemUiVisibility 不再生效，
+            // 改用 WindowInsetsController 反色（浅色主题→深色图标，深色主题→浅色图标）；
+            // 状态栏背景本身透明（edge-to-edge），自动透出顶栏的主题色
+            val decorView = androidx.compose.ui.platform.LocalView.current
+            androidx.compose.runtime.DisposableEffect(isDark) {
+                val controller = androidx.core.view.WindowCompat.getInsetsController(window, decorView)
+                controller.isAppearanceLightStatusBars = !isDark
+                onDispose { }
             }
 
             // 27 轮：平板模式启动窗口标题为 LLMChatPro（仅窗口标题；应用内所有文案仍为 LLMChatMobile，手机模式不变）
