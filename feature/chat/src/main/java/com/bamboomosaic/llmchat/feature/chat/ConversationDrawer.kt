@@ -63,6 +63,8 @@ import kotlinx.coroutines.withContext
 fun ConversationDrawer(
     conversations: List<Conversation>,
     currentId: String,
+    /** 29 轮：毛玻璃雾化底图（主窗干净帧，毛玻璃档显示）。 */
+    backdrop: ImageBitmap? = null,
     onNewConversation: () -> Unit,
     onSelect: (String) -> Unit,
     onRename: (String, String) -> Unit,
@@ -111,7 +113,7 @@ fun ConversationDrawer(
         Box(modifier = Modifier.fillMaxSize().clipToBounds()) {
             // 29 轮：毛玻璃档——主窗截图缩小绘制的模糊背景层（同 window 无系统跨窗模糊的替代方案）
             if (LocalGlassLevel.current >= 2) {
-                val backdrop = rememberBlurredBackdrop(true)
+                // backdrop 由 ChatScreen 在抽屉入树前截好传入（同 window 截图会含抽屉自身重影）
                 if (backdrop != null) {
                     // 按截图原比例 1:1 对齐屏幕（左上角对齐，右侧溢出裁掉）——糊斑位置与真实内容对应
                     androidx.compose.foundation.Image(

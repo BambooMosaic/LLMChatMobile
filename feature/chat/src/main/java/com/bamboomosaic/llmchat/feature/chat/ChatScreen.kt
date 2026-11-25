@@ -260,11 +260,23 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
     // 20 轮：平板/横屏（宽屏）侧边栏常驻展开，与聊天内容并排；手机保持抽屉交互
     val wideScreen = LocalConfiguration.current.screenWidthDp >= 600
     val closeDrawer: () -> Unit = { scope.launch { drawerState.close() } }
+    // 29 轮：抽屉毛玻璃——在抽屉入树前截主窗干净帧，作为雾化底图传给抽屉
+    var drawerBackdrop by remember { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
+    val openDrawer: () -> Unit = {
+        scope.launch {
+            if (glassLevel >= 2) {
+                val decor = screenContext.findActivity()?.window?.decorView
+                if (decor != null) drawerBackdrop = captureBlurredBackdrop(decor)
+            }
+            drawerState.open()
+        }
+    }
     val drawerContent: @Composable (Boolean) -> Unit = { permanent ->
         ConversationDrawer(
             conversations = conversations,
             currentId = currentId,
             permanent = permanent,
+            backdrop = drawerBackdrop,
             onNewConversation = {
                 closeDrawer()
                 if (settings.defaultModeId == "off") {
@@ -346,7 +358,7 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
                 ),
                 navigationIcon = {
                     if (!permanentDrawer) {
-                        TextButton(onClick = { scope.launch { drawerState.open() } }) { Text("☰") }
+                        TextButton(onClick = openDrawer) { Text("☰") }
                     } else {
                         Spacer(Modifier.width(8.dp))
                     }

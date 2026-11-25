@@ -146,8 +146,8 @@ fun GlassDialogShell(
 }
 
 /**
- * 29 轮：主窗内容截图 → 1/10 缩小 → 两级 1/3 重采样 = 雾化底图（弹窗卡片 / 抽屉毛玻璃共用）。
- * 纯软件实现，不依赖系统跨窗模糊——所有 ROM / 动画开关表现一致。
+ * 29 轮：雾化底图（弹窗用）——弹窗是独立 window，LocalView 的 rootView 是弹窗自己，
+ * 必须截 **Activity 的 decorView**（背后主窗内容）才有意义。
  */
 @Composable
 fun rememberBlurredBackdrop(enabled: Boolean): ImageBitmap? {
@@ -156,43 +156,58 @@ fun rememberBlurredBackdrop(enabled: Boolean): ImageBitmap? {
     LaunchedEffect(enabled) {
         if (!enabled) return@LaunchedEffect
         delay(80)
-        withContext(Dispatchers.Default) {
-            runCatching {
-                val root = view.rootView
-                if (root.width <= 0 || root.height <= 0) return@runCatching null
-                val scale = 1f / 10f
-                var small = android.graphics.Bitmap.createBitmap(
-                    (root.width * scale).toInt().coerceAtLeast(1),
-                    (root.height * scale).toInt().coerceAtLeast(1),
-                    android.graphics.Bitmap.Config.ARGB_8888,
-                )
-                val canvas = android.graphics.Canvas(small)
-                canvas.scale(scale, scale)
-                root.draw(canvas)
-                val paint = android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG)
-                repeat(2) {
-                    val next = android.graphics.Bitmap.createBitmap(
-                        (small.width / 3).coerceAtLeast(1),
-                        (small.height / 3).coerceAtLeast(1),
-                        android.graphics.Bitmap.Config.ARGB_8888,
-                    )
-                    android.graphics.Canvas(next).drawBitmap(
-                        small,
-                        null,
-                        android.graphics.RectF(
-                            0f, 0f, next.width.toFloat(), next.height.toFloat(),
-                        ),
-                        paint,
-                    )
-                    small.recycle()
-                    small = next
-                }
-                small.asImageBitmap()
-            }.getOrNull()
-        }
+        val decor = view.context.findActivity()?.window?.decorView ?: return@LaunchedEffect
+        bmp = captureBlurredBackdrop(decor)
     }
     return bmp
 }
+
+/** Context 逐层解包找 Activity。 */
+internal tailrec fun android.content.Context.findActivity(): android.app.Activity? = when (this) {
+    is android.app.Activity -> this
+    is android.content.ContextWrapper -> baseContext.findActivity()
+    else -> null
+}
+
+/**
+ * 29 轮：把给定 decor view 的内容截图 → 1/10 缩小 → 两级 1/3 重采样 = 雾化底图。
+ * 纯软件实现，不依赖系统跨窗模糊——所有 ROM / 动画开关表现一致。
+ * 注意须在浮层（弹窗/抽屉）入树 **之前** 截，否则截到浮层自身重影。
+ */
+suspend fun captureBlurredBackdrop(decor: android.view.View): ImageBitmap? =
+    // 注意：View.draw 会触发 Compose 的 draw block（读 snapshot），跨线程调用直接崩溃——全程主线程
+    withContext(Dispatchers.Main) {
+        runCatching {
+            val root = decor
+            if (root.width <= 0 || root.height <= 0) return@runCatching null
+            val scale = 1f / 10f
+            var small = android.graphics.Bitmap.createBitmap(
+                (root.width * scale).toInt().coerceAtLeast(1),
+                (root.height * scale).toInt().coerceAtLeast(1),
+                android.graphics.Bitmap.Config.ARGB_8888,
+            )
+            val canvas = android.graphics.Canvas(small)
+            canvas.scale(scale, scale)
+            root.draw(canvas)
+            val paint = android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG)
+            repeat(2) {
+                val next = android.graphics.Bitmap.createBitmap(
+                    (small.width / 3).coerceAtLeast(1),
+                    (small.height / 3).coerceAtLeast(1),
+                    android.graphics.Bitmap.Config.ARGB_8888,
+                )
+                android.graphics.Canvas(next).drawBitmap(
+                    small,
+                    null,
+                    android.graphics.RectF(0f, 0f, next.width.toFloat(), next.height.toFloat()),
+                    paint,
+                )
+                small.recycle()
+                small = next
+            }
+            small.asImageBitmap()
+        }.getOrNull()
+    }
 
 /** 24 轮：弹窗表面色——毛玻璃开启时降透明度（深色主题近乎不透明，保证文字可读）。 */
 @Composable
