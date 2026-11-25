@@ -2,6 +2,7 @@ package com.bamboomosaic.llmchat.feature.chat
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -9,6 +10,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -30,22 +33,29 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.bamboomosaic.llmchat.core.domain.Conversation
 import com.bamboomosaic.llmchat.feature.chat.i18n.LocalAppStrings
 import com.bamboomosaic.llmchat.feature.chat.LocalGlassLevel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 
 /** 侧边栏：宽度为屏幕 2/3，顶部标题 + 新对话，列表，底部 Token 统计 + 设置。 */
 @OptIn(ExperimentalFoundationApi::class)
@@ -88,13 +98,33 @@ fun ConversationDrawer(
         } else {
             Modifier.width(drawerWidth)
         },
-        // 29 轮：统一走 glassSurfaceColor（0.78 半透明；抽屉与主窗同 window 无系统模糊，靠透底色呈现玻璃感）
-        drawerContainerColor = glassSurfaceColor(),
+        // 29 轮：毛玻璃档容器近透明（底下垫主窗截图模糊层）；半透明档仍走 glassSurfaceColor
+        drawerContainerColor = when {
+            LocalGlassLevel.current >= 2 -> MaterialTheme.colorScheme.surface.copy(alpha = 0.25f)
+            LocalGlassLevel.current >= 1 -> glassSurfaceColor()
+            else -> MaterialTheme.colorScheme.surface
+        },
         // 25 轮：玻璃模式 tonal elevation 归零——去掉色调叠加（半透明色不被混合），视觉上无阴影
         drawerTonalElevation = if (LocalGlassLevel.current >= 1) 0.dp
         else androidx.compose.material3.DrawerDefaults.ModalDrawerElevation,
     ) {
-        Column(modifier = Modifier.fillMaxSize()) {
+        Box(modifier = Modifier.fillMaxSize().clipToBounds()) {
+            // 29 轮：毛玻璃档——主窗截图缩小绘制的模糊背景层（同 window 无系统跨窗模糊的替代方案）
+            if (LocalGlassLevel.current >= 2) {
+                val backdrop = rememberBlurredBackdrop(true)
+                if (backdrop != null) {
+                    // 按截图原比例 1:1 对齐屏幕（左上角对齐，右侧溢出裁掉）——糊斑位置与真实内容对应
+                    androidx.compose.foundation.Image(
+                        bitmap = backdrop,
+                        contentDescription = null,
+                        contentScale = androidx.compose.ui.layout.ContentScale.FillBounds,
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .aspectRatio(backdrop.width.toFloat() / backdrop.height.toFloat()),
+                    )
+                }
+            }
+            Column(modifier = Modifier.fillMaxSize()) {
             Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp)) {
                 Text(
                     text = s.appName,
@@ -268,6 +298,7 @@ fun ConversationDrawer(
                     }
                 }
                 TextButton(onClick = onOpenSettings) { Text("⚙ ${s.settings}") }
+            }
             }
         }
     }

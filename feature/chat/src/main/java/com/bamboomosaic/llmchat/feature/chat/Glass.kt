@@ -1,25 +1,47 @@
 package com.bamboomosaic.llmchat.feature.chat
 
 import android.os.Build
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogWindowProvider
+import kotlin.math.roundToInt
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 
 /**
  * 24 轮：实验性毛玻璃 / 半透明磨砂材质（半透明 + 高配毛玻璃）。
@@ -40,23 +62,16 @@ fun GlassDialogEffect(enabled: Boolean = LocalGlassLevel.current >= 1) {
         DisposableEffect(enabled) {
             val window = (view.parent as? DialogWindowProvider)?.window
             if (window != null) {
-                // 玻璃模式统一：窗口背景透明 + 去掉背后的黑色遮罩（用户感知的"阴影"）
+                // 玻璃模式统一：窗口背景透明 + 去掉背后的黑色遮罩（用户感知的"阴影"）。
+                // 29 轮定稿：卡片内的"毛玻璃"由软件模糊层（rememberBlurredBackdrop）实现，
+                // 不依赖系统跨窗模糊——物理机 ROM 差异/动画开关都不再影响；卡片外完全透明。
                 window.setBackgroundDrawableResource(android.R.color.transparent)
                 val attrs = window.attributes
                 attrs.dimAmount = 0f
-                // 毛玻璃档（2）且系统支持：叠加整窗背后实时模糊
-                // 29 轮修正：必须显式加 FLAG_BLUR_BEHIND，只设 blurBehindRadius 不生效
-                // （此前所有设备毛玻璃档实际都停在半透明的根因）
-                if (level >= 2 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    window.addFlags(android.view.WindowManager.LayoutParams.FLAG_BLUR_BEHIND)
-                    // 29 轮反馈：90 太糊，"比半透明糊一点点"——轻雾感
-                    attrs.blurBehindRadius = 30
-                }
                 window.attributes = attrs
             }
             onDispose {
                 if (window != null) {
-                    window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_BLUR_BEHIND)
                     val attrs = window.attributes
                     attrs.blurBehindRadius = 0
                     attrs.dimAmount = 0.32f
@@ -88,15 +103,95 @@ fun GlassDialogShell(
         return
     }
     GlassDialogEffect()
+    val frosted = LocalGlassLevel.current >= 2
+    // 29 轮：卡片高度必须有界（毛玻璃档垫了全屏 backdrop，且内容带 scroll 的弹窗自会滚动）
+    val maxCardHeight = LocalConfiguration.current.screenHeightDp.dp * 0.88f
+    var cardPos by remember { mutableStateOf(Offset.Zero) }
     Surface(
         modifier = modifier
+            .heightIn(max = maxCardHeight)
+            .onGloballyPositioned { cardPos = it.positionInWindow() }
             .clip(shape)
             .border(width = 0.7.dp, color = MaterialTheme.colorScheme.outlineVariant, shape = shape),
         shape = shape,
-        // 24 轮：半透明 + 染色；系统支持时 blurBehindRadius 在背后叠加实时模糊（高配）
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
+        // 毛玻璃档背后是软件模糊层，染色更透；半透明档纯染色
+        color = MaterialTheme.colorScheme.surface.copy(alpha = if (frosted) 0.62f else 0.78f),
         contentColor = MaterialTheme.colorScheme.onSurface,
-    ) { content() }
+    ) {
+        if (frosted) {
+            val backdrop = rememberBlurredBackdrop(true)
+            if (backdrop != null) {
+                // 雾化截图按屏幕坐标 1:1 对齐到卡片背后——卡片内=其后内容的模糊，不越界
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clipToBounds(),
+                ) {
+                    Image(
+                        bitmap = backdrop,
+                        contentDescription = null,
+                        contentScale = ContentScale.FillBounds,
+                        modifier = Modifier
+                            .offset { IntOffset(-cardPos.x.roundToInt(), -cardPos.y.roundToInt()) }
+                            .size(
+                                LocalConfiguration.current.screenWidthDp.dp,
+                                LocalConfiguration.current.screenHeightDp.dp,
+                            ),
+                    )
+                }
+            }
+        }
+        content()
+    }
+}
+
+/**
+ * 29 轮：主窗内容截图 → 1/10 缩小 → 两级 1/3 重采样 = 雾化底图（弹窗卡片 / 抽屉毛玻璃共用）。
+ * 纯软件实现，不依赖系统跨窗模糊——所有 ROM / 动画开关表现一致。
+ */
+@Composable
+fun rememberBlurredBackdrop(enabled: Boolean): ImageBitmap? {
+    val view = LocalView.current
+    var bmp by remember { mutableStateOf<ImageBitmap?>(null) }
+    LaunchedEffect(enabled) {
+        if (!enabled) return@LaunchedEffect
+        delay(80)
+        withContext(Dispatchers.Default) {
+            runCatching {
+                val root = view.rootView
+                if (root.width <= 0 || root.height <= 0) return@runCatching null
+                val scale = 1f / 10f
+                var small = android.graphics.Bitmap.createBitmap(
+                    (root.width * scale).toInt().coerceAtLeast(1),
+                    (root.height * scale).toInt().coerceAtLeast(1),
+                    android.graphics.Bitmap.Config.ARGB_8888,
+                )
+                val canvas = android.graphics.Canvas(small)
+                canvas.scale(scale, scale)
+                root.draw(canvas)
+                val paint = android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG)
+                repeat(2) {
+                    val next = android.graphics.Bitmap.createBitmap(
+                        (small.width / 3).coerceAtLeast(1),
+                        (small.height / 3).coerceAtLeast(1),
+                        android.graphics.Bitmap.Config.ARGB_8888,
+                    )
+                    android.graphics.Canvas(next).drawBitmap(
+                        small,
+                        null,
+                        android.graphics.RectF(
+                            0f, 0f, next.width.toFloat(), next.height.toFloat(),
+                        ),
+                        paint,
+                    )
+                    small.recycle()
+                    small = next
+                }
+                small.asImageBitmap()
+            }.getOrNull()
+        }
+    }
+    return bmp
 }
 
 /** 24 轮：弹窗表面色——毛玻璃开启时降透明度（深色主题近乎不透明，保证文字可读）。 */
@@ -109,39 +204,41 @@ fun glassSurfaceColor(): Color {
 }
 
 /**
- * 29 轮反馈：小菜单（DropdownMenu / Popup）的毛玻璃——Popup 也是独立 window，
- * 通过内容根 view 的 WindowManager.LayoutParams 打 FLAG_BLUR_BEHIND（拿不到 LP 时静默跳过）。
+ * 29 轮反馈：小菜单（DropdownMenu / Popup）的毛玻璃——Popup 也是独立 window。
+ * 关键：LocalView 在 popup 内仍是主窗口的 view，拿不到 popup window；
+ * 所以借 AndroidView 在 popup window 里"种"一个 view，attach 后从它的 root 取
+ * WindowManager.LayoutParams 打 FLAG_BLUR_BEHIND（拿不到时静默跳过）。
  * 用法：放在 DropdownMenu 的 content 开头，配套菜单容器色用 [glassSurfaceColor]。
  */
 @Composable
 fun GlassPopupEffect(enabled: Boolean = LocalGlassLevel.current >= 1) {
     val level = LocalGlassLevel.current
     if (level < 1) return
-    val view = LocalView.current
-    DisposableEffect(view) {
-        val root = view.rootView
-        val lp = root.layoutParams as? android.view.WindowManager.LayoutParams
-        val wm = runCatching {
-            view.context.getSystemService(android.content.Context.WINDOW_SERVICE) as android.view.WindowManager
-        }.getOrNull()
-        // 只对应用内 attached popup 生效（Compose 两种 type 都可能用），主窗口天然不匹配
-        val attached = lp != null && wm != null && (
-            lp.type == android.view.WindowManager.LayoutParams.TYPE_APPLICATION_ATTACHED_DIALOG ||
-                lp.type == android.view.WindowManager.LayoutParams.TYPE_APPLICATION_PANEL
-            )
-        if (attached && level >= 2 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            lp.flags = lp.flags or android.view.WindowManager.LayoutParams.FLAG_BLUR_BEHIND
-            lp.blurBehindRadius = 30
-            runCatching { wm.updateViewLayout(root, lp) }
-        }
-        onDispose {
-            if (attached) {
-                lp.flags = lp.flags and android.view.WindowManager.LayoutParams.FLAG_BLUR_BEHIND.inv()
-                lp.blurBehindRadius = 0
-                runCatching { wm.updateViewLayout(root, lp) }
+    if (level < 2 || Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
+    androidx.compose.ui.viewinterop.AndroidView(
+        factory = { ctx ->
+            android.view.View(ctx).also { probe ->
+                probe.post {
+                    runCatching {
+                        val root = probe.rootView
+                        val lp = root.layoutParams
+                            as? android.view.WindowManager.LayoutParams
+                            ?: return@runCatching
+                        val isAttachedPopup =
+                            lp.type == android.view.WindowManager.LayoutParams.TYPE_APPLICATION_ATTACHED_DIALOG ||
+                                lp.type == android.view.WindowManager.LayoutParams.TYPE_APPLICATION_PANEL
+                        if (!isAttachedPopup) return@runCatching
+                        val wm = ctx.getSystemService(android.content.Context.WINDOW_SERVICE)
+                            as android.view.WindowManager
+                        lp.flags = lp.flags or android.view.WindowManager.LayoutParams.FLAG_BLUR_BEHIND
+                        lp.blurBehindRadius = 30
+                        wm.updateViewLayout(root, lp)
+                    }
+                }
             }
-        }
-    }
+        },
+        modifier = Modifier.size(0.dp),
+    )
 }
 
 /**
