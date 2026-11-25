@@ -653,7 +653,6 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
             onSetTtsProvider = viewModel::setTtsProvider,
             onSetTtsVoiceQwen = viewModel::setTtsVoiceQwen,
             onSetTtsVoiceGlm = viewModel::setTtsVoiceGlm,
-            onSetNetRetryCount = viewModel::setNetRetryCount,
             onExportBackup = { exportBackupLauncher.launch("llmchat_backup.json") },
             onImportBackup = { importBackupLauncher.launch(arrayOf("application/json")) },
             onRestoreConversation = viewModel::restoreConversation,

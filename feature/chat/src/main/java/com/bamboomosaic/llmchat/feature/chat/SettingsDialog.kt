@@ -98,7 +98,6 @@ fun SettingsDialog(
     onSetTtsProvider: (String) -> Unit,
     onSetTtsVoiceQwen: (String) -> Unit,
     onSetTtsVoiceGlm: (String) -> Unit,
-    onSetNetRetryCount: (Int) -> Unit,
     onExportBackup: () -> Unit,
     onImportBackup: () -> Unit,
     onDownloadLatest: () -> Unit,
@@ -200,7 +199,6 @@ fun SettingsDialog(
                 onSetTtsProvider = onSetTtsProvider,
                 onSetTtsVoiceQwen = onSetTtsVoiceQwen,
                 onSetTtsVoiceGlm = onSetTtsVoiceGlm,
-                onSetNetRetryCount = onSetNetRetryCount,
                 onExportBackup = onExportBackup,
                 onImportBackup = onImportBackup,
             )
@@ -834,81 +832,11 @@ private fun OtherPage(
     onSetTtsProvider: (String) -> Unit = {},
     onSetTtsVoiceQwen: (String) -> Unit = {},
     onSetTtsVoiceGlm: (String) -> Unit = {},
-    onSetNetRetryCount: (Int) -> Unit = {},
     onExportBackup: () -> Unit = {},
     onImportBackup: () -> Unit = {},
 ) {
     val s = LocalAppStrings.current
 
-    // 28 轮：网络 / 429 自动重试次数（0~5，0 = 不重试，默认 2）——输入合法即生效
-    var retryText by remember { mutableStateOf(settings.netRetryCount.toString()) }
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Text(s.netRetryLabel, style = MaterialTheme.typography.bodyLarge)
-        OutlinedTextField(
-            value = retryText,
-            onValueChange = { raw ->
-                val digits = raw.filter { it.isDigit() }.take(1)
-                retryText = digits
-                digits.toIntOrNull()?.let { v -> onSetNetRetryCount(v.coerceIn(0, 5)) }
-            },
-            singleLine = true,
-            textStyle = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.width(120.dp),
-        )
-    }
-    Text(
-        text = s.netRetryHint,
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
-
-    Spacer(Modifier.height(16.dp))
-    // 29 轮：一键导出 / 导入全部数据（设置 + API 配置 + 会话 + 消息 + token 统计）
-    var showImportConfirm by remember { mutableStateOf(false) }
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        androidx.compose.material3.OutlinedButton(
-            onClick = onExportBackup,
-            modifier = Modifier.weight(1f),
-        ) {
-            Text(s.exportAllData, style = MaterialTheme.typography.bodyMedium)
-        }
-        androidx.compose.material3.OutlinedButton(
-            onClick = { showImportConfirm = true },
-            modifier = Modifier.weight(1f),
-        ) {
-            Text(s.importAllData, style = MaterialTheme.typography.bodyMedium)
-        }
-    }
-    Text(
-        text = s.backupHint,
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
-    if (showImportConfirm) {
-        androidx.compose.material3.AlertDialog(
-            onDismissRequest = { showImportConfirm = false },
-            title = { Text(s.importConfirmTitle) },
-            text = { Text(s.importConfirmBody) },
-            confirmButton = {
-                androidx.compose.material3.TextButton(onClick = {
-                    showImportConfirm = false
-                    onImportBackup()
-                }) { Text(s.importConfirmConfirm) }
-            },
-            dismissButton = {
-                androidx.compose.material3.TextButton(onClick = { showImportConfirm = false }) { Text(s.cancel) }
-            },
-        )
-    }
-
-    Spacer(Modifier.height(16.dp))
     // 23 轮：手动压缩摘要字数上限（100~1024，默认 400）——输入合法即生效
     var limitText by remember { mutableStateOf(settings.compressSummaryLimit.toString()) }
     Row(
@@ -1114,6 +1042,41 @@ private fun OtherPage(
         )
     }
 
+    Spacer(Modifier.height(16.dp))
+    // 29 轮：一键导出 / 导入全部数据（设置 + API 配置 + 会话 + 消息 + token 统计）——置于其他设置最下方
+    var showImportConfirm by remember { mutableStateOf(false) }
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        androidx.compose.material3.TextButton(onClick = onExportBackup) {
+            Text(s.exportAllData, style = MaterialTheme.typography.labelMedium)
+        }
+        androidx.compose.material3.TextButton(onClick = { showImportConfirm = true }) {
+            Text(s.importAllData, style = MaterialTheme.typography.labelMedium)
+        }
+    }
+    Text(
+        text = s.backupHint,
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    if (showImportConfirm) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showImportConfirm = false },
+            title = { Text(s.importConfirmTitle) },
+            text = { Text(s.importConfirmBody) },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    showImportConfirm = false
+                    onImportBackup()
+                }) { Text(s.importConfirmConfirm) }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { showImportConfirm = false }) { Text(s.cancel) }
+            },
+        )
+    }
 }
 /** 偏好设置：环境注入开关、用户称呼、新对话默认模式。 */
 @Composable

@@ -104,7 +104,8 @@ class SettingsStore @Inject constructor(
             ttsEnabled = prefs[ttsEnabledKey] ?: true,
             ttsVoice = prefs[ttsVoiceKey]?.takeIf { it == "stella" || it == "tide" } ?: "stella",
             ttsAutoRead = prefs[ttsAutoReadKey] ?: false,
-            netRetryCount = (prefs[netRetryCountKey] ?: 2).coerceIn(0, 5),
+            // 29 轮：重试次数固定 3 次（自定义设置项已移除，历史存储值不再生效）
+            netRetryCount = 3,
             ttsProvider = prefs[ttsProviderKey]?.takeIf { it == "deepseek" || it == "qwen" || it == "glm" }
                 ?: "deepseek",
             ttsVoiceQwen = prefs[ttsVoiceQwenKey]?.takeIf { it.isNotBlank() } ?: "Cherry",
@@ -274,11 +275,6 @@ class SettingsStore @Inject constructor(
     /** 27 轮修正：自动朗读开关。 */
     override suspend fun setTtsAutoRead(enabled: Boolean) {
         context.settingsDataStore.edit { it[ttsAutoReadKey] = enabled }
-    }
-
-    /** 28 轮：网络重试次数（0~5）。 */
-    override suspend fun setNetRetryCount(count: Int) {
-        context.settingsDataStore.edit { it[netRetryCountKey] = count.coerceIn(0, 5) }
     }
 
     /** 29 轮：TTS 朗读引擎（deepseek / qwen / glm）。 */

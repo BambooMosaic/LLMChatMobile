@@ -128,8 +128,8 @@ data class AppSettings(
     val ttsVoice: String = "stella",
     /** 27 轮修正：AI 回复完成后自动朗读（默认关——DeepSeek TTS 按字符计费，长回复消耗明显）。 */
     val ttsAutoRead: Boolean = false,
-    /** 28 轮：网络 / 429 自动重试次数（0 = 不重试，默认 2）。 */
-    val netRetryCount: Int = 2,
+    /** 28 轮：网络 / 429 自动重试次数（29 轮起固定 3 次，不再提供设置项）。 */
+    val netRetryCount: Int = 3,
     /** 29 轮：TTS 朗读引擎（deepseek / qwen / glm）。 */
     val ttsProvider: String = "deepseek",
     /** 29 轮：通义千问 TTS 音色（预置如 Cherry/Serena/Ethan，大小写敏感）。 */
@@ -219,9 +219,6 @@ interface SettingsRepository {
 
     /** 27 轮修正：自动朗读开关。 */
     suspend fun setTtsAutoRead(enabled: Boolean)
-
-    /** 28 轮：网络重试次数（0~5）。 */
-    suspend fun setNetRetryCount(count: Int)
 
     /** 29 轮：TTS 朗读引擎（deepseek / qwen / glm）。 */
     suspend fun setTtsProvider(providerId: String)

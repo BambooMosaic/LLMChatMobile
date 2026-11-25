@@ -1746,11 +1746,6 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch { settingsRepository.setTtsAutoRead(enabled) }
     }
 
-    /** 28 轮：网络 / 429 自动重试次数（0 = 不重试）。 */
-    fun setNetRetryCount(count: Int) {
-        viewModelScope.launch { settingsRepository.setNetRetryCount(count.coerceIn(0, 5)) }
-    }
-
     // ===== 29 轮：一键导出 / 导入全量数据 =====
 
     /** 备份结果提示（一次性，UI 弹 toast 后消费）。 */
