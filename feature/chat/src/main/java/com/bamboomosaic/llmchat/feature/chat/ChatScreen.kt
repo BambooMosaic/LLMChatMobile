@@ -318,7 +318,20 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
                 .background(MaterialTheme.colorScheme.background)
                 .imePadding(),
         ) {
-            if (settings.backgroundImageUri.isNotBlank()) {
+            // 31 轮：预设流光背景（渐变代码绘制）优先于自定义图片；两者之上统一叠主题色遮罩保证文字可读
+            val presetBrush = PresetBackgrounds.brushOf(settings.backgroundPreset)
+            if (presetBrush != null) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(presetBrush),
+                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.background.copy(alpha = 0.72f)),
+                )
+            } else if (settings.backgroundImageUri.isNotBlank()) {
                 val bgBitmap = remember(settings.backgroundImageUri) {
                     runCatching { android.graphics.BitmapFactory.decodeFile(settings.backgroundImageUri) }
                         .getOrNull()
@@ -644,6 +657,8 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
             onSetFollowSystemTheme = viewModel::setFollowSystemTheme,
             onSetCompressSummaryLimit = viewModel::setCompressSummaryLimit,
             onSetBackgroundImage = viewModel::setBackgroundImage,
+            backgroundPreset = settings.backgroundPreset,
+            onSetBackgroundPreset = viewModel::setBackgroundPreset,
             onSetLanguage = viewModel::setLanguage,
             onSetAutoCompressEnabled = viewModel::setAutoCompressEnabled,
             onSetGlassLevel = viewModel::setGlassLevel,

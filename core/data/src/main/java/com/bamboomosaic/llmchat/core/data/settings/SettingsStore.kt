@@ -53,6 +53,8 @@ class SettingsStore @Inject constructor(
     private val roleplayParenKey = booleanPreferencesKey("roleplay_paren_rule")
     private val userNicknameKey = stringPreferencesKey("user_nickname")
     private val backgroundImageUriKey = stringPreferencesKey("background_image_uri")
+    /** 31 轮：预设流光背景 ID。 */
+    private val backgroundPresetKey = stringPreferencesKey("background_preset")
     private val colorPresetKey = stringPreferencesKey("color_preset")
     // 23 轮：跟随系统 + 配对索引（浅色组与深色组按位置一一配对：0=默认对默认…5=浅粉对深红）
     private val followSystemKey = booleanPreferencesKey("follow_system_theme")
@@ -93,6 +95,7 @@ class SettingsStore @Inject constructor(
             roleplayParenRule = prefs[roleplayParenKey] ?: true,
             userNickname = prefs[userNicknameKey] ?: "",
             backgroundImageUri = prefs[backgroundImageUriKey] ?: "",
+            backgroundPreset = prefs[backgroundPresetKey] ?: "",
             colorPreset = effectiveColorPreset(prefs),
             followSystemTheme = prefs[followSystemKey] ?: false,
             compressSummaryLimit = prefs[compressSummaryLimitKey] ?: 400,
@@ -229,6 +232,10 @@ class SettingsStore @Inject constructor(
 
     override suspend fun setBackgroundImageUri(value: String) {
         context.settingsDataStore.edit { it[backgroundImageUriKey] = value }
+    }
+
+    override suspend fun setBackgroundPreset(value: String) {
+        context.settingsDataStore.edit { it[backgroundPresetKey] = value }
     }
 
     override suspend fun setColorPreset(value: String) {
@@ -416,6 +423,7 @@ class SettingsStore @Inject constructor(
             target[firstLaunchKey] = false
             target[onboardVersionKey] = currentOnboard ?: currentMajorMinor()
             target[backgroundImageUriKey] = ""
+            target[backgroundPresetKey] = ""
         }
     }
 

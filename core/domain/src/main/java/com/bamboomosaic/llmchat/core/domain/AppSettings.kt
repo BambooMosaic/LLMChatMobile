@@ -114,6 +114,8 @@ data class AppSettings(
     val userNickname: String = "",
     /** 20 轮：聊天页面自定义背景图（应用内文件路径；空 = 默认背景）。 */
     val backgroundImageUri: String = "",
+    /** 31 轮：预设流光背景 ID（空 = 无预设，回退自定义图片或默认背景；非空时优先于背景图）。 */
+    val backgroundPreset: String = "",
     /** 20 轮：UI 配色预设 ID。22 轮起 id 自带 light_/dark_ 前缀；跟随系统关闭时为生效值。 */
     val colorPreset: String = "dark_default",
     /** 23 轮：跟随系统明暗——开启时按系统深浅在浅色/深色两组预设间按位置配对切换（默认↔默认、黄↔棕…）。 */
@@ -198,6 +200,9 @@ interface SettingsRepository {
 
     /** 20 轮：聊天页自定义背景图（应用内路径；空串 = 使用默认背景）。 */
     suspend fun setBackgroundImageUri(value: String)
+
+    /** 31 轮：预设流光背景 ID（空串 = 无预设）。 */
+    suspend fun setBackgroundPreset(value: String)
 
     /** 20 轮：UI 配色预设 ID。 */
     suspend fun setColorPreset(value: String)

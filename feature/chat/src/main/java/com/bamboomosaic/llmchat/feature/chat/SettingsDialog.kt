@@ -27,7 +27,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.foundation.verticalScroll
@@ -104,6 +106,9 @@ fun SettingsDialog(
     onSetColorPreset: (String) -> Unit,
     onSetFollowSystemTheme: (Boolean) -> Unit,
     onSetBackgroundImage: (String) -> Unit,
+    /** 31 轮：当前预设流光背景 ID（空 = 无）。 */
+    backgroundPreset: String,
+    onSetBackgroundPreset: (String) -> Unit,
     onSetLanguage: (AppLanguage) -> Unit,
     onSetAutoCompressEnabled: (Boolean) -> Unit,
     onRestoreConversation: (String) -> Unit,
@@ -180,6 +185,8 @@ fun SettingsDialog(
                             onSetColorPreset = onSetColorPreset,
                             backgroundImageUri = settings.backgroundImageUri,
                             onSetBackgroundImage = onSetBackgroundImage,
+                            backgroundPreset = settings.backgroundPreset,
+                            onSetBackgroundPreset = onSetBackgroundPreset,
                         )
 
             SettingsPage.LANGUAGE -> LanguagePage(
@@ -1224,6 +1231,8 @@ private fun AppearancePage(
     onSetColorPreset: (String) -> Unit,
     backgroundImageUri: String,
     onSetBackgroundImage: (String) -> Unit,
+    backgroundPreset: String,
+    onSetBackgroundPreset: (String) -> Unit,
 ) {
     val s = LocalAppStrings.current
     // 23 轮：跟随系统开启时按配对位置在两组同时高亮（默认↔默认、黄↔棕…）；关闭时只亮选中组
@@ -1334,6 +1343,52 @@ private fun AppearancePage(
             }
         }
     }
+    // 31 轮：预设流光背景色卡（纯视觉无文字，不新增多语言文案）；点选即换，再次点击选中项取消
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        // 「无」块：清除预设，回退自定义图片或默认背景
+        val noneSelected = backgroundPreset.isBlank()
+        Box(
+            modifier = Modifier
+                .size(44.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .border(
+                    width = if (noneSelected) 2.dp else 0.7.dp,
+                    color = if (noneSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
+                    shape = RoundedCornerShape(10.dp),
+                )
+                .clickable { onSetBackgroundPreset("") },
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = "×",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        PresetBackgrounds.all.forEach { preset ->
+            val selected = backgroundPreset == preset.id
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(
+                        Brush.linearGradient(
+                            preset.colors,
+                            start = Offset(0f, 0f),
+                            end = Offset(1f, 1f),
+                        ),
+                    )
+                    .border(
+                        width = if (selected) 2.dp else 0.7.dp,
+                        color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
+                        shape = RoundedCornerShape(10.dp),
+                    )
+                    .clickable { onSetBackgroundPreset(preset.id) },
+            )
+        }
+    }
+    Spacer(Modifier.height(8.dp))
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         androidx.compose.material3.Button(
             onClick = { pickImage.launch("image/*") },

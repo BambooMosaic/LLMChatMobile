@@ -1906,6 +1906,11 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch { settingsRepository.setBackgroundImageUri(path) }
     }
 
+    /** 31 轮：选择预设流光背景（空串 = 无预设，回退自定义图片或默认背景）。 */
+    fun setBackgroundPreset(id: String) {
+        viewModelScope.launch { settingsRepository.setBackgroundPreset(id) }
+    }
+
     /** 20 轮：UI 配色预设（default / ocean / forest / ember）。 */
     fun setColorPreset(preset: String) {
         viewModelScope.launch { settingsRepository.setColorPreset(preset) }
