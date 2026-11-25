@@ -78,21 +78,30 @@ fun ConversationDrawer(
     var menuTarget by remember { mutableStateOf<Conversation?>(null) }
 
     ModalDrawerSheet(
-        modifier = if (LocalGlassLevel.current >= 1) {
-            // 24 轮：毛玻璃模式抽屉加细边框；30 轮：抽屉完全实色（消除半透明色差）后，
-            // 恢复柔和外阴影（用户确认实色底上外阴影观感良好，色差只来自半透明底）
-            Modifier.width(drawerWidth)
+        modifier = when {
+            // 30 轮：毛玻璃档——完全实色（半透明会透出背景差异形成色差）+ 柔和外阴影 + 细边框
+            LocalGlassLevel.current >= 2 -> Modifier.width(drawerWidth)
                 .shadow(elevation = 12.dp, shape = MaterialTheme.shapes.large)
                 .border(
                     width = 0.7.dp,
                     color = MaterialTheme.colorScheme.outlineVariant,
                     shape = MaterialTheme.shapes.large,
                 )
-        } else {
-            Modifier.width(drawerWidth)
+            // 半透明档：恢复 0.7.3 原样——0.78 透底 + 细边框（无阴影）
+            LocalGlassLevel.current == 1 -> Modifier.width(drawerWidth).border(
+                width = 0.7.dp,
+                color = MaterialTheme.colorScheme.outlineVariant,
+                shape = MaterialTheme.shapes.large,
+            )
+            else -> Modifier.width(drawerWidth)
         },
-        // 30 轮：抽屉完全实色（见上注释——半透明必然透出背景差异形成色差）
-        drawerContainerColor = MaterialTheme.colorScheme.surface,
+        // 30 轮：毛玻璃档完全实色（半透明透背景必色差）；半透明档走 glassSurfaceColor
+        // （0.85 透底，全局统一值；0.7.3 为 0.78，浅色主题下偏透看不清）
+        drawerContainerColor = if (LocalGlassLevel.current == 1) {
+            glassSurfaceColor()
+        } else {
+            MaterialTheme.colorScheme.surface
+        },
         // 25 轮：玻璃模式 tonal elevation 归零——去掉色调叠加（半透明色不被混合），视觉上无阴影
         drawerTonalElevation = if (LocalGlassLevel.current >= 1) 0.dp
         else androidx.compose.material3.DrawerDefaults.ModalDrawerElevation,

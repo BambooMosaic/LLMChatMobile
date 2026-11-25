@@ -135,8 +135,8 @@ fun GlassDialogShell(
 fun glassSurfaceColor(): Color {
     val surface = MaterialTheme.colorScheme.surface
     if (LocalGlassLevel.current < 1) return surface
-    // 半透明档：两主题统一 0.78，效果肉眼可见；毛玻璃档背后有系统模糊，同样 0.78
-    return surface.copy(alpha = 0.78f)
+    // 半透明档：两主题统一 0.85（0.7.3~0.7.4 为 0.78，浅色主题下偏透看不清，30 轮调实）
+    return surface.copy(alpha = 0.85f)
 }
 
 /**
