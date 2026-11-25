@@ -88,11 +88,8 @@ fun ConversationDrawer(
         } else {
             Modifier.width(drawerWidth)
         },
-        drawerContainerColor = if (LocalGlassLevel.current >= 1) {
-            MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)
-        } else {
-            MaterialTheme.colorScheme.surface
-        },
+        // 29 轮：统一走 glassSurfaceColor（0.78 半透明；抽屉与主窗同 window 无系统模糊，靠透底色呈现玻璃感）
+        drawerContainerColor = glassSurfaceColor(),
         // 25 轮：玻璃模式 tonal elevation 归零——去掉色调叠加（半透明色不被混合），视觉上无阴影
         drawerTonalElevation = if (LocalGlassLevel.current >= 1) 0.dp
         else androidx.compose.material3.DrawerDefaults.ModalDrawerElevation,
@@ -164,12 +161,8 @@ fun ConversationDrawer(
                         DropdownMenu(
                             expanded = menuTarget?.id == conversation.id,
                             onDismissRequest = { menuTarget = null },
-                            // 25 轮：跟随玻璃档位——半透明容器 + 细边框 + 去投影
-                            containerColor = if (LocalGlassLevel.current >= 1) {
-                                MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.85f)
-                            } else {
-                                androidx.compose.material3.MenuDefaults.containerColor
-                            },
+                            // 25 轮：跟随玻璃档位——半透明容器 + 细边框 + 去投影；29 轮统一走 glassSurfaceColor
+                            containerColor = glassSurfaceColor(),
                             shadowElevation = if (LocalGlassLevel.current >= 1) 0.dp else 8.dp,
                             border = if (LocalGlassLevel.current >= 1) {
                                 androidx.compose.foundation.BorderStroke(
@@ -180,6 +173,7 @@ fun ConversationDrawer(
                                 null
                             },
                         ) {
+                            GlassPopupEffect()
                             DropdownMenuItem(
                                 colors = androidx.compose.material3.MenuDefaults.itemColors(
                                     textColor = MaterialTheme.colorScheme.onSurface,
@@ -298,7 +292,9 @@ private fun RenameDialog(
 ) {
     val s = LocalAppStrings.current
     var draft by remember { mutableStateOf(initial) }
+    GlassDialogEffect()
     AlertDialog(
+        containerColor = glassSurfaceColor(),
         onDismissRequest = onDismiss,
         title = { Text(s.renameTitle) },
         text = {

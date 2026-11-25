@@ -327,8 +327,11 @@ fun ChatInputBar(
                             expanded = modelMenuExpanded,
                             onDismissRequest = { modelMenuExpanded = false },
                             shape = RoundedCornerShape(16.dp),
+                            containerColor = glassSurfaceColor(),
+                            shadowElevation = if (LocalGlassLevel.current >= 1) 0.dp else 8.dp,
                             modifier = Modifier.widthIn(max = LocalConfiguration.current.screenWidthDp.dp / 2), // 半屏宽
                         ) {
+                            GlassPopupEffect()
                             // 双行条目：上行=模型名+价格标签，下行=配置名
                             modelConfigs.forEach { config ->
                                 val tier = priceTierOf(config.model)
@@ -480,7 +483,10 @@ fun ChatInputBar(
                             expanded = uploadMenuExpanded,
                             onDismissRequest = { uploadMenuExpanded = false },
                             shape = RoundedCornerShape(16.dp),
+                            containerColor = glassSurfaceColor(),
+                            shadowElevation = if (LocalGlassLevel.current >= 1) 0.dp else 8.dp,
                         ) {
+                            GlassPopupEffect()
                             DropdownMenuItem(
                                 text = { Text(s.uploadImage) },
                                 enabled = visionSupported,

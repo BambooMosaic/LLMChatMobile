@@ -49,7 +49,8 @@ fun GlassDialogEffect(enabled: Boolean = LocalGlassLevel.current >= 1) {
                 // （此前所有设备毛玻璃档实际都停在半透明的根因）
                 if (level >= 2 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                     window.addFlags(android.view.WindowManager.LayoutParams.FLAG_BLUR_BEHIND)
-                    attrs.blurBehindRadius = 90
+                    // 29 轮反馈：90 太糊，"比半透明糊一点点"——轻雾感
+                    attrs.blurBehindRadius = 30
                 }
                 window.attributes = attrs
             }
@@ -105,6 +106,42 @@ fun glassSurfaceColor(): Color {
     if (LocalGlassLevel.current < 1) return surface
     // 半透明档：两主题统一 0.78，效果肉眼可见；毛玻璃档背后有系统模糊，同样 0.78
     return surface.copy(alpha = 0.78f)
+}
+
+/**
+ * 29 轮反馈：小菜单（DropdownMenu / Popup）的毛玻璃——Popup 也是独立 window，
+ * 通过内容根 view 的 WindowManager.LayoutParams 打 FLAG_BLUR_BEHIND（拿不到 LP 时静默跳过）。
+ * 用法：放在 DropdownMenu 的 content 开头，配套菜单容器色用 [glassSurfaceColor]。
+ */
+@Composable
+fun GlassPopupEffect(enabled: Boolean = LocalGlassLevel.current >= 1) {
+    val level = LocalGlassLevel.current
+    if (level < 1) return
+    val view = LocalView.current
+    DisposableEffect(view) {
+        val root = view.rootView
+        val lp = root.layoutParams as? android.view.WindowManager.LayoutParams
+        val wm = runCatching {
+            view.context.getSystemService(android.content.Context.WINDOW_SERVICE) as android.view.WindowManager
+        }.getOrNull()
+        // 只对应用内 attached popup 生效（Compose 两种 type 都可能用），主窗口天然不匹配
+        val attached = lp != null && wm != null && (
+            lp.type == android.view.WindowManager.LayoutParams.TYPE_APPLICATION_ATTACHED_DIALOG ||
+                lp.type == android.view.WindowManager.LayoutParams.TYPE_APPLICATION_PANEL
+            )
+        if (attached && level >= 2 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            lp.flags = lp.flags or android.view.WindowManager.LayoutParams.FLAG_BLUR_BEHIND
+            lp.blurBehindRadius = 30
+            runCatching { wm.updateViewLayout(root, lp) }
+        }
+        onDispose {
+            if (attached) {
+                lp.flags = lp.flags and android.view.WindowManager.LayoutParams.FLAG_BLUR_BEHIND.inv()
+                lp.blurBehindRadius = 0
+                runCatching { wm.updateViewLayout(root, lp) }
+            }
+        }
+    }
 }
 
 /**
