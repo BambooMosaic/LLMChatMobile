@@ -101,12 +101,13 @@ fun ModePreviewDialog(
         return obj.toString(2)
     }
 
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+    // 30 轮：禁用全屏窗口——blurBehind 模糊只落在窗口（卡片）矩形内，不再全屏雾化
+    Dialog(onDismissRequest = onDismiss) {
         GlassDialogShell(
             modifier = Modifier
                 .fillMaxWidth()
-                .wideDialogMax(520.dp)
-                .padding(16.dp),
+                .wideDialogMax(520.dp),
+                // 30 轮：全屏窗口时代的 padding(16) 已不需要——窗口本身收缩为卡片矩形
         ) {
             Column(
                 modifier = Modifier

@@ -402,7 +402,8 @@ private fun ArchivedPage(
     }
 
     deleteTarget?.let { target ->
-        AlertDialog(
+        // 30 轮：换 GlassAlertDialog——卡片内轻毛玻璃，窗口外完全透明
+        GlassAlertDialog(
             onDismissRequest = { deleteTarget = null },
             title = { Text(s.deleteConfirmTitle) },
             text = { Text(target.title, maxLines = 2, overflow = TextOverflow.Ellipsis) },
@@ -510,7 +511,7 @@ private fun ApiConfigListPage(
         )
     }
 
-    // 每项的操作菜单
+    // 每项的操作菜单（30 轮：小菜单不参与毛玻璃，保持系统默认样式）
     menuTarget?.let { config ->
         DropdownMenu(
             expanded = true,
@@ -552,7 +553,8 @@ private fun ApiConfigListPage(
 
     // 删除确认
     deleteTarget?.let { config ->
-        AlertDialog(
+        // 30 轮：换 GlassAlertDialog——卡片内轻毛玻璃，窗口外完全透明
+        GlassAlertDialog(
             onDismissRequest = { deleteTarget = null },
             title = { Text(s.deleteConfirmTitle) },
             text = { Text(config.name) },
@@ -620,10 +622,9 @@ private fun ConfigEditDialog(
     )
 
     Dialog(onDismissRequest = onDismiss) {
-        GlassDialogEffect()
-        Surface(
+        // 30 轮：换 GlassDialogShell——卡片内轻毛玻璃 + 细边框，窗口外完全透明
+        GlassDialogShell(
             shape = RoundedCornerShape(24.dp),
-            color = glassSurfaceColor(),
             modifier = Modifier
                 .fillMaxWidth(0.94f)
                 .wideDialogMax(440.dp)
@@ -1062,7 +1063,8 @@ private fun OtherPage(
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
     if (showImportConfirm) {
-        androidx.compose.material3.AlertDialog(
+        // 30 轮：换 GlassAlertDialog——卡片内轻毛玻璃，窗口外完全透明
+        GlassAlertDialog(
             onDismissRequest = { showImportConfirm = false },
             title = { Text(s.importConfirmTitle) },
             text = { Text(s.importConfirmBody) },
@@ -1578,9 +1580,9 @@ private fun AboutPage(onDownloadLatest: () -> Unit = {}) {
 private fun CreditsDialog(onDismiss: () -> Unit) {
     val s = LocalAppStrings.current
     androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
-        Surface(
+        // 30 轮：换 GlassDialogShell——卡片内轻毛玻璃 + 细边框，窗口外完全透明
+        GlassDialogShell(
             shape = RoundedCornerShape(24.dp),
-            color = glassSurfaceColor(),
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp),

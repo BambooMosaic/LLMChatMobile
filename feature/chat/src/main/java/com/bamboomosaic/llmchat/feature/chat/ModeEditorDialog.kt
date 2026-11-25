@@ -176,7 +176,7 @@ fun ModeEditorDialog(
 
     Dialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false),
+        // 30 轮：禁用全屏窗口——blurBehind 模糊只落在窗口（卡片）矩形内，不再全屏雾化
     ) {
         // 27 轮：平板/宽屏两列式——左列模式直排列表（竖屏折叠菜单的展开形态），右列补充上下文/角色卡 + 确认按钮；
         // 窄屏维持原单列折叠交互
@@ -184,8 +184,8 @@ fun ModeEditorDialog(
         GlassDialogShell(
             modifier = Modifier
                 .fillMaxWidth()
-                .wideDialogMax(760.dp)
-                .padding(16.dp),
+                .wideDialogMax(760.dp),
+                // 30 轮：全屏窗口时代的 padding(16) 已不需要——窗口本身收缩为卡片矩形
         ) {
             // 面板与确认按钮抽成局部 Composable，单列/两列共用同一份实现
             // 29 轮：模板入口改为四个池模式（聊天/办公/写作/开发）都显示，按当前模式加载专属池

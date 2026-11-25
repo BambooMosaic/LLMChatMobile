@@ -289,9 +289,8 @@ private fun RenameDialog(
 ) {
     val s = LocalAppStrings.current
     var draft by remember { mutableStateOf(initial) }
-    GlassDialogEffect()
-    AlertDialog(
-        containerColor = glassSurfaceColor(),
+    // 30 轮：换 GlassAlertDialog——卡片内轻毛玻璃，窗口外完全透明
+    GlassAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(s.renameTitle) },
         text = {

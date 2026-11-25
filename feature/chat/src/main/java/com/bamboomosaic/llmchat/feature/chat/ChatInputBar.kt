@@ -280,11 +280,11 @@ fun ChatInputBar(
                             onClick = if (isGenerating) onStop else onSend,
                             shape = CircleShape,
                             interactionSource = sendInteraction,
-                            modifier = Modifier
-                                .align(Alignment.BottomEnd)
-                                .pressScale(sendInteraction, 0.92f)
-                                .padding(end = 2.dp, bottom = 2.dp)
-                                .size(40.dp),
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .pressScale(sendInteraction, 0.92f)
+                            .padding(end = 2.dp, bottom = 2.dp)
+                            .size(40.dp),
                             colors = if (isGenerating) {
                                 androidx.compose.material3.IconButtonDefaults.filledIconButtonColors(
                                     containerColor = MaterialTheme.colorScheme.error,

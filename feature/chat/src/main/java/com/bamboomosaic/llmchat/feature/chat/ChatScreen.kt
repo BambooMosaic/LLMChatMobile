@@ -663,9 +663,8 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
 
     // 29 轮：导入成功——重启应用使全量替换后的状态生效（VM/数据库连接全部重建）
     if (showImportRestart) {
-        GlassDialogEffect()
-        AlertDialog(
-            containerColor = glassSurfaceColor(),
+        // 30 轮：换 GlassAlertDialog——卡片内轻毛玻璃，窗口外完全透明
+        GlassAlertDialog(
             onDismissRequest = { showImportRestart = false },
             title = { Text(s.importRestartTitle) },
             text = { Text(s.importRestartBody) },
@@ -785,9 +784,8 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
     // 23 轮：升级为预览确认——展示将保留/压缩的条数，待压缩消息过少时禁用确认
     if (showCompressConfirm) {
         val toCompress = (messages.count { !it.isStreaming } - 4).coerceAtLeast(0)
-        GlassDialogEffect()
-        androidx.compose.material3.AlertDialog(
-            containerColor = glassSurfaceColor(),
+        // 30 轮：换 GlassAlertDialog——卡片内轻毛玻璃，窗口外完全透明
+        GlassAlertDialog(
             onDismissRequest = { showCompressConfirm = false },
             title = { Text(s.manualCompressButton) },
             text = {
@@ -876,9 +874,8 @@ private fun PromptEditDialog(
 ) {
     val s = LocalAppStrings.current
     var draft by remember(initial) { mutableStateOf(initial) }
-    GlassDialogEffect()
-    AlertDialog(
-        containerColor = glassSurfaceColor(),
+    // 30 轮：换 GlassAlertDialog——卡片内轻毛玻璃，窗口外完全透明
+    GlassAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(s.editPrompt) },
         text = {
@@ -906,9 +903,8 @@ private fun ExportFormatDialog(
     onDismiss: () -> Unit,
 ) {
     val s = LocalAppStrings.current
-    GlassDialogEffect()
-    AlertDialog(
-        containerColor = glassSurfaceColor(),
+    // 30 轮：换 GlassAlertDialog——卡片内轻毛玻璃，窗口外完全透明
+    GlassAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(s.export) },
         text = {
@@ -956,9 +952,8 @@ private fun FirstLaunchDialog(onConfirm: () -> Unit) {
         }
     }
 
-    GlassDialogEffect()
-    AlertDialog(
-        containerColor = glassSurfaceColor(),
+    // 30 轮：换 GlassAlertDialog——卡片内轻毛玻璃，窗口外完全透明
+    GlassAlertDialog(
         onDismissRequest = { /* 空实现：不可通过点空白关闭 */ },
         confirmButton = {
             TextButton(onClick = onConfirm) { Text(s.iKnow) }

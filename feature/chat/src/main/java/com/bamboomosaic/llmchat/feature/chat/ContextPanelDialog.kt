@@ -55,7 +55,8 @@ fun ContextPanelDialog(
     )
     val usedSeg = totalSeg.sumOf { it.second }.coerceAtLeast(1)
 
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+    // 30 轮：禁用全屏窗口——blurBehind 模糊只落在窗口（卡片）矩形内，不再全屏雾化
+    Dialog(onDismissRequest = onDismiss) {
         GlassDialogShell(
             modifier = Modifier
                 .fillMaxWidth(0.94f)
