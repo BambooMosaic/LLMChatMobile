@@ -565,7 +565,7 @@ private val ZhCN = AppStrings(
     glassLevelOff = "关",
     glassLevelTranslucent = "半透明",
     glassLevelFrosted = "毛玻璃",
-    glassHint = "半透明：弹窗与抽屉半透明。毛玻璃：叠加系统背景模糊，需 Android 12+ 且系统允许跨窗口模糊，否则停留在半透明",
+    glassHint = "半透明：弹窗与抽屉半透明。毛玻璃：叠加系统背景实时模糊（需 Android 12+ 且系统动画开启；动画关闭、省电模式或部分 ROM 不支持时自动退化为半透明）",
 )
 
 private val ZhTW = AppStrings(
@@ -808,7 +808,7 @@ private val ZhTW = AppStrings(
     glassLevelOff = "關",
     glassLevelTranslucent = "半透明",
     glassLevelFrosted = "毛玻璃",
-    glassHint = "半透明：彈窗與抽屜半透明。毛玻璃：疊加系統背景模糊，需 Android 12+ 且系統允許跨視窗模糊，否則停留在半透明",
+    glassHint = "半透明：彈窗與抽屜半透明。毛玻璃：疊加系統背景即時模糊（需 Android 12+ 且系統動畫開啟；動畫關閉、省電模式或部分 ROM 不支援時自動退化為半透明）",
 )
 
 private val EnUS = AppStrings(
@@ -1051,7 +1051,7 @@ private val EnUS = AppStrings(
     glassLevelOff = "Off",
     glassLevelTranslucent = "Translucent",
     glassLevelFrosted = "Frosted",
-    glassHint = "Translucent: dialogs and drawer become translucent. Frosted: adds system background blur — requires Android 12+ and cross-window blur allowed, otherwise stays translucent",
+    glassHint = "Translucent: dialogs and drawer become translucent. Frosted: adds live system background blur (needs Android 12+ with system animations on; degrades to translucent when animations are off, in battery saver, or on ROMs without support)",
 )
 
 fun stringsFor(language: AppLanguage): AppStrings = when (language) {

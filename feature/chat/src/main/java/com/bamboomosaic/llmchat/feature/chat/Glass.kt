@@ -37,28 +37,32 @@ fun GlassDialogEffect(enabled: Boolean = LocalGlassLevel.current >= 1) {
     val level = LocalGlassLevel.current
     if (level < 1) return
     val view = LocalView.current
-    DisposableEffect(enabled) {
-        val window = (view.parent as? DialogWindowProvider)?.window
-        if (window != null) {
-            // 玻璃模式统一：窗口背景透明 + 去掉背后的黑色遮罩（用户感知的"阴影"）
-            window.setBackgroundDrawableResource(android.R.color.transparent)
-            val attrs = window.attributes
-            attrs.dimAmount = 0f
-            // 毛玻璃档（2）且系统支持：叠加整窗背后实时模糊
-            if (level >= 2 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                attrs.blurBehindRadius = 90
-            }
-            window.attributes = attrs
-        }
-        onDispose {
+        DisposableEffect(enabled) {
+            val window = (view.parent as? DialogWindowProvider)?.window
             if (window != null) {
+                // 玻璃模式统一：窗口背景透明 + 去掉背后的黑色遮罩（用户感知的"阴影"）
+                window.setBackgroundDrawableResource(android.R.color.transparent)
                 val attrs = window.attributes
-                attrs.blurBehindRadius = 0
-                attrs.dimAmount = 0.32f
+                attrs.dimAmount = 0f
+                // 毛玻璃档（2）且系统支持：叠加整窗背后实时模糊
+                // 29 轮修正：必须显式加 FLAG_BLUR_BEHIND，只设 blurBehindRadius 不生效
+                // （此前所有设备毛玻璃档实际都停在半透明的根因）
+                if (level >= 2 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    window.addFlags(android.view.WindowManager.LayoutParams.FLAG_BLUR_BEHIND)
+                    attrs.blurBehindRadius = 90
+                }
                 window.attributes = attrs
             }
+            onDispose {
+                if (window != null) {
+                    window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_BLUR_BEHIND)
+                    val attrs = window.attributes
+                    attrs.blurBehindRadius = 0
+                    attrs.dimAmount = 0.32f
+                    window.attributes = attrs
+                }
+            }
         }
-    }
 }
 
 /**
@@ -103,16 +107,15 @@ fun glassSurfaceColor(): Color {
     return surface.copy(alpha = 0.78f)
 }
 
-/** 25 轮：设备是否支持系统级跨窗口模糊（毛玻璃档位可用性）。 */
+/**
+ * 25 轮：毛玻璃档位可用性（29 轮修正）——改按 **能力**（API 31+）判断。
+ * 此前用 isCrossWindowBlurEnabled（当前是否启用）：系统动画关闭 / 省电模式 / 部分厂商策略
+ * 都会令其返回 false，导致大量真机滑块被锁死滑不到毛玻璃。
+ * 新逻辑：Android 12+ 一律允许选择毛玻璃档；系统不启用跨窗模糊时（动画关/省电/ROM 禁用）
+ * FLAG_BLUR_BEHIND 自动无效，实际退化为半透明——不锁死、只降级。
+ */
 @Composable
-fun blurSupported(): Boolean {
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return false
-    val ctx = androidx.compose.ui.platform.LocalContext.current
-    return runCatching {
-        (ctx.getSystemService(android.content.Context.WINDOW_SERVICE) as android.view.WindowManager)
-            .isCrossWindowBlurEnabled
-    }.getOrDefault(false)
-}
+fun blurSupported(): Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
 
 /**
  * 27 轮：平板/宽屏弹窗限宽——宽屏时限宽居中（保持正常比例不拉伸），窄屏原样返回。
