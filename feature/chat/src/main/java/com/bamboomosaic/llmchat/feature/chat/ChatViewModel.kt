@@ -1052,9 +1052,17 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    /** 输入变化时同步草稿（内存）。 */
+    private var draftSaveJob: kotlinx.coroutines.Job? = null
+
+    /** 输入变化时同步草稿（内存 + 500ms 防抖写盘——大退/回收后仍可恢复）。 */
     fun updateDraft(text: String) {
-        drafts[_currentConversationId.value] = text
+        val id = _currentConversationId.value
+        drafts[id] = text
+        draftSaveJob?.cancel()
+        draftSaveJob = viewModelScope.launch {
+            kotlinx.coroutines.delay(500)
+            settingsRepository.setDraft(id, drafts[id] ?: text)
+        }
     }
 
     fun selectConversation(conversationId: String) {
@@ -1640,52 +1648,52 @@ class ChatViewModel @Inject constructor(
                 .filter { it.role == MessageRole.ASSISTANT && it.versionKey != null }
                 .groupBy { it.versionKey!! }
 
-            fun buildNode(
+            /** 28 轮修正：折叠 AI 节点——只渲染输入内容（用户节点）；每条分支末端（最后一条输出）保留半宽小方块。 */
+            fun buildUserNode(
                 m: ChatMessage,
                 siblings: Int,
                 branchIndex: Int,
-                mainLineNext: ChatMessage?,
             ): FlowNodeUi {
-                val label = if (m.role == MessageRole.USER) {
-                    // 28 轮：节点文字上限 10 字
-                    val base = m.content.replace("\n", " ").trim()
-                    val prefix = if (siblings > 1) "改$branchIndex " else ""
-                    if (prefix.isNotEmpty()) (prefix + base).take(11).ifBlank { "[图片]" }
-                    else base.take(10).ifBlank { "[图片]" }
-                } else {
-                    // 28 轮：AI 节点不再写「第 N 次生成」，靠边线分支编号标识（省空间更清爽）
-                    ""
-                }
+                val base = m.content.replace("\n", " ").trim()
+                val prefix = if (siblings > 1) "改$branchIndex " else ""
+                val label = if (prefix.isNotEmpty()) (prefix + base).take(11).ifBlank { "[图片]" }
+                else base.take(10).ifBlank { "[图片]" }
+
                 val sub = mutableListOf<FlowNodeUi>()
-                if (m.role == MessageRole.USER) {
-                    // 回复版本组（重新生成）；主线延续挂组内最新版本，保持单棵连贯树
-                    val group = assistantByKey[m.id].orEmpty()
-                    val latestId = group.maxByOrNull { it.version }?.id
-                    sub += group.mapIndexed { i, a ->
-                        val next = if (a.id == latestId) mainLineNext else null
-                        buildNode(a, group.size, if (group.size > 1) i + 1 else 0, next)
+                // 该输入下的每个回复版本：无后续对话 = 分支末端半宽小方块；有后续 = 直接挂后续用户分支（继续递归）
+                val group = assistantByKey[m.id].orEmpty()
+                group.forEach { a ->
+                    val kids = children[a.id].orEmpty().filter { it.role == MessageRole.USER }
+                    if (kids.isEmpty()) {
+                        // 分支末端：标「结果 N」（N = 该分支的生成序号）
+                        sub += FlowNodeUi(
+                            messageId = a.id,
+                            isUser = false,
+                            label = "结果 ${a.version}",
+                            active = a.id in activeIds,
+                            children = emptyList(),
+                        )
+                    } else {
+                        kids.forEachIndexed { i, k ->
+                            sub += buildUserNode(k, kids.size, if (kids.size > 1) i + 1 else 0)
+                        }
                     }
                 }
-                // 该消息下的用户分支（编辑重发）
-                val userKids = children[m.id].orEmpty().filter { it.role == MessageRole.USER }
-                sub += userKids.mapIndexed { i, k -> buildNode(k, userKids.size, if (userKids.size > 1) i + 1 else 0, null) }
-                if (m.role == MessageRole.USER && sub.isEmpty() && mainLineNext != null) {
-                    sub += buildNode(mainLineNext, 1, 1, null)
-                }
+                // 输入本身的编辑重发分支（兄弟挂在同一父下，不会出现在 children[m.id]，此处只兜底主线外分支）
                 return FlowNodeUi(
                     messageId = m.id,
-                    isUser = m.role == MessageRole.USER,
+                    isUser = true,
                     label = label,
                     active = m.id in activeIds,
                     children = sub,
                 )
             }
 
-            // 顶层 = 单棵树：主线第一条用户消息为根，后续主线经「最新版本 → 下一轮」连贯成主干
+            // 顶层 = 每条主线根输入一棵树（第一轮被编辑重发时为多根横排）
             val rootUsers = all.filter { it.role == MessageRole.USER && it.parentId == null }
-            val topNodes = if (rootUsers.isEmpty()) emptyList() else listOf(
-                buildNode(rootUsers.first(), 1, 1, rootUsers.getOrNull(1)),
-            )
+            val topNodes = rootUsers.mapIndexed { i, r ->
+                buildUserNode(r, rootUsers.size, if (rootUsers.size > 1) i + 1 else 0)
+            }
             _flowDiagram.value = topNodes
         }
     }
