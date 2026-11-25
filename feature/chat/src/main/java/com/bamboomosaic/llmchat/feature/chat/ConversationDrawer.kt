@@ -7,6 +7,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -79,14 +80,25 @@ fun ConversationDrawer(
 
     ModalDrawerSheet(
         modifier = when {
-            // 30 轮：毛玻璃档——完全实色（半透明会透出背景差异形成色差）+ 柔和外阴影 + 细边框
-            LocalGlassLevel.current >= 2 -> Modifier.width(drawerWidth)
-                .shadow(elevation = 12.dp, shape = MaterialTheme.shapes.large)
-                .border(
-                    width = 0.7.dp,
-                    color = MaterialTheme.colorScheme.outlineVariant,
-                    shape = MaterialTheme.shapes.large,
-                )
+            // 30 轮：毛玻璃档——完全实色（半透明会透出背景差异形成色差）+ 细边框 + 柔和外阴影。
+            // 31 轮：阴影仅浅色预设启用——深色（6 个 dark 预设）下黑色阴影晕在深色背景上
+            // 形成明显暗带，观感差，深色下跳过（用户实测反馈）
+            LocalGlassLevel.current >= 2 -> {
+                val darkTheme = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+                Modifier.width(drawerWidth)
+                    .then(
+                        if (darkTheme) {
+                            Modifier
+                        } else {
+                            Modifier.shadow(elevation = 12.dp, shape = MaterialTheme.shapes.large)
+                        },
+                    )
+                    .border(
+                        width = 0.7.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant,
+                        shape = MaterialTheme.shapes.large,
+                    )
+            }
             // 半透明档：恢复 0.7.3 原样——0.78 透底 + 细边框（无阴影）
             LocalGlassLevel.current == 1 -> Modifier.width(drawerWidth).border(
                 width = 0.7.dp,
