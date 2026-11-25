@@ -115,14 +115,13 @@ fun ConversationDrawer(
             if (LocalGlassLevel.current >= 2) {
                 // backdrop 由 ChatScreen 在抽屉入树前截好传入（同 window 截图会含抽屉自身重影）
                 if (backdrop != null) {
-                    // 按截图原比例 1:1 对齐屏幕（左上角对齐，右侧溢出裁掉）——糊斑位置与真实内容对应
+                    // 全屏截图拉伸铺满抽屉：垂直方向 1:1（雾斑高度与真实内容对应），
+                    // 水平方向轻微压缩（内容全是糊斑，无感）；不用 aspectRatio——insets 会把图压扁错位
                     androidx.compose.foundation.Image(
                         bitmap = backdrop,
                         contentDescription = null,
                         contentScale = androidx.compose.ui.layout.ContentScale.FillBounds,
-                        modifier = Modifier
-                            .fillMaxHeight()
-                            .aspectRatio(backdrop.width.toFloat() / backdrop.height.toFloat()),
+                        modifier = Modifier.fillMaxSize(),
                     )
                 }
             }
