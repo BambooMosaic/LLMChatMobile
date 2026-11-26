@@ -106,6 +106,8 @@ fun SettingsDialog(
     onSetColorPreset: (String) -> Unit,
     onSetFollowSystemTheme: (Boolean) -> Unit,
     onSetBackgroundImage: (String) -> Unit,
+    /** 32 轮：导出本地崩溃日志。 */
+    onExportCrashLogs: () -> Unit,
     /** 31 轮：当前预设流光背景 ID（空 = 无）。 */
     backgroundPreset: String,
     onSetBackgroundPreset: (String) -> Unit,
@@ -196,6 +198,7 @@ fun SettingsDialog(
 
             SettingsPage.OTHER -> OtherPage(
                 settings = settings,
+                onExportCrashLogs = onExportCrashLogs,
                 onSetTokenSavingLevel = onSetTokenSavingLevel,
                 onSetSearchEnabled = onSetSearchEnabled,
                 onSetAutoCompressEnabled = onSetAutoCompressEnabled,
@@ -830,6 +833,7 @@ private fun ConfigEditDialog(
 @Composable
 private fun OtherPage(
     settings: AppSettings,
+    onExportCrashLogs: () -> Unit = {},
     onSetTokenSavingLevel: (Int) -> Unit,
     onSetSearchEnabled: (Boolean) -> Unit,
     onSetAutoCompressEnabled: (Boolean) -> Unit,
@@ -1062,6 +1066,10 @@ private fun OtherPage(
         }
         androidx.compose.material3.TextButton(onClick = { showImportConfirm = true }) {
             Text(s.importAllData, style = MaterialTheme.typography.labelMedium)
+        }
+        // 32 轮：导出崩溃日志（闪退堆栈排障用，配合 mapping.txt 还原）
+        androidx.compose.material3.TextButton(onClick = onExportCrashLogs) {
+            Text(s.exportCrashLogs, style = MaterialTheme.typography.labelMedium)
         }
     }
     Text(

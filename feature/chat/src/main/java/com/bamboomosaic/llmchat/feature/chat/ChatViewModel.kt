@@ -1917,6 +1917,26 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+    /** 32 轮：导出本地崩溃日志（最近 5 条拼合）到所选 SAF 文件。 */
+    fun exportCrashLogs(uri: android.net.Uri) {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                runCatching {
+                    val dir = java.io.File(appContext.filesDir, "crash")
+                    val files = dir.listFiles()?.sortedByDescending { it.name }.orEmpty()
+                    val text = if (files.isEmpty()) {
+                        "no crash logs"
+                    } else {
+                        files.joinToString("\n\n========\n\n") { it.readText() }
+                    }
+                    appContext.contentResolver.openOutputStream(uri)?.use { out ->
+                        out.write(text.toByteArray(Charsets.UTF_8))
+                    }
+                }
+            }
+        }
+    }
+
     /** 20 轮：聊天页自定义背景图（应用内路径；空串 = 默认背景）。 */
     fun setBackgroundImage(path: String) {
         viewModelScope.launch { settingsRepository.setBackgroundImageUri(path) }

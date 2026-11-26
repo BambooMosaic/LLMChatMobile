@@ -2,6 +2,7 @@ package com.bamboomosaic.llmchat.feature.chat
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
+import kotlinx.coroutines.delay
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -31,6 +32,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -77,6 +79,14 @@ fun ConversationDrawer(
 
     var renameTarget by remember { mutableStateOf<Conversation?>(null) }
     var menuTarget by remember { mutableStateOf<Conversation?>(null) }
+    // 32 轮修复：app 常驻跨午夜时「今天」分组不随日期刷新——时间锚点每分钟刷新，触发分组重算
+    var groupingNow by remember { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(60_000)
+            groupingNow = System.currentTimeMillis()
+        }
+    }
 
     ModalDrawerSheet(
         modifier = when {
@@ -154,7 +164,7 @@ fun ConversationDrawer(
                 val pinnedList = conversations.filter { it.pinned }
                 val rest = conversations.filterNot { it.pinned }
                 val calendar = java.util.Calendar.getInstance()
-                calendar.timeInMillis = System.currentTimeMillis()
+                calendar.timeInMillis = groupingNow
                 calendar.set(java.util.Calendar.HOUR_OF_DAY, 0)
                 calendar.set(java.util.Calendar.MINUTE, 0)
                 calendar.set(java.util.Calendar.SECOND, 0)

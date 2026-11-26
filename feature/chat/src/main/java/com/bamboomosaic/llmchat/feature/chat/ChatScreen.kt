@@ -234,6 +234,10 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
     val exportBackupLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/json"),
     ) { uri -> uri?.let(viewModel::exportAllData) }
+    // 32 轮：导出崩溃日志（闪退堆栈，配合发布归档的 mapping.txt 可还原混淆堆栈）
+    val exportCrashLogsLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.CreateDocument("text/plain"),
+    ) { uri -> uri?.let(viewModel::exportCrashLogs) }
     val importBackupLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.OpenDocument(),
     ) { uri -> uri?.let(viewModel::importAllData) }
@@ -668,6 +672,7 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
             onSetFollowSystemTheme = viewModel::setFollowSystemTheme,
             onSetCompressSummaryLimit = viewModel::setCompressSummaryLimit,
             onSetBackgroundImage = viewModel::setBackgroundImage,
+            onExportCrashLogs = { exportCrashLogsLauncher.launch("llmchat_crash_logs.txt") },
             backgroundPreset = settings.backgroundPreset,
             onSetBackgroundPreset = viewModel::setBackgroundPreset,
             onSetLanguage = viewModel::setLanguage,
@@ -1063,7 +1068,8 @@ private fun MessageBubble(
         ) {
             GlassPopupEffect()
             // 31 轮：引用——放复制上方，把消息完整内容以引用块插入输入框
-            if (onQuote != null) {
+            // 32 轮：请求失败的空气泡（正文为空）不显示引用，避免插入空引用块
+            if (onQuote != null && message.text.isNotBlank()) {
                 DropdownMenuItem(
                     text = { Text(s.quote) },
                     onClick = {
