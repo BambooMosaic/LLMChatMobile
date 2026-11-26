@@ -515,6 +515,11 @@ class ChatViewModel @Inject constructor(
         val nickname = if (mode.modeId == ModeConfig.DS_WEB) "" else currentSettings.userNickname
         val systemText = buildString {
             append(sp.prompt)
+            // 32 轮：用户称呼是静态偏好——从环境快照拆出归入 system 静态区（门禁不变：
+            // 环境/称呼同受 shouldInject 与 DS 网页版排除规则控制）
+            if (shouldInject && nickname.isNotBlank()) {
+                append("\n\n[用户称呼] ").append(nickname)
+            }
             searchDigest?.takeIf { it.isNotBlank() }?.let { digest ->
                 append("\n\n")
                 append(
@@ -534,7 +539,7 @@ class ChatViewModel @Inject constructor(
         if (shouldInject) {
             val lastUserIdx = withSystem.indexOfLast { it.role == MessageRole.USER }
             if (lastUserIdx >= 0) {
-                val reminder = contextReminderProvider.buildReminder(currentSettings.language, nickname)
+                val reminder = contextReminderProvider.buildReminder(currentSettings.language)
                 val userMessage = withSystem[lastUserIdx]
                 withSystem = withSystem.toMutableList().also { list ->
                     list[lastUserIdx] = userMessage.copy(

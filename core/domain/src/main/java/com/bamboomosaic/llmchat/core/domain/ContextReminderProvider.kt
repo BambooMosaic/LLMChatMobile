@@ -8,20 +8,21 @@ import java.util.Locale
 
 /**
  * 环境上下文 Provider：组装「日期-时分,星期,地区,客户端署名,语言」五项字符串。
- * 每次请求实时生成（注入开关开启的模式，system 末尾），不落库、不进历史。
+ * 每次请求实时生成（32 轮起注入当前轮用户消息开头，不再进 system），不落库、不进历史。
  * 地区自动识别：系统地区，失败兜底「无」。
  */
 interface ContextReminderProvider {
     /**
-     * 组装环境上下文。[userNickname] 非空时追加用户称呼项；
-     * DS 网页版模式由调用方传空串跳过（该模式提示词固定单句，不注入称呼）。
+     * 组装环境快照（仅易变信息：日期时分 / 星期 / 地区 / 客户端署名 / 语言）。
+     * 32 轮对照官方注入方案：用户称呼是静态偏好，不再混入环境快照，
+     * 改由调用方归入 system 静态提示词区。
      */
-    fun buildReminder(language: AppLanguage, userNickname: String = ""): String
+    fun buildReminder(language: AppLanguage): String
 }
 
 class ContextReminderProviderImpl() : ContextReminderProvider {
 
-    override fun buildReminder(language: AppLanguage, userNickname: String): String {
+    override fun buildReminder(language: AppLanguage): String {
         val locale = when (language) {
             AppLanguage.SIMPLIFIED_CHINESE -> Locale.SIMPLIFIED_CHINESE
             AppLanguage.TRADITIONAL_CHINESE -> Locale.TRADITIONAL_CHINESE
@@ -38,17 +39,6 @@ class ContextReminderProviderImpl() : ContextReminderProvider {
             AppLanguage.TRADITIONAL_CHINESE -> "繁體中文"
             AppLanguage.ENGLISH -> "English"
         }
-        val base = "$dateTime,$weekday,$region,由BambooMosaic制作的LLMChatMobile客户端,$langText"
-        // 19 轮：用户称呼非空时追加为第六项（调用方已按模式排除 DS 网页版）
-        return if (userNickname.isNotBlank()) {
-            val nickLabel = when (language) {
-                AppLanguage.TRADITIONAL_CHINESE -> "用戶稱呼"
-                AppLanguage.ENGLISH -> "user's preferred name"
-                else -> "用户称呼"
-            }
-            "$base,$nickLabel:$userNickname"
-        } else {
-            base
-        }
+        return "$dateTime,$weekday,$region,由BambooMosaic制作的LLMChatMobile客户端,$langText"
     }
 }
