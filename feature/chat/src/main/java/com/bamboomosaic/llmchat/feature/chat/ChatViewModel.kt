@@ -526,12 +526,23 @@ class ChatViewModel @Inject constructor(
                 )
                 append('\n').append(digest)
             }
-            if (shouldInject) {
-                append("\n\n[当前环境] ")
-                append(contextReminderProvider.buildReminder(currentSettings.language, nickname))
+        }
+        var withSystem = listOf(ChatMessage(MessageRole.SYSTEM, systemText)) + history
+        // 32 轮：环境上下文注入到当前轮用户消息——时间戳实时、随用户输入一起发给 API，
+        // 不再拼入 system；历史轮次不重复注入（省 Token 且不污染上下文）。
+        // 模式规则保留：ds_web 强制开启 / 「自动注入环境信息」开关 / 终极省钱档一律不注入 / DS 网页版不带称呼
+        if (shouldInject) {
+            val lastUserIdx = withSystem.indexOfLast { it.role == MessageRole.USER }
+            if (lastUserIdx >= 0) {
+                val reminder = contextReminderProvider.buildReminder(currentSettings.language, nickname)
+                val userMessage = withSystem[lastUserIdx]
+                withSystem = withSystem.toMutableList().also { list ->
+                    list[lastUserIdx] = userMessage.copy(
+                        content = "[当前环境] " + reminder + "\n\n" + userMessage.content,
+                    )
+                }
             }
         }
-        val withSystem = listOf(ChatMessage(MessageRole.SYSTEM, systemText)) + history
         // 21 轮：省 Token 档位压缩阈值（1→120k 2→50k 3→30k 4→10k）。
         // DS 网页版 / Legacy 豁免档位压缩（终极档除外，强制 10k）；未开档位时跟随全局自动压缩开关。
         val isTierExemptMode = mode.modeId == ModeConfig.DS_WEB || mode.modeId == ModeConfig.LEGACY
