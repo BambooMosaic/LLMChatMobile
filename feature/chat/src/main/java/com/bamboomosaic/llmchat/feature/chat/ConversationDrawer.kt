@@ -146,9 +146,26 @@ fun ConversationDrawer(
             }
 
             LazyColumn(modifier = Modifier.weight(1f).padding(horizontal = 8.dp)) {
-                // 24 轮：置顶组 + 普通组（DAO 已按 pinned DESC, updatedAt DESC 排序）
+                // 32 轮：置顶 → 今天 → 7 天内 → 30 天内 → 更早。
+                // updatedAt 即最近一轮对话时间（appendVersionedReply 每追加一条消息都会
+                // dao.touch 刷新），所以很久之前的会话只要发一条消息就会自动上浮分组；
+                // 空会话 updatedAt = 创建时间，按创建时间参与分组；DAO 已按 updatedAt 倒序，
+                // 各组 filter 保序即组内倒序。
                 val pinnedList = conversations.filter { it.pinned }
-                val normalList = conversations.filter { !it.pinned }
+                val rest = conversations.filterNot { it.pinned }
+                val calendar = java.util.Calendar.getInstance()
+                calendar.timeInMillis = System.currentTimeMillis()
+                calendar.set(java.util.Calendar.HOUR_OF_DAY, 0)
+                calendar.set(java.util.Calendar.MINUTE, 0)
+                calendar.set(java.util.Calendar.SECOND, 0)
+                calendar.set(java.util.Calendar.MILLISECOND, 0)
+                val todayStart = calendar.timeInMillis
+                val sevenDaysStart = todayStart - 7L * 24 * 60 * 60 * 1000
+                val thirtyDaysStart = todayStart - 30L * 24 * 60 * 60 * 1000
+                val todayList = rest.filter { it.updatedAt >= todayStart }
+                val last7List = rest.filter { it.updatedAt >= sevenDaysStart && it.updatedAt < todayStart }
+                val last30List = rest.filter { it.updatedAt >= thirtyDaysStart && it.updatedAt < sevenDaysStart }
+                val earlierList = rest.filter { it.updatedAt < thirtyDaysStart }
                 val conversationRow: @Composable (Conversation) -> Unit = { conversation ->
                     val selected = conversation.id == currentId
                     Box {
@@ -266,9 +283,21 @@ fun ConversationDrawer(
                     item(key = "header-pinned") { SectionHeader(s.sectionPinned) }
                     items(pinnedList, key = { "p-" + it.id }) { conversationRow(it) }
                 }
-                if (normalList.isNotEmpty()) {
-                    item(key = "header-all") { SectionHeader(s.sectionAll) }
-                    items(normalList, key = { it.id }) { conversationRow(it) }
+                if (todayList.isNotEmpty()) {
+                    item(key = "header-today") { SectionHeader(s.sectionToday) }
+                    items(todayList, key = { it.id }) { conversationRow(it) }
+                }
+                if (last7List.isNotEmpty()) {
+                    item(key = "header-7d") { SectionHeader(s.section7Days) }
+                    items(last7List, key = { it.id }) { conversationRow(it) }
+                }
+                if (last30List.isNotEmpty()) {
+                    item(key = "header-30d") { SectionHeader(s.section30Days) }
+                    items(last30List, key = { it.id }) { conversationRow(it) }
+                }
+                if (earlierList.isNotEmpty()) {
+                    item(key = "header-earlier") { SectionHeader(s.sectionEarlier) }
+                    items(earlierList, key = { it.id }) { conversationRow(it) }
                 }
             }
 
