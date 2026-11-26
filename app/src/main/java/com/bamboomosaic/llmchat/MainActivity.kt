@@ -4,6 +4,7 @@ import android.os.Bundle
 import android.view.View
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -34,6 +35,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // 31 轮：显式启用 edge-to-edge——targetSdk 35 的强制 edge-to-edge 仅在 Android 15+
+        // 设备生效（模拟器 API 35 正常的原因）；Android 15 以下（澎湃 1 的 Android 13 等）
+        // 不调用则内容不延伸到状态栏后面，状态栏显示系统黑底、不同步主题色
+        enableEdgeToEdge()
         setContent {
             val settings by settingsRepository.observeSettings().collectAsState(
                 initial = AppSettings(
