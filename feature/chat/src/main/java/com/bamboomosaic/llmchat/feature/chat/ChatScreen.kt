@@ -14,7 +14,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -67,9 +67,14 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -1046,6 +1051,12 @@ private fun MessageBubble(
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     val context = androidx.compose.ui.platform.LocalContext.current
     var showMenu by remember { mutableStateOf(false) }
+    // 33 轮：长按位置——菜单跟随长按点弹出，Popup 自动做屏幕边界避让。
+    // 注意：带 offset 的 DropdownMenu 重载以父布局左上为原点，
+    // 因此记录气泡在组合根中的位置，把局部坐标换算成根坐标再传 offset
+    var menuOffset by remember { mutableStateOf(DpOffset.Zero) }
+    var bubbleRootTopLeft by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
+    val density = LocalDensity.current
     var menuDismissed by remember { mutableStateOf(false) }
     val isUser = message.role == MessageRole.USER
     val containerColor = if (isUser) {
@@ -1063,6 +1074,7 @@ private fun MessageBubble(
         DropdownMenu(
             expanded = true,
             onDismissRequest = { showMenu = false },
+            offset = menuOffset,
             containerColor = glassSurfaceColor(),
             shadowElevation = if (LocalGlassLevel.current >= 1) 0.dp else 8.dp,
         ) {
@@ -1122,13 +1134,23 @@ private fun MessageBubble(
                 shape = RoundedCornerShape(BubbleRadius),
                 color = containerColor,
                 contentColor = contentColor,
-                modifier = Modifier.combinedClickable(
-                    onClick = onToggleReasoning,
-                    onLongClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        showMenu = true
+                modifier = Modifier
+                    .onGloballyPositioned { bubbleRootTopLeft = it.boundsInRoot().topLeft }
+                    .pointerInput(Unit) {
+                        // 33 轮：菜单跟随长按点击位置弹出（detectTapGestures 提供坐标）
+                        detectTapGestures(
+                            onTap = { onToggleReasoning() },
+                            onLongPress = { pos ->
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                val global = bubbleRootTopLeft + pos
+                                menuOffset = DpOffset(
+                                    with(density) { global.x.toDp() },
+                                    with(density) { global.y.toDp() },
+                                )
+                                showMenu = true
+                            },
+                        )
                     },
-                ),
             ) {
                 Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
                     // 联网搜索状态（思考区域上方）：搜索中 → 已搜索 N 个网页

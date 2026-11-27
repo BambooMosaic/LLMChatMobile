@@ -43,6 +43,7 @@ import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
@@ -71,7 +72,7 @@ import com.bamboomosaic.llmchat.core.domain.Conversation
 import com.bamboomosaic.llmchat.core.domain.Providers
 import com.bamboomosaic.llmchat.feature.chat.i18n.LocalAppStrings
 
-private enum class SettingsPage { HOME, API, PREFERENCES, APPEARANCE, LANGUAGE, OTHER, ARCHIVED, TUTORIAL, ABOUT }
+private enum class SettingsPage { HOME, API, PREFERENCES, APPEARANCE, LANGUAGE, OTHER, TTS, ARCHIVED, TUTORIAL, ABOUT }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -142,6 +143,7 @@ fun SettingsDialog(
         SettingsPage.LANGUAGE -> s.languageSetting
         SettingsPage.PREFERENCES -> s.preferencesSetting
         SettingsPage.OTHER -> s.otherSettings
+        SettingsPage.TTS -> s.ttsSection
         SettingsPage.ARCHIVED -> s.archivedConversations
         SettingsPage.TUTORIAL -> s.tutorialLabel
         SettingsPage.ABOUT -> s.about
@@ -198,19 +200,23 @@ fun SettingsDialog(
 
             SettingsPage.OTHER -> OtherPage(
                 settings = settings,
-                onExportCrashLogs = onExportCrashLogs,
                 onSetTokenSavingLevel = onSetTokenSavingLevel,
                 onSetSearchEnabled = onSetSearchEnabled,
                 onSetAutoCompressEnabled = onSetAutoCompressEnabled,
                 onSetCompressSummaryLimit = onSetCompressSummaryLimit,
+                onExportBackup = onExportBackup,
+                onImportBackup = onImportBackup,
+                onOpenTtsPage = { go(SettingsPage.TTS) },
+            )
+
+            SettingsPage.TTS -> TtsPage(
+                settings = settings,
                 onSetTtsEnabled = onSetTtsEnabled,
                 onSetTtsVoice = onSetTtsVoice,
                 onSetTtsAutoRead = onSetTtsAutoRead,
                 onSetTtsProvider = onSetTtsProvider,
                 onSetTtsVoiceQwen = onSetTtsVoiceQwen,
                 onSetTtsVoiceGlm = onSetTtsVoiceGlm,
-                onExportBackup = onExportBackup,
-                onImportBackup = onImportBackup,
             )
 
             SettingsPage.ARCHIVED -> ArchivedPage(
@@ -221,7 +227,10 @@ fun SettingsDialog(
 
             SettingsPage.TUTORIAL -> TutorialPage()
 
-            SettingsPage.ABOUT -> AboutPage(onDownloadLatest = onDownloadLatest)
+            SettingsPage.ABOUT -> AboutPage(
+                onDownloadLatest = onDownloadLatest,
+                onExportCrashLogs = onExportCrashLogs,
+            )
         }
     }
 
@@ -833,19 +842,14 @@ private fun ConfigEditDialog(
 @Composable
 private fun OtherPage(
     settings: AppSettings,
-    onExportCrashLogs: () -> Unit = {},
     onSetTokenSavingLevel: (Int) -> Unit,
     onSetSearchEnabled: (Boolean) -> Unit,
     onSetAutoCompressEnabled: (Boolean) -> Unit,
     onSetCompressSummaryLimit: (Int) -> Unit,
-    onSetTtsEnabled: (Boolean) -> Unit = {},
-    onSetTtsVoice: (String) -> Unit = {},
-    onSetTtsAutoRead: (Boolean) -> Unit = {},
-    onSetTtsProvider: (String) -> Unit = {},
-    onSetTtsVoiceQwen: (String) -> Unit = {},
-    onSetTtsVoiceGlm: (String) -> Unit = {},
     onExportBackup: () -> Unit = {},
     onImportBackup: () -> Unit = {},
+    /** 33 轮：语音朗读配置迁入二级子页面。 */
+    onOpenTtsPage: () -> Unit = {},
 ) {
     val s = LocalAppStrings.current
 
@@ -878,117 +882,11 @@ private fun OtherPage(
     )
 
     Spacer(Modifier.height(16.dp))
-    // 29 轮：语音朗读——引擎三选（DeepSeek / 通义千问 / 智谱 GLM），各引擎音色独立记忆
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Text(s.ttsSection, style = MaterialTheme.typography.bodyLarge)
-        Switch(checked = settings.ttsEnabled, onCheckedChange = { onSetTtsEnabled(it) })
-    }
-    if (settings.ttsEnabled) {
-        Spacer(Modifier.height(4.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text(s.ttsAutoRead, style = MaterialTheme.typography.bodyMedium)
-            Switch(checked = settings.ttsAutoRead, onCheckedChange = { onSetTtsAutoRead(it) })
-        }
-        Text(
-            text = when (settings.ttsProvider) {
-                "qwen" -> s.ttsHintQwen
-                "glm" -> s.ttsHintGlm
-                else -> s.ttsCostHint
-            },
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(Modifier.height(4.dp))
-        Text(
-            text = s.ttsEngineLabel,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        listOf(
-            "deepseek" to s.ttsEngineDeepseek,
-            "qwen" to s.ttsEngineQwen,
-            "glm" to s.ttsEngineGlm,
-        ).forEach { (id, label) ->
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onSetTtsProvider(id) },
-            ) {
-                RadioButton(
-                    selected = settings.ttsProvider == id,
-                    onClick = { onSetTtsProvider(id) },
-                )
-                Text(label, style = MaterialTheme.typography.bodyMedium)
-            }
-        }
-        Spacer(Modifier.height(4.dp))
-        Text(
-            text = s.ttsVoiceLabel,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        // 音色随引擎切换；音色显示名是专有名词，不入 i18n
-        val voiceOptions: List<Pair<String, String>> = when (settings.ttsProvider) {
-            "qwen" -> listOf(
-                "Cherry" to "Cherry 芊悦",
-                "Serena" to "Serena 苏瑶",
-                "Ethan" to "Ethan 晨煦",
-                "Chelsie" to "Chelsie 千雪",
-                "Momo" to "Momo 茉兔",
-                "Moon" to "Moon 月白",
-                "Maia" to "Maia 四月",
-                "Bella" to "Bella 萌宝",
-                "Neil" to "Neil 阿闻",
-                "Nini" to "Nini 邻家妹妹",
-            )
-            "glm" -> listOf(
-                "tongtong" to "tongtong 彤彤",
-                "chuichui" to "chuichui 锤锤",
-                "xiaochen" to "xiaochen 小陈",
-                "jam" to "jam",
-                "kazi" to "kazi",
-                "douji" to "douji",
-                "luodo" to "luodo",
-            )
-            else -> listOf(
-                "stella" to s.ttsVoiceStella,
-                "tide" to s.ttsVoiceTide,
-            )
-        }
-        val onSetVoice = when (settings.ttsProvider) {
-            "qwen" -> onSetTtsVoiceQwen
-            "glm" -> onSetTtsVoiceGlm
-            else -> onSetTtsVoice
-        }
-        val currentVoice = when (settings.ttsProvider) {
-            "qwen" -> settings.ttsVoiceQwen
-            "glm" -> settings.ttsVoiceGlm
-            else -> settings.ttsVoice
-        }
-        voiceOptions.forEach { (id, label) ->
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onSetVoice(id) },
-            ) {
-                RadioButton(
-                    selected = currentVoice == id,
-                    onClick = { onSetVoice(id) },
-                )
-                Text(label, style = MaterialTheme.typography.bodyMedium)
-            }
-        }
-    }
+    // 33 轮：语音朗读配置迁入二级子页面（SettingsPage.TTS），主列表只保留入口
+    MenuRow(
+        label = s.ttsSection,
+        onClick = onOpenTtsPage,
+    )
 
     Spacer(Modifier.height(16.dp))
     // 19 轮：联网搜索开关（DeepSeek 原生；其他模型经 DeepSeek-Flash 代理）
@@ -1066,10 +964,6 @@ private fun OtherPage(
         }
         androidx.compose.material3.TextButton(onClick = { showImportConfirm = true }) {
             Text(s.importAllData, style = MaterialTheme.typography.labelMedium)
-        }
-        // 32 轮：导出崩溃日志（闪退堆栈排障用，配合 mapping.txt 还原）
-        androidx.compose.material3.TextButton(onClick = onExportCrashLogs) {
-            Text(s.exportCrashLogs, style = MaterialTheme.typography.labelMedium)
         }
     }
     Text(
@@ -1622,7 +1516,11 @@ private fun TutorialPage() {
 
 /** 关于二级页面。 */
 @Composable
-private fun AboutPage(onDownloadLatest: () -> Unit = {}) {
+private fun AboutPage(
+    onDownloadLatest: () -> Unit = {},
+    /** 33 轮：导出本地崩溃日志（闪退堆栈排障用，配合发布归档的 mapping.txt 还原）。 */
+    onExportCrashLogs: () -> Unit = {},
+) {
     val versionName = rememberVersionName()
     val s = LocalAppStrings.current
     Column {
@@ -1634,6 +1532,140 @@ private fun AboutPage(onDownloadLatest: () -> Unit = {}) {
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text(s.aboutDownload)
+        }
+        Spacer(Modifier.height(8.dp))
+        // 33 轮：从其他设置迁入——横向按钮，与下载按钮同列宽
+        OutlinedButton(
+            onClick = onExportCrashLogs,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(s.exportCrashLogs, style = MaterialTheme.typography.labelMedium)
+        }
+    }
+}
+
+/** 33 轮：语音朗读二级子页面——原其他设置页的 TTS 配置整体迁入，逻辑与持久化不变。 */
+@Composable
+private fun TtsPage(
+    settings: AppSettings,
+    onSetTtsEnabled: (Boolean) -> Unit,
+    onSetTtsVoice: (String) -> Unit,
+    onSetTtsAutoRead: (Boolean) -> Unit,
+    onSetTtsProvider: (String) -> Unit,
+    onSetTtsVoiceQwen: (String) -> Unit,
+    onSetTtsVoiceGlm: (String) -> Unit,
+) {
+    val s = LocalAppStrings.current
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(s.ttsSection, style = MaterialTheme.typography.bodyLarge)
+            Switch(checked = settings.ttsEnabled, onCheckedChange = { onSetTtsEnabled(it) })
+        }
+        if (settings.ttsEnabled) {
+            Spacer(Modifier.height(4.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(s.ttsAutoRead, style = MaterialTheme.typography.bodyMedium)
+                Switch(checked = settings.ttsAutoRead, onCheckedChange = { onSetTtsAutoRead(it) })
+            }
+            Text(
+                text = when (settings.ttsProvider) {
+                    "qwen" -> s.ttsHintQwen
+                    "glm" -> s.ttsHintGlm
+                    else -> s.ttsCostHint
+                },
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = s.ttsEngineLabel,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            listOf(
+                "deepseek" to s.ttsEngineDeepseek,
+                "qwen" to s.ttsEngineQwen,
+                "glm" to s.ttsEngineGlm,
+            ).forEach { (id, label) ->
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onSetTtsProvider(id) },
+                ) {
+                    RadioButton(
+                        selected = settings.ttsProvider == id,
+                        onClick = { onSetTtsProvider(id) },
+                    )
+                    Text(label, style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = s.ttsVoiceLabel,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            // 音色随引擎切换；音色显示名是专有名词，不入 i18n
+            val voiceOptions: List<Pair<String, String>> = when (settings.ttsProvider) {
+                "qwen" -> listOf(
+                    "Cherry" to "Cherry 芊悦",
+                    "Serena" to "Serena 苏瑶",
+                    "Ethan" to "Ethan 晨煦",
+                    "Chelsie" to "Chelsie 千雪",
+                    "Momo" to "Momo 茉兔",
+                    "Moon" to "Moon 月白",
+                    "Maia" to "Maia 四月",
+                    "Bella" to "Bella 萌宝",
+                    "Neil" to "Neil 阿闻",
+                    "Nini" to "Nini 邻家妹妹",
+                )
+                "glm" -> listOf(
+                    "tongtong" to "tongtong 彤彤",
+                    "chuichui" to "chuichui 锤锤",
+                    "xiaochen" to "xiaochen 小陈",
+                    "jam" to "jam",
+                    "kazi" to "kazi",
+                    "douji" to "douji",
+                    "luodo" to "luodo",
+                )
+                else -> listOf(
+                    "stella" to s.ttsVoiceStella,
+                    "tide" to s.ttsVoiceTide,
+                )
+            }
+            val onSetVoice = when (settings.ttsProvider) {
+                "qwen" -> onSetTtsVoiceQwen
+                "glm" -> onSetTtsVoiceGlm
+                else -> onSetTtsVoice
+            }
+            val currentVoice = when (settings.ttsProvider) {
+                "qwen" -> settings.ttsVoiceQwen
+                "glm" -> settings.ttsVoiceGlm
+                else -> settings.ttsVoice
+            }
+            voiceOptions.forEach { (id, label) ->
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onSetVoice(id) },
+                ) {
+                    RadioButton(
+                        selected = currentVoice == id,
+                        onClick = { onSetVoice(id) },
+                    )
+                    Text(label, style = MaterialTheme.typography.bodyMedium)
+                }
+            }
         }
     }
 }
