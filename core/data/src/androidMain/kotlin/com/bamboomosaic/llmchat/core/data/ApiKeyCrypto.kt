@@ -10,11 +10,10 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
 /**
- * 28 轮：API Key 加密存储——AES-256/GCM，密钥存 Android Keystore（不可导出）。
- * 密文带 "enc:v1:" 前缀；无前缀视为 28 轮前的旧明文，解密时原样返回（平滑迁移，用户无感）。
- * Keystore 异常（厂商 ROM 差异）时加密回退明文、解密返回空串（提示重填），不阻塞应用。
+ * Android actual：API Key 加密存储——AES-256/GCM，密钥存 Android Keystore（不可导出）。
+ * 28 轮实现原样保留；Keystore 异常（厂商 ROM 差异）时加密回退明文、解密返回空串（提示重填）。
  */
-object ApiKeyCrypto {
+actual object ApiKeyCrypto {
 
     private const val KEYSTORE = "AndroidKeyStore"
     private const val ALIAS = "llmchat_apikey_aes"
@@ -22,9 +21,9 @@ object ApiKeyCrypto {
     private const val GCM_TAG_BITS = 128
     private const val IV_BYTES = 12
 
-    fun isEncrypted(stored: String): Boolean = stored.startsWith(PREFIX)
+    actual fun isEncrypted(stored: String): Boolean = stored.startsWith(PREFIX)
 
-    fun encrypt(plain: String): String = try {
+    actual fun encrypt(plain: String): String = try {
         if (plain.isBlank()) plain
         else {
             val cipher = Cipher.getInstance("AES/GCM/NoPadding")
@@ -36,7 +35,7 @@ object ApiKeyCrypto {
         plain // Keystore 不可用时回退明文存储（功能优先）
     }
 
-    fun decrypt(stored: String): String = try {
+    actual fun decrypt(stored: String): String = try {
         if (!stored.startsWith(PREFIX)) stored
         else {
             val data = Base64.decode(stored.removePrefix(PREFIX), Base64.NO_WRAP)

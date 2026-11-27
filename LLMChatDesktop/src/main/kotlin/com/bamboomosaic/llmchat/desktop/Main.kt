@@ -7,15 +7,22 @@ import androidx.compose.ui.window.rememberWindowState
 
 /**
  * LLMChatDesktop 桌面壳入口。
- * 34 轮（阶段一收尾）：对话链路打通——UI 见 DesktopChat.kt。
- * 已共享：core:domain（域模型/模式提示词/环境快照）+ core:network（OkHttp SSE 流式）。
+ * 桌面端第 2 轮：会话/消息/设置/API 配置持久化（存储层 KMP 共享）+ 会话列表 + 功能对话框。
+ * UI 见 DesktopApp.kt / DesktopDialogs.kt；装配见 DesktopContainer.kt。
  */
 fun main() = application {
     Window(
         onCloseRequest = ::exitApplication,
         title = "LLMChat Desktop",
-        state = rememberWindowState(width = 980.dp, height = 720.dp),
+        state = rememberWindowState(width = 1100.dp, height = 760.dp),
     ) {
-        DesktopChatApp()
+        DesktopApp(DesktopChatViewModel(
+            settingsRepository = DesktopContainer.settingsRepository,
+            configRepository = DesktopContainer.configRepository,
+            conversationRepository = DesktopContainer.conversationRepository,
+            chatRepository = DesktopContainer.chatRepository,
+            contextWindowRepository = DesktopContainer.contextWindowRepository,
+            contextReminderProvider = DesktopContainer.contextReminderProvider,
+        ))
     }
 }

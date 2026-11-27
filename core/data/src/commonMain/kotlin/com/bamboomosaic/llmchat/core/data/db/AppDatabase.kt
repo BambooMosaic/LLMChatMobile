@@ -3,7 +3,15 @@ package com.bamboomosaic.llmchat.core.data.db
 import androidx.room.Database
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
-import androidx.sqlite.db.SupportSQLiteDatabase
+import androidx.sqlite.SQLiteConnection
+
+/**
+ * androidx.sqlite 2.6 KMP：SQLiteConnection 不再自带 execSQL，
+ * prepare + step 执行一条 DDL（迁移体保持与 Android 版写法一致）。
+ */
+private fun SQLiteConnection.execSQL(sql: String) {
+    prepare(sql).use { it.step() }
+}
 
 @Database(
     entities = [
@@ -22,12 +30,13 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun apiConfigDao(): ApiConfigDao
 
     companion object {
+
         /**
          * v2 -> v3：会话支持归档、消息保存思考内容。
          * 用显式迁移而不是 destructive：升级时保留用户已有对话。
          */
         val MIGRATION_2_3 = object : Migration(2, 3) {
-            override fun migrate(db: SupportSQLiteDatabase) {
+            override fun migrate(db: SQLiteConnection) {
                 db.execSQL("ALTER TABLE conversations ADD COLUMN archived INTEGER NOT NULL DEFAULT 0")
                 db.execSQL("ALTER TABLE messages ADD COLUMN reasoning TEXT")
             }
@@ -39,7 +48,7 @@ abstract class AppDatabase : RoomDatabase() {
          * （Migration 里读不到 DataStore，所以放在仓库层做）。
          */
         val MIGRATION_3_4 = object : Migration(3, 4) {
-            override fun migrate(db: SupportSQLiteDatabase) {
+            override fun migrate(db: SQLiteConnection) {
                 db.execSQL(
                     """
                     CREATE TABLE IF NOT EXISTS `api_configs` (
@@ -61,7 +70,7 @@ abstract class AppDatabase : RoomDatabase() {
          * v4 -> v5：会话独立系统提示词。
          */
         val MIGRATION_4_5 = object : Migration(4, 5) {
-            override fun migrate(db: SupportSQLiteDatabase) {
+            override fun migrate(db: SQLiteConnection) {
                 db.execSQL("ALTER TABLE conversations ADD COLUMN systemPrompt TEXT")
             }
         }
@@ -70,7 +79,7 @@ abstract class AppDatabase : RoomDatabase() {
          * v5 -> v6：消息支持多模态图片。
          */
         val MIGRATION_5_6 = object : Migration(5, 6) {
-            override fun migrate(db: SupportSQLiteDatabase) {
+            override fun migrate(db: SQLiteConnection) {
                 db.execSQL("ALTER TABLE messages ADD COLUMN images TEXT")
             }
         }
@@ -79,7 +88,7 @@ abstract class AppDatabase : RoomDatabase() {
          * v6 -> v7：消息记录联网搜索到的网页总数（搜索状态展示）。
          */
         val MIGRATION_6_7 = object : Migration(6, 7) {
-            override fun migrate(db: SupportSQLiteDatabase) {
+            override fun migrate(db: SQLiteConnection) {
                 db.execSQL("ALTER TABLE messages ADD COLUMN searchPages INTEGER")
             }
         }
@@ -94,7 +103,7 @@ abstract class AppDatabase : RoomDatabase() {
          * api_configs 加每配置独立的最大上下文/最大输出（NULL = 不限制，用全局默认）。
          */
         val MIGRATION_8_9 = object : Migration(8, 9) {
-            override fun migrate(db: SupportSQLiteDatabase) {
+            override fun migrate(db: SQLiteConnection) {
                 db.execSQL("ALTER TABLE conversations ADD COLUMN modeId TEXT NOT NULL DEFAULT 'custom'")
                 db.execSQL("ALTER TABLE conversations ADD COLUMN userPrompt TEXT")
                 db.execSQL("ALTER TABLE conversations ADD COLUMN effectiveTemperature REAL")
@@ -107,7 +116,7 @@ abstract class AppDatabase : RoomDatabase() {
         }
 
         val MIGRATION_7_8 = object : Migration(7, 8) {
-            override fun migrate(db: SupportSQLiteDatabase) {
+            override fun migrate(db: SQLiteConnection) {
                 db.execSQL("ALTER TABLE messages ADD COLUMN version INTEGER NOT NULL DEFAULT 1")
                 db.execSQL("ALTER TABLE messages ADD COLUMN versionKey INTEGER")
                 db.execSQL("ALTER TABLE messages ADD COLUMN usageId INTEGER")
@@ -119,7 +128,7 @@ abstract class AppDatabase : RoomDatabase() {
          * 用于缓存命中统计与三色柱状图。
          */
         val MIGRATION_9_10 = object : Migration(9, 10) {
-            override fun migrate(db: SupportSQLiteDatabase) {
+            override fun migrate(db: SQLiteConnection) {
                 db.execSQL("ALTER TABLE token_usage_records ADD COLUMN cacheHitTokens INTEGER NOT NULL DEFAULT 0")
             }
         }
@@ -129,7 +138,7 @@ abstract class AppDatabase : RoomDatabase() {
          * 与联网搜索标记列（搜索代理轮次），供上下文面板按会话分项统计。
          */
         val MIGRATION_10_11 = object : Migration(10, 11) {
-            override fun migrate(db: SupportSQLiteDatabase) {
+            override fun migrate(db: SQLiteConnection) {
                 db.execSQL("ALTER TABLE token_usage_records ADD COLUMN reasoningTokens INTEGER NOT NULL DEFAULT 0")
                 db.execSQL("ALTER TABLE token_usage_records ADD COLUMN isSearch INTEGER NOT NULL DEFAULT 0")
             }
@@ -141,16 +150,34 @@ abstract class AppDatabase : RoomDatabase() {
          */
         /** 27 轮：消息分叉树——messages 加 parentId 列。 */
         val MIGRATION_12_13 = object : Migration(12, 13) {
-            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+            override fun migrate(db: SQLiteConnection) {
                 db.execSQL("ALTER TABLE messages ADD COLUMN parentId INTEGER")
             }
         }
 
         val MIGRATION_11_12 = object : Migration(11, 12) {
-            override fun migrate(db: SupportSQLiteDatabase) {
+            override fun migrate(db: SQLiteConnection) {
                 db.execSQL("ALTER TABLE conversations ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0")
                 db.execSQL("ALTER TABLE conversations ADD COLUMN titleAuto INTEGER NOT NULL DEFAULT 1")
             }
         }
+
+        /**
+         * 全量迁移集：Android / Desktop 两侧 builder 共用（桌面端第 2 轮抽出）。
+         * 顺序即版本序；22 轮曾漏注册 v9_10 导致升级清库，勿再漏。
+         */
+        val ALL_MIGRATIONS = arrayOf(
+            MIGRATION_2_3,
+            MIGRATION_3_4,
+            MIGRATION_4_5,
+            MIGRATION_5_6,
+            MIGRATION_6_7,
+            MIGRATION_7_8,
+            MIGRATION_8_9,
+            MIGRATION_9_10,
+            MIGRATION_10_11,
+            MIGRATION_11_12,
+            MIGRATION_12_13,
+        )
     }
 }

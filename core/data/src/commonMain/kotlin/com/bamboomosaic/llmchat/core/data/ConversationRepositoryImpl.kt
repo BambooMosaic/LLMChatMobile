@@ -25,7 +25,7 @@ class ConversationRepositoryImpl @Inject constructor(
         dao.observeArchivedConversations().map { list -> list.map { it.toDomain() } }
 
     override suspend fun ensureConversation(conversationId: String, title: String) {
-        val now = System.currentTimeMillis()
+        val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
         dao.insertConversation(
             ConversationEntity(
                 id = conversationId,
@@ -45,7 +45,7 @@ class ConversationRepositoryImpl @Inject constructor(
         message: ChatMessage,
         versionKey: Long,
     ): ChatMessage {
-        val now = System.currentTimeMillis()
+        val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
         // 版本号 = 同组内最大 version + 1（新组从 1 开始）
         val nextVersion = if (versionKey > 0L) {
             (dao.getSiblingVersionsByGroup(conversationId, versionKey).maxOfOrNull { it.version } ?: 0) + 1
@@ -92,13 +92,13 @@ class ConversationRepositoryImpl @Inject constructor(
     override suspend fun updateTitleIfPlaceholder(conversationId: String, title: String) {
         val current = dao.getConversation(conversationId) ?: return
         if (current.title == PLACEHOLDER_TITLE || current.title == "新对话" || current.title.isBlank()) {
-            dao.updateTitle(conversationId, title, System.currentTimeMillis())
+            dao.updateTitle(conversationId, title, kotlin.time.Clock.System.now().toEpochMilliseconds())
         }
     }
 
     override suspend fun renameConversation(conversationId: String, title: String) {
         // 24 轮：手动改名走 setTitle，同时关闭自动标题标记
-        dao.setTitle(conversationId, title.trim(), System.currentTimeMillis())
+        dao.setTitle(conversationId, title.trim(), kotlin.time.Clock.System.now().toEpochMilliseconds())
     }
 
     override suspend fun setPinned(conversationId: String, pinned: Boolean) {
@@ -106,7 +106,7 @@ class ConversationRepositoryImpl @Inject constructor(
     }
 
     override suspend fun setAutoTitle(conversationId: String, title: String) {
-        dao.setTitle(conversationId, title.take(24), System.currentTimeMillis())
+        dao.setTitle(conversationId, title.take(24), kotlin.time.Clock.System.now().toEpochMilliseconds())
     }
 
     override suspend fun setArchived(conversationId: String, archived: Boolean) {
@@ -134,7 +134,7 @@ class ConversationRepositoryImpl @Inject constructor(
         temperature: Float?,
         topP: Float?,
     ) {
-        val now = System.currentTimeMillis()
+        val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
         val existing = dao.getConversation(conversationId)
         if (existing != null) return
         dao.insertConversation(
@@ -163,8 +163,8 @@ class ConversationRepositoryImpl @Inject constructor(
             ?: ConversationEntity(
                 id = conversationId,
                 title = "",
-                createdAt = System.currentTimeMillis(),
-                updatedAt = System.currentTimeMillis(),
+                createdAt = kotlin.time.Clock.System.now().toEpochMilliseconds(),
+                updatedAt = kotlin.time.Clock.System.now().toEpochMilliseconds(),
             )
         dao.updateConversation(
             entity.copy(
@@ -172,7 +172,7 @@ class ConversationRepositoryImpl @Inject constructor(
                 userPrompt = userPrompt?.takeIf { it.isNotBlank() },
                 effectiveTemperature = temperature,
                 effectiveTopP = topP,
-                updatedAt = System.currentTimeMillis(),
+                updatedAt = kotlin.time.Clock.System.now().toEpochMilliseconds(),
             ),
         )
     }

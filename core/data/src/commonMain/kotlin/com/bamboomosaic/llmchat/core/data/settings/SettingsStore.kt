@@ -1,6 +1,5 @@
 package com.bamboomosaic.llmchat.core.data.settings
 
-import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -11,24 +10,26 @@ import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.stringPreferencesKey
-import androidx.datastore.preferences.preferencesDataStore
 import com.bamboomosaic.llmchat.core.domain.AppLanguage
 import com.bamboomosaic.llmchat.core.domain.AppSettings
 import com.bamboomosaic.llmchat.core.domain.SettingsRepository
 import com.bamboomosaic.llmchat.core.domain.ThemeMode
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
-import javax.inject.Inject
 
-private val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(
-    name = "app_settings",
-)
+/**
+ * 系统是否深色模式（桌面端第 2 轮抽象）。
+ * Android：读取 uiMode 夜间掩码；Desktop：本轮恒为 false（桌面 UI 暂固定深色，TODO 跟随系统）。
+ */
+expect fun isSystemDarkMode(): Boolean
 
-/** 用 DataStore Preferences 保存全部配置项。 */
-class SettingsStore @Inject constructor(
-    @ApplicationContext private val context: Context,
+/** 当前应用版本名（桌面端第 2 轮抽象；Android=packageInfo.versionName，Desktop=TODO 打包后接 jpackage 版本）。 */
+expect fun appVersionName(): String
+
+/** 用 DataStore Preferences 保存全部配置项（dataStore 实例由各端工厂提供）。 */
+class SettingsStore(
+    private val dataStore: DataStore<Preferences>,
 ) : SettingsRepository {
 
     private val systemPromptKey = stringPreferencesKey("system_prompt")
@@ -72,7 +73,7 @@ class SettingsStore @Inject constructor(
     private val ttsVoiceGlmKey = stringPreferencesKey("tts_voice_glm")
     private val legacyExperimentalGlassKey = booleanPreferencesKey("experimental_glass")
 
-    override fun observeSettings(): Flow<AppSettings> = context.settingsDataStore.data.map { prefs ->
+    override fun observeSettings(): Flow<AppSettings> = dataStore.data.map { prefs ->
         val language = AppLanguage.fromTag(prefs[languageKey])
         AppSettings(
             // 未显式设置过提示词时，按当前语言给默认值，实现"AI 语言跟随界面语言"
@@ -127,9 +128,7 @@ class SettingsStore @Inject constructor(
         if (!follow) return active
         val pair = prefs[colorPresetPairKey] ?: pairIndexOf(active)
         if (pair !in 0..5) return active
-        val systemDark = (context.resources.configuration.uiMode and
-            android.content.res.Configuration.UI_MODE_NIGHT_MASK
-        ) == android.content.res.Configuration.UI_MODE_NIGHT_YES
+        val systemDark = isSystemDarkMode()
         return if (systemDark) darkPairIds().getOrNull(pair) ?: active else lightPairIds().getOrNull(pair) ?: active
     }
 
@@ -159,11 +158,7 @@ class SettingsStore @Inject constructor(
         ) {
             ThemeMode.LIGHT -> "light"
             ThemeMode.DARK -> "dark"
-            ThemeMode.SYSTEM ->
-                if ((context.resources.configuration.uiMode and
-                        android.content.res.Configuration.UI_MODE_NIGHT_MASK
-                ) == android.content.res.Configuration.UI_MODE_NIGHT_YES
-                ) "dark" else "light"
+            ThemeMode.SYSTEM -> if (isSystemDarkMode()) "dark" else "light"
         }
         val name = if (group == "light" && stored == "warm") "yellow" else
             if (stored == "warm") "brown" else stored
@@ -171,31 +166,31 @@ class SettingsStore @Inject constructor(
     }
 
     override suspend fun setSystemPrompt(value: String) {
-        context.settingsDataStore.edit { it[systemPromptKey] = value }
+        dataStore.edit { it[systemPromptKey] = value }
     }
 
     override suspend fun setModel(value: String) {
-        context.settingsDataStore.edit { it[modelKey] = value }
+        dataStore.edit { it[modelKey] = value }
     }
 
     override suspend fun setBaseUrl(value: String) {
-        context.settingsDataStore.edit { it[baseUrlKey] = value }
+        dataStore.edit { it[baseUrlKey] = value }
     }
 
     override suspend fun setApiKey(value: String) {
-        context.settingsDataStore.edit { it[apiKeyKey] = value }
+        dataStore.edit { it[apiKeyKey] = value }
     }
 
     override suspend fun setProvider(providerId: String) {
-        context.settingsDataStore.edit { it[providerKey] = providerId }
+        dataStore.edit { it[providerKey] = providerId }
     }
 
     override suspend fun setThemeMode(mode: ThemeMode) {
-        context.settingsDataStore.edit { it[themeModeKey] = mode.name }
+        dataStore.edit { it[themeModeKey] = mode.name }
     }
 
     override suspend fun setLanguage(language: AppLanguage) {
-        context.settingsDataStore.edit { prefs ->
+        dataStore.edit { prefs ->
             prefs[languageKey] = language.tag
             // 语言切换时同步重置提示词默认值（用户自定义过的会被覆盖，可在设置里再改）
             prefs[systemPromptKey] = AppSettings.defaultSystemPrompt(language)
@@ -203,43 +198,43 @@ class SettingsStore @Inject constructor(
     }
 
     override suspend fun setThinkingEnabled(enabled: Boolean) {
-        context.settingsDataStore.edit { it[thinkingKey] = enabled }
+        dataStore.edit { it[thinkingKey] = enabled }
     }
 
     override suspend fun setSearchEnabled(enabled: Boolean) {
-        context.settingsDataStore.edit { it[searchKey] = enabled }
+        dataStore.edit { it[searchKey] = enabled }
     }
 
     override suspend fun setDefaultModeId(modeId: String) {
-        context.settingsDataStore.edit { it[defaultModeIdKey] = modeId }
+        dataStore.edit { it[defaultModeIdKey] = modeId }
     }
 
     override suspend fun setContextInjectionEnabled(enabled: Boolean) {
-        context.settingsDataStore.edit { it[contextInjectionKey] = enabled }
+        dataStore.edit { it[contextInjectionKey] = enabled }
     }
 
     override suspend fun setTokenSavingLevel(level: Int) {
-        context.settingsDataStore.edit { it[tokenSavingKey] = level.coerceIn(0, 4) }
+        dataStore.edit { it[tokenSavingKey] = level.coerceIn(0, 4) }
     }
 
     override suspend fun setRoleplayParenRule(enabled: Boolean) {
-        context.settingsDataStore.edit { it[roleplayParenKey] = enabled }
+        dataStore.edit { it[roleplayParenKey] = enabled }
     }
 
     override suspend fun setUserNickname(value: String) {
-        context.settingsDataStore.edit { it[userNicknameKey] = value.trim() }
+        dataStore.edit { it[userNicknameKey] = value.trim() }
     }
 
     override suspend fun setBackgroundImageUri(value: String) {
-        context.settingsDataStore.edit { it[backgroundImageUriKey] = value }
+        dataStore.edit { it[backgroundImageUriKey] = value }
     }
 
     override suspend fun setBackgroundPreset(value: String) {
-        context.settingsDataStore.edit { it[backgroundPresetKey] = value }
+        dataStore.edit { it[backgroundPresetKey] = value }
     }
 
     override suspend fun setColorPreset(value: String) {
-        context.settingsDataStore.edit { prefs ->
+        dataStore.edit { prefs ->
             prefs[colorPresetKey] = value
             // 23 轮：同步记录配对索引（跟随系统自动切换时按位置取对应组）
             prefs[colorPresetPairKey] = pairIndexOf(value)
@@ -248,7 +243,7 @@ class SettingsStore @Inject constructor(
 
     /** 23 轮：跟随系统明暗开关。开启瞬间由当前选中值推导配对索引。 */
     override suspend fun setFollowSystemTheme(value: Boolean) {
-        context.settingsDataStore.edit { prefs ->
+        dataStore.edit { prefs ->
             prefs[followSystemKey] = value
             if (value) {
                 val active = migrateColorPreset(prefs)
@@ -259,112 +254,112 @@ class SettingsStore @Inject constructor(
 
     /** 23 轮：手动压缩摘要字数上限（100~1024）。 */
     override suspend fun setCompressSummaryLimit(value: Int) {
-        context.settingsDataStore.edit { it[compressSummaryLimitKey] = value.coerceIn(100, 1024) }
+        dataStore.edit { it[compressSummaryLimitKey] = value.coerceIn(100, 1024) }
     }
 
     /** 25 轮：玻璃材质档位（0/1/2）。 */
     override suspend fun setGlassLevel(value: Int) {
-        context.settingsDataStore.edit { it[glassLevelKey] = value.coerceIn(0, 2) }
+        dataStore.edit { it[glassLevelKey] = value.coerceIn(0, 2) }
     }
 
     /** 27 轮：语音朗读开关。 */
     override suspend fun setTtsEnabled(enabled: Boolean) {
-        context.settingsDataStore.edit { it[ttsEnabledKey] = enabled }
+        dataStore.edit { it[ttsEnabledKey] = enabled }
     }
 
     /** 27 轮：TTS 音色（stella / tide）。 */
     override suspend fun setTtsVoice(voiceId: String) {
-        context.settingsDataStore.edit {
+        dataStore.edit {
             it[ttsVoiceKey] = if (voiceId == "tide") "tide" else "stella"
         }
     }
 
     /** 27 轮修正：自动朗读开关。 */
     override suspend fun setTtsAutoRead(enabled: Boolean) {
-        context.settingsDataStore.edit { it[ttsAutoReadKey] = enabled }
+        dataStore.edit { it[ttsAutoReadKey] = enabled }
     }
 
     /** 29 轮：TTS 朗读引擎（deepseek / qwen / glm）。 */
     override suspend fun setTtsProvider(providerId: String) {
-        context.settingsDataStore.edit {
+        dataStore.edit {
             it[ttsProviderKey] = if (providerId == "qwen" || providerId == "glm") providerId else "deepseek"
         }
     }
 
     /** 29 轮：通义千问 TTS 音色。 */
     override suspend fun setTtsVoiceQwen(voiceId: String) {
-        context.settingsDataStore.edit { it[ttsVoiceQwenKey] = voiceId.ifBlank { "Cherry" } }
+        dataStore.edit { it[ttsVoiceQwenKey] = voiceId.ifBlank { "Cherry" } }
     }
 
     /** 29 轮：智谱 GLM TTS 音色。 */
     override suspend fun setTtsVoiceGlm(voiceId: String) {
-        context.settingsDataStore.edit { it[ttsVoiceGlmKey] = voiceId.ifBlank { "tongtong" } }
+        dataStore.edit { it[ttsVoiceGlmKey] = voiceId.ifBlank { "tongtong" } }
     }
 
     /** 28 轮：会话草稿（空串 = 清除键）。 */
     override suspend fun setDraft(conversationId: String, text: String) {
-        context.settingsDataStore.edit { prefs ->
+        dataStore.edit { prefs ->
             val key = stringPreferencesKey("draft_" + conversationId)
             if (text.isBlank()) prefs.remove(key) else prefs[key] = text
         }
     }
 
     override suspend fun getDraft(conversationId: String): String =
-        context.settingsDataStore.data
+        dataStore.data
             .map { prefs -> prefs[stringPreferencesKey("draft_" + conversationId)] ?: "" }
             .first()
 
     override fun observeModeUserPrompt(modeId: String): Flow<String?> =
-        context.settingsDataStore.data.map { prefs ->
+        dataStore.data.map { prefs ->
             prefs[stringPreferencesKey("mode_user_prompt_$modeId")]
         }
 
     override suspend fun setModeUserPrompt(modeId: String, prompt: String?) {
-        context.settingsDataStore.edit { prefs ->
+        dataStore.edit { prefs ->
             val key = stringPreferencesKey("mode_user_prompt_$modeId")
             if (prompt.isNullOrBlank()) prefs.remove(key) else prefs[key] = prompt
         }
     }
 
     override fun observeModeCustomParams(modeId: String): Flow<Pair<Float, Float>?> =
-        context.settingsDataStore.data.map { prefs ->
+        dataStore.data.map { prefs ->
             val t = prefs[floatPreferencesKey("mode_temp_$modeId")]
             val p = prefs[floatPreferencesKey("mode_topp_$modeId")]
             if (t != null && p != null) t to p else null
         }
 
     override suspend fun setModeCustomParams(modeId: String, temperature: Float, topP: Float) {
-        context.settingsDataStore.edit { prefs ->
+        dataStore.edit { prefs ->
             prefs[floatPreferencesKey("mode_temp_$modeId")] = temperature
             prefs[floatPreferencesKey("mode_topp_$modeId")] = topP
         }
     }
 
     override suspend fun setMaxContextTokens(value: Int) {
-        context.settingsDataStore.edit { it[maxContextKey] = value }
+        dataStore.edit { it[maxContextKey] = value }
     }
 
     override suspend fun setMaxOutputTokens(value: Int) {
-        context.settingsDataStore.edit { it[maxOutputKey] = value }
+        dataStore.edit { it[maxOutputKey] = value }
     }
 
     override suspend fun setAutoCompressEnabled(enabled: Boolean) {
-        context.settingsDataStore.edit { it[autoCompressKey] = enabled }
+        dataStore.edit { it[autoCompressKey] = enabled }
     }
 
-    override fun observeCurrentConfigId(): Flow<Long> = context.settingsDataStore.data.map { prefs ->
+    override fun observeCurrentConfigId(): Flow<Long> = dataStore.data.map { prefs ->
         prefs[currentConfigIdKey] ?: 0L
     }
 
     override suspend fun setCurrentConfigId(id: Long) {
-        context.settingsDataStore.edit { it[currentConfigIdKey] = id }
+        dataStore.edit { it[currentConfigIdKey] = id }
     }
 
     /**
      * 27 轮修正：首次引导只看「从未完成过引导」，更新不再重走大引导；
      * 大版本变化改由 [observeMajorVersionChanged] 触发轻量更新公告。
      */
-    override fun observeFirstLaunch(): Flow<Boolean> = context.settingsDataStore.data.map { prefs ->
+    override fun observeFirstLaunch(): Flow<Boolean> = dataStore.data.map { prefs ->
         prefs[firstLaunchKey] ?: true
     }
 
@@ -372,22 +367,22 @@ class SettingsStore @Inject constructor(
      * 27 轮修正：大版本更新公告——已完成引导的用户，大版本段（major.minor）变化时返回 true。
      * 旧用户没有版本记录时补记当前段（不打扰），0.7 之后的下一次大版本起正常生效。
      */
-    override fun observeMajorVersionChanged(): Flow<Boolean> = context.settingsDataStore.data.map { prefs ->
+    override fun observeMajorVersionChanged(): Flow<Boolean> = dataStore.data.map { prefs ->
         if (prefs[firstLaunchKey] == true) return@map false
         val stored = prefs[onboardVersionKey]
         if (stored == null) {
-            context.settingsDataStore.edit { it[onboardVersionKey] = currentMajorMinor() }
+            dataStore.edit { it[onboardVersionKey] = currentMajorMinor() }
             return@map false
         }
         stored != currentMajorMinor()
     }
 
     override suspend fun markMajorVersionNoticeSeen() {
-        context.settingsDataStore.edit { it[onboardVersionKey] = currentMajorMinor() }
+        dataStore.edit { it[onboardVersionKey] = currentMajorMinor() }
     }
 
     override suspend fun setFirstLaunchDone() {
-        context.settingsDataStore.edit {
+        dataStore.edit {
             it[firstLaunchKey] = false
             it[onboardVersionKey] = currentMajorMinor()
         }
@@ -397,7 +392,7 @@ class SettingsStore @Inject constructor(
 
     /** 备份导出：全部设置键编码为字符串映射（"b:/i:/f:/l:/d:/s:" 类型前缀 + 值）。 */
     suspend fun backupSettings(): Map<String, String> {
-        val prefs = context.settingsDataStore.data.first()
+        val prefs = dataStore.data.first()
         return prefs.asMap().entries.associate { (key, value) ->
             key.name to when (value) {
                 is Boolean -> "b:$value"
@@ -416,8 +411,8 @@ class SettingsStore @Inject constructor(
      * （不因导入弹更新公告）、背景图跨设备无效强制清空；其余键与导出设备一致。
      */
     suspend fun restoreSettings(backup: Map<String, String>) {
-        val currentOnboard = context.settingsDataStore.data.first()[onboardVersionKey]
-        context.settingsDataStore.edit { target ->
+        val currentOnboard = dataStore.data.first()[onboardVersionKey]
+        dataStore.edit { target ->
             target.asMap().keys.forEach { target.remove(it) }
             backup.forEach { (name, encoded) -> writeEncodedSetting(target, name, encoded) }
             target[firstLaunchKey] = false
@@ -445,7 +440,7 @@ class SettingsStore @Inject constructor(
 
     /** 26 轮：当前版本的大版本段——versionName（如 "beta0.6.5"）取前两段数字，解析失败返回空串（视为同段）。 */
     private fun currentMajorMinor(): String = runCatching {
-        val name = context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: ""
+        val name = appVersionName()
         Regex("(\\d+)\\.(\\d+)").find(name)?.let { m -> "${m.groupValues[1]}.${m.groupValues[2]}" } ?: name
     }.getOrDefault("")
 }

@@ -14,12 +14,13 @@ import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.transform
-import javax.inject.Inject
 
-class ChatRepositoryImpl @Inject constructor(
+class ChatRepositoryImpl(
     private val sseClient: OpenAiSseClient,
     private val tokenUsageDao: TokenUsageDao,
     private val configRepository: ConfigRepository,
+    // 桌面端第 2 轮：最新版查询平台件（Android=GitHub API 实现；桌面本轮恒 null，无需下载更新）
+    private val latestReleaseUrlFetcher: suspend () -> String? = { null },
 ) : ChatRepository {
 
     override fun sendChatStream(
@@ -64,7 +65,7 @@ class ChatRepositoryImpl @Inject constructor(
                                 model = effectiveModel,
                                 promptTokens = event.promptTokens,
                                 completionTokens = event.completionTokens,
-                                timestamp = System.currentTimeMillis(),
+                                timestamp = kotlin.time.Clock.System.now().toEpochMilliseconds(),
                                 cacheHitTokens = event.cacheHitTokens,
                                 reasoningTokens = event.reasoningTokens,
                             ),
@@ -120,7 +121,7 @@ class ChatRepositoryImpl @Inject constructor(
                         model = model,
                         promptTokens = event.promptTokens,
                         completionTokens = event.completionTokens,
-                        timestamp = System.currentTimeMillis(),
+                        timestamp = kotlin.time.Clock.System.now().toEpochMilliseconds(),
                         cacheHitTokens = event.cacheHitTokens,
                         reasoningTokens = event.reasoningTokens,
                         // 搜索代理轮次打标，供上下文面板分项统计联网搜索 token
@@ -133,32 +134,7 @@ class ChatRepositoryImpl @Inject constructor(
         return answer.toString()
     }
 
-    override suspend fun latestApkDownloadUrl(): String? = kotlinx.coroutines.withContext(
-        kotlinx.coroutines.Dispatchers.IO,
-    ) {
-        runCatching {
-            // GitHub Releases Latest API：只返回正式版（prerelease 不参与），无需认证
-            // 用 JDK HttpURLConnection：core:data 不直接依赖 OkHttp，避免穿透网络模块边界
-            val conn = java.net.URL(LATEST_RELEASE_API)
-                .openConnection() as java.net.HttpURLConnection
-            conn.connectTimeout = 5_000
-            conn.readTimeout = 5_000
-            conn.setRequestProperty("Accept", "application/vnd.github+json")
-            conn.inputStream.use { input ->
-                val root = org.json.JSONObject(input.bufferedReader().readText())
-                val assets = root.optJSONArray("assets") ?: return@runCatching null
-                for (i in 0 until assets.length()) {
-                    val asset = assets.optJSONObject(i) ?: continue
-                    val name = asset.optString("name")
-                    if (name.endsWith("_android_release.apk")) {
-                        return@runCatching asset.optString("browser_download_url")
-                            .takeIf { it.isNotBlank() }
-                    }
-                }
-                null
-            }
-        }.getOrNull()
-    }
+    override suspend fun latestApkDownloadUrl(): String? = latestReleaseUrlFetcher()
 
     private companion object {
         /** 搜索代理固定指令：要求基于联网搜索结果作答并标注来源。 */

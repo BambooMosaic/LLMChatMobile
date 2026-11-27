@@ -28,6 +28,11 @@ dependencies {
     // 34 轮：共享域核心 + 共享网络层——复合构建替换为 Mobile 工程对应模块的 desktop JVM 变体
     implementation("com.bamboomosaic.llmchat:core-domain:0.1.0")
     implementation("com.bamboomosaic.llmchat:core-network:0.1.0")
+    // 桌面端第 2 轮：共享存储层（Room + DataStore，KMP）
+    implementation("com.bamboomosaic.llmchat:core-data:0.1.0")
+    // core:data 以 implementation 暴露 API，桌面端直接用到其类型时需自行带上传递依赖
+    implementation("androidx.room:room-runtime:2.8.5")
+    implementation("androidx.datastore:datastore-preferences-core:1.3.0")
 }
 
 application {

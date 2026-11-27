@@ -36,9 +36,13 @@ gradlew.bat run        # Windows；macOS / Linux 用 ./gradlew run
 
 ## 状态
 
+（轮次口径：桌面端单独编号，「第 34 轮」保留给移动端）
+
 - [x] 阶段〇：独立桌面壳（可编译可运行窗口）
-- [x] 阶段一（34 轮）：core:domain KMP 化（android+desktop 双目标）+ 复合构建接入，窗口已渲染共享域实时数据
-- [ ] 阶段一收尾：core:network（OkHttp SSE，JVM 直接可用）接入桌面端
+- [x] 阶段一：core:domain KMP 化（android+desktop 双目标）+ 复合构建接入，窗口已渲染共享域实时数据
+- [x] 桌面端第 1 轮：core:network 接入 + 基础对话页（流式 SSE 对话链路打通）
+- [x] 桌面端第 2 轮：core:data KMP 化（Room/DataStore 双端）+ 会话/消息/设置/API 配置持久化 + 会话列表 / 配置管理 / 基础设置 UI
+- [ ] 桌面端第 3 轮起：功能补齐（模式选择 / 会话分组 / 高级设置 / 导入导出 / TTS 等）+ UI 打磨
 - [ ] 阶段二：存储层 KMP 化 + Koin
 - [ ] 阶段三：聊天 UI 复用（首个可用的桌面端）
 - [ ] 打包（jpackage 出安装包）

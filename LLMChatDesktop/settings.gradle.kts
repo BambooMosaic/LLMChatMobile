@@ -27,5 +27,7 @@ includeBuild("..") {
             .using(project(":core:domain"))
         substitute(module("com.bamboomosaic.llmchat:core-network"))
             .using(project(":core:network"))
+        substitute(module("com.bamboomosaic.llmchat:core-data"))
+            .using(project(":core:data"))
     }
 }

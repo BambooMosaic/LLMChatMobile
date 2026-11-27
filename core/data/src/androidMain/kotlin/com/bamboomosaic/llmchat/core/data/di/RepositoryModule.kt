@@ -5,9 +5,11 @@ import androidx.room.Room
 import com.bamboomosaic.llmchat.core.data.ChatRepositoryImpl
 import com.bamboomosaic.llmchat.core.data.ConfigRepositoryImpl
 import com.bamboomosaic.llmchat.core.data.ConversationRepositoryImpl
+import com.bamboomosaic.llmchat.core.data.LatestReleaseFetcher
 import com.bamboomosaic.llmchat.core.data.TokenUsageRepositoryImpl
 import com.bamboomosaic.llmchat.core.data.context.SlidingWindowManager
 import com.bamboomosaic.llmchat.core.data.settings.SettingsStore
+import com.bamboomosaic.llmchat.core.data.settings.settingsDataStore
 import com.bamboomosaic.llmchat.core.data.db.ApiConfigDao
 import com.bamboomosaic.llmchat.core.data.db.AppDatabase
 import com.bamboomosaic.llmchat.core.data.db.ConversationDao
@@ -32,10 +34,7 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 abstract class RepositoryModule {
 
-    @Binds
-    @Singleton
-    abstract fun bindChatRepository(impl: ChatRepositoryImpl): ChatRepository
-
+    // 桌面端第 2 轮：ChatRepositoryImpl/SettingsStore 构造改为平台件注入，@Binds → @Provides
     @Binds
     @Singleton
     abstract fun bindTokenUsageRepository(impl: TokenUsageRepositoryImpl): TokenUsageRepository
@@ -43,10 +42,6 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindContextWindowRepository(impl: SlidingWindowManager): ContextWindowRepository
-
-    @Binds
-    @Singleton
-    abstract fun bindSettingsRepository(impl: SettingsStore): SettingsRepository
 
     @Binds
     @Singleton
@@ -82,23 +77,29 @@ abstract class RepositoryModule {
 
         @Provides
         @Singleton
+        fun provideSettingsStore(@ApplicationContext context: Context): SettingsStore =
+            SettingsStore(context.settingsDataStore)
+
+        @Provides
+        @Singleton
+        fun provideChatRepository(
+            sseClient: OpenAiSseClient,
+            tokenUsageDao: TokenUsageDao,
+            configRepository: ConfigRepository,
+        ): ChatRepository = ChatRepositoryImpl(
+            sseClient = sseClient,
+            tokenUsageDao = tokenUsageDao,
+            configRepository = configRepository,
+            // 20 轮：Android 侧保留 GitHub Latest 查询（桌面端本轮不需要）
+            latestReleaseUrlFetcher = { LatestReleaseFetcher.fetch() },
+        )
+
+        @Provides
+        @Singleton
         fun provideAppDatabase(@ApplicationContext context: Context): AppDatabase =
             Room.databaseBuilder(context, AppDatabase::class.java, "llmchat.db")
                 // 显式迁移保留用户已有对话；未覆盖到的版本变更才走重建兜底
-                .addMigrations(
-                    AppDatabase.MIGRATION_2_3,
-                    AppDatabase.MIGRATION_3_4,
-                    AppDatabase.MIGRATION_4_5,
-                    AppDatabase.MIGRATION_5_6,
-                    AppDatabase.MIGRATION_6_7,
-                    AppDatabase.MIGRATION_7_8,
-                    AppDatabase.MIGRATION_8_9,
-                    // 22 轮补注册：v9_10 上一轮漏注册，导致从 beta0.5.0 升级会触发破坏性迁移清库
-                    AppDatabase.MIGRATION_9_10,
-                    AppDatabase.MIGRATION_10_11,
-                    AppDatabase.MIGRATION_11_12,
-                    AppDatabase.MIGRATION_12_13,
-        )
+                .addMigrations(*AppDatabase.ALL_MIGRATIONS)
                 .fallbackToDestructiveMigration(dropAllTables = true)
                 .build()
 
