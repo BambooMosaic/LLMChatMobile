@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
@@ -1163,7 +1164,12 @@ private fun MessageBubble(
                     // 33 轮：长按菜单锚点——放在长按点处，菜单弹出自动跟随 + 屏幕边缘避让
                     if (showMenu) {
                         Box(
-                            modifier = Modifier.offset { IntOffset(menuPos.x.roundToInt(), menuPos.y.roundToInt()) },
+                            modifier = Modifier
+                                // 33 轮修正：锚点强制 1dp——不限尺寸时锚点布局位置落在内容
+                                // Column 底部（AI 长消息 Column 很高），offset 叠加后菜单跑到
+                                // 消息最下方；requiredSize 使锚点始终是气泡左上角 1dp 的点
+                                .requiredSize(1.dp)
+                                .offset { IntOffset(menuPos.x.roundToInt(), menuPos.y.roundToInt()) },
                         ) {
                             DropdownMenu(
                                 expanded = true,
