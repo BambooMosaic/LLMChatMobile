@@ -82,6 +82,19 @@ abstract class RepositoryModule {
 
         @Provides
         @Singleton
+        fun provideSettingsRepository(store: SettingsStore): SettingsRepository = store
+
+        @Provides
+        @Singleton
+        fun provideBackupManager(
+            database: AppDatabase,
+            settingsStore: SettingsStore,
+        ): com.bamboomosaic.llmchat.core.data.backup.BackupManager =
+            // 桌面端第 3 轮：BackupManager KMP 化（去 @Inject/context），显式 provider 供 Hilt 构造
+            com.bamboomosaic.llmchat.core.data.backup.BackupManager(database, settingsStore)
+
+        @Provides
+        @Singleton
         fun provideChatRepository(
             sseClient: OpenAiSseClient,
             tokenUsageDao: TokenUsageDao,

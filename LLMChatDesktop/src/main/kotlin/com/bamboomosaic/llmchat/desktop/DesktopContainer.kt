@@ -30,11 +30,16 @@ object DesktopContainer {
     /** 全进程协程作用域（DataStore / Room Flow 的宿主）。 */
     val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
-    private val database: AppDatabase by lazy { desktopDatabase() }
+    /** 桌面数据目录：~/.llmchat（数据库 + DataStore + 崩溃日志 + 下载导出）。 */
+    val dataDir: java.io.File = java.io.File(System.getProperty("user.home"), ".llmchat").apply { mkdirs() }
 
-    val settingsRepository: SettingsRepository by lazy {
+    val database: AppDatabase by lazy { desktopDatabase() }
+
+    val settingsStore: com.bamboomosaic.llmchat.core.data.settings.SettingsStore by lazy {
         SettingsStore(desktopSettingsDataStore(appScope))
     }
+
+    val settingsRepository: SettingsRepository get() = settingsStore
 
     val configRepository: ConfigRepository by lazy {
         ConfigRepositoryImpl(database.apiConfigDao(), settingsRepository)
@@ -53,11 +58,31 @@ object DesktopContainer {
         )
     }
 
+    val tokenUsageRepository: com.bamboomosaic.llmchat.core.domain.TokenUsageRepository by lazy {
+        TokenUsageRepositoryImpl(database.tokenUsageDao())
+    }
+
     val contextWindowRepository: ContextWindowRepository by lazy {
         SlidingWindowManager(settingsRepository)
     }
 
     val contextReminderProvider: ContextReminderProvider by lazy {
         ContextReminderProviderImpl()
+    }
+
+    val backupManager: com.bamboomosaic.llmchat.core.data.backup.BackupManager by lazy {
+        com.bamboomosaic.llmchat.core.data.backup.BackupManager(database, settingsStore)
+    }
+
+    val deepSeekTtsClient: com.bamboomosaic.llmchat.core.network.DeepSeekTtsClient by lazy {
+        com.bamboomosaic.llmchat.core.network.DeepSeekTtsClient()
+    }
+
+    val qwenTtsClient: com.bamboomosaic.llmchat.core.network.QwenTtsClient by lazy {
+        com.bamboomosaic.llmchat.core.network.QwenTtsClient()
+    }
+
+    val glmTtsClient: com.bamboomosaic.llmchat.core.network.GlmTtsClient by lazy {
+        com.bamboomosaic.llmchat.core.network.GlmTtsClient()
     }
 }

@@ -34,6 +34,12 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    lint {
+        // AGP 8.7 的 lint 内嵌 Kotlin 2.0 无法解析 datastore 1.3 的 Kotlin 2.2 metadata
+        //（core:data KMP 化后 lintVitalRelease 触发读取依赖 jar）。1.0 后升级 AGP 再恢复。
+        checkReleaseBuilds = false
+    }
+
     buildFeatures {
         compose = true
     }

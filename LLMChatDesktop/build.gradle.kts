@@ -33,6 +33,13 @@ dependencies {
     // core:data 以 implementation 暴露 API，桌面端直接用到其类型时需自行带上传递依赖
     implementation("androidx.room:room-runtime:2.8.5")
     implementation("androidx.datastore:datastore-preferences-core:1.3.0")
+    // Markdown 渲染（手机端同款库，本身是多平台工件）
+    implementation("com.mikepenz:multiplatform-markdown-renderer-m3:0.32.0")
+    implementation("com.mikepenz:multiplatform-markdown-renderer-code:0.32.0")
+    // org.json：模式导入导出沿用手机端的 JSON 构建代码（org.json 为 Android 内置，桌面需显式依赖）
+    implementation("org.json:json:20240303")
+    // 桌面端 Main 调度器（Swing）：手机端由 coroutines-android 提供，桌面需 coroutines-swing
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing:1.10.2")
 }
 
 application {

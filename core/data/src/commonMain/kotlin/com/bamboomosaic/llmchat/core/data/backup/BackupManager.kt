@@ -1,19 +1,18 @@
 package com.bamboomosaic.llmchat.core.data.backup
 
-import android.content.Context
-import androidx.room.withTransaction
+import androidx.room.immediateTransaction
+import androidx.room.useWriterConnection
 import com.bamboomosaic.llmchat.core.data.db.ApiConfigEntity
 import com.bamboomosaic.llmchat.core.data.db.AppDatabase
 import com.bamboomosaic.llmchat.core.data.db.ConversationEntity
 import com.bamboomosaic.llmchat.core.data.db.MessageEntity
 import com.bamboomosaic.llmchat.core.data.db.TokenUsageRecordEntity
 import com.bamboomosaic.llmchat.core.data.settings.SettingsStore
-import dagger.hilt.android.qualifiers.ApplicationContext
+import com.bamboomosaic.llmchat.core.data.settings.appVersionName
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import javax.inject.Inject
 
 /** 备份文件载荷（29 轮）。settings 为编码字符串映射，四个表直接序列化实体。 */
 @Serializable
@@ -38,11 +37,12 @@ data class BackupPayload(
  * - API Key 不导出（导出时全部置空串；导入后需重新填写）
  * - 导入 = 全量替换：事务内清空四表后重插；会话/消息 id 显式保留，parentId 分支树不断链
  * - 设置整体覆盖，但引导状态 / 更新公告游标按本机处理、背景图跨设备无效强制清空
+ * 桌面端第 3 轮：迁 commonMain（KMP 事务 useWriterConnection + immediateTransaction；
+ * 版本号走 appVersionName expect/actual），两端共用同一套导入导出。
  */
-class BackupManager @Inject constructor(
+class BackupManager(
     private val db: AppDatabase,
     private val settingsStore: SettingsStore,
-    @ApplicationContext private val appContext: Context,
 ) {
 
     private val json = Json {
@@ -54,8 +54,8 @@ class BackupManager @Inject constructor(
     suspend fun export(): String = withContext(Dispatchers.IO) {
         json.encodeToString(
             BackupPayload(
-                appVersion = appVersion(),
-                exportedAt = System.currentTimeMillis(),
+                appVersion = appVersionName(),
+                exportedAt = kotlin.time.Clock.System.now().toEpochMilliseconds(),
                 settings = settingsStore.backupSettings(),
                 conversations = db.conversationDao().getAllConversations(),
                 messages = db.conversationDao().getAllMessages(),
@@ -73,22 +73,20 @@ class BackupManager @Inject constructor(
             check(payload.schemaVersion == BackupPayload.SCHEMA_VERSION) {
                 "备份文件版本不匹配（schema ${payload.schemaVersion}，当前 ${BackupPayload.SCHEMA_VERSION}），无法导入"
             }
-            // 单事务替换：任一步失败整体回滚，不留半截数据
-            db.withTransaction {
-                db.conversationDao().deleteAllMessages()
-                db.conversationDao().deleteAllConversations()
-                db.tokenUsageDao().deleteAllRecords()
-                db.apiConfigDao().deleteAll()
-                db.conversationDao().insertAllConversations(payload.conversations)
-                db.conversationDao().insertAllMessages(payload.messages)
-                db.tokenUsageDao().insertAllRecords(payload.tokenUsage)
-                db.apiConfigDao().insertAll(payload.apiConfigs)
+            // 单事务替换：任一步失败整体回滚，不留半截数据（KMP 事务 API）
+            db.useWriterConnection { transactor ->
+                transactor.immediateTransaction {
+                    db.conversationDao().deleteAllMessages()
+                    db.conversationDao().deleteAllConversations()
+                    db.tokenUsageDao().deleteAllRecords()
+                    db.apiConfigDao().deleteAll()
+                    db.conversationDao().insertAllConversations(payload.conversations)
+                    db.conversationDao().insertAllMessages(payload.messages)
+                    db.tokenUsageDao().insertAllRecords(payload.tokenUsage)
+                    db.apiConfigDao().insertAll(payload.apiConfigs)
+                }
             }
             settingsStore.restoreSettings(payload.settings)
         }
     }
-
-    private fun appVersion(): String = runCatching {
-        appContext.packageManager.getPackageInfo(appContext.packageName, 0).versionName ?: ""
-    }.getOrDefault("")
 }
