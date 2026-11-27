@@ -1,4 +1,4 @@
-// LLMChatDesktop 桌面壳（阶段〇）：Kotlin/JVM + Compose Multiplatform 仅挂 Desktop 目标。
+// LLMChatDesktop 桌面壳（阶段一：共享域核心已接入）：Kotlin/JVM + Compose Multiplatform 仅挂 Desktop 目标。
 // 版本与 Android 端对齐：Kotlin 2.2.20（见根工程 gradle/libs.versions.toml）；
 // CMP 1.12.2 为当前稳定线（2026-10，JetBrains 政策：最新 CMP 兼容最新 Kotlin）。
 plugins {
@@ -21,6 +21,12 @@ dependencies {
     implementation(compose.foundation)
     implementation(compose.material3)
     implementation(compose.ui)
+    // 当前操作系统的 Skia 原生运行时（skiko-awt-runtime-windows-x64），缺失会在窗口创建时
+    // 抛 LibraryLoadException: Cannot find skiko-windows-x64.dll
+    implementation(compose.desktop.currentOs)
+
+    // 34 轮：共享域核心——复合构建替换为 Mobile 工程 :core:domain 的 desktop JVM 变体
+    implementation("com.bamboomosaic.llmchat:core-domain:0.1.0")
 }
 
 application {

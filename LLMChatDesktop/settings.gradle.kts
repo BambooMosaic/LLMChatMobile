@@ -17,3 +17,14 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "LLMChatDesktop"
+
+// 34 轮（阶段一）：复合构建接入 Mobile 共享域核心。
+// includeBuild 整个 LLMChatMobile 工程，依赖替换把
+// com.bamboomosaic.llmchat:core-domain → LLMChatMobile 的 :core:domain（KMP，取 desktop JVM 变体）。
+// 后续阶段接入 core/network 等共享模块时，同样在此追加替换规则。
+includeBuild("..") {
+    dependencySubstitution {
+        substitute(module("com.bamboomosaic.llmchat:core-domain"))
+            .using(project(":core:domain"))
+    }
+}
