@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
@@ -60,6 +61,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import kotlin.math.roundToInt
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -75,6 +77,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.DpOffset
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -1051,12 +1054,9 @@ private fun MessageBubble(
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     val context = androidx.compose.ui.platform.LocalContext.current
     var showMenu by remember { mutableStateOf(false) }
-    // 33 轮：长按位置——菜单跟随长按点弹出，Popup 自动做屏幕边界避让。
-    // 注意：带 offset 的 DropdownMenu 重载以父布局左上为原点，
-    // 因此记录气泡在组合根中的位置，把局部坐标换算成根坐标再传 offset
-    var menuOffset by remember { mutableStateOf(DpOffset.Zero) }
-    var bubbleRootTopLeft by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
-    val density = LocalDensity.current
+    // 33 轮：长按位置（气泡内局部坐标）——锚点 Box 放在长按点处，DropdownMenu 作为其
+    // 子级弹出：跟随长按点，菜单 provider 自动做屏幕边缘避让（含上下翻转与左右钳制）
+    var menuPos by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
     var menuDismissed by remember { mutableStateOf(false) }
     val isUser = message.role == MessageRole.USER
     val containerColor = if (isUser) {
@@ -1068,56 +1068,6 @@ private fun MessageBubble(
         MaterialTheme.colorScheme.onPrimaryContainer
     } else {
         MaterialTheme.colorScheme.onSurfaceVariant
-    }
-
-    if (showMenu) {
-        DropdownMenu(
-            expanded = true,
-            onDismissRequest = { showMenu = false },
-            offset = menuOffset,
-            containerColor = glassSurfaceColor(),
-            shadowElevation = if (LocalGlassLevel.current >= 1) 0.dp else 8.dp,
-        ) {
-            GlassPopupEffect()
-            // 31 轮：引用——放复制上方，把消息完整内容以引用块插入输入框
-            // 32 轮：请求失败的空气泡（正文为空）不显示引用，避免插入空引用块
-            if (onQuote != null && message.text.isNotBlank()) {
-                DropdownMenuItem(
-                    text = { Text(s.quote) },
-                    onClick = {
-                        showMenu = false
-                        onQuote?.invoke()
-                    },
-                )
-            }
-            DropdownMenuItem(
-                text = { Text(s.copy) },
-                onClick = {
-                    clipboard.setText(AnnotatedString(message.text))
-                    android.widget.Toast.makeText(context, s.copied, android.widget.Toast.LENGTH_SHORT).show()
-                    showMenu = false
-                },
-            )
-            // 27 轮修正：朗读入口改到长按菜单（气泡下方按钮命中区太小）
-            if (showTts) {
-                DropdownMenuItem(
-                    text = { Text(if (ttsBusy == 2) s.ttsMenuStop else s.ttsMenuSpeak) },
-                    onClick = {
-                        onToggleTts()
-                        showMenu = false
-                    },
-                )
-            }
-            if (onEdit != null) {
-                DropdownMenuItem(
-                    text = { Text(s.edit) },
-                    onClick = {
-                        showMenu = false
-                        onEdit()
-                    },
-                )
-            }
-        }
     }
 
     Row(
@@ -1134,23 +1084,17 @@ private fun MessageBubble(
                 shape = RoundedCornerShape(BubbleRadius),
                 color = containerColor,
                 contentColor = contentColor,
-                modifier = Modifier
-                    .onGloballyPositioned { bubbleRootTopLeft = it.boundsInRoot().topLeft }
-                    .pointerInput(Unit) {
-                        // 33 轮：菜单跟随长按点击位置弹出（detectTapGestures 提供坐标）
-                        detectTapGestures(
-                            onTap = { onToggleReasoning() },
-                            onLongPress = { pos ->
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                val global = bubbleRootTopLeft + pos
-                                menuOffset = DpOffset(
-                                    with(density) { global.x.toDp() },
-                                    with(density) { global.y.toDp() },
-                                )
-                                showMenu = true
-                            },
-                        )
-                    },
+                modifier = Modifier.pointerInput(Unit) {
+                    // 33 轮：菜单跟随长按点击位置弹出（锚点 Box 放在长按点，菜单 provider 自动避让屏幕边缘）
+                    detectTapGestures(
+                        onTap = { onToggleReasoning() },
+                        onLongPress = { pos ->
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            menuPos = pos
+                            showMenu = true
+                        },
+                    )
+                },
             ) {
                 Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
                     // 联网搜索状态（思考区域上方）：搜索中 → 已搜索 N 个网页
@@ -1214,6 +1158,60 @@ private fun MessageBubble(
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                         )
+                    }
+
+                    // 33 轮：长按菜单锚点——放在长按点处，菜单弹出自动跟随 + 屏幕边缘避让
+                    if (showMenu) {
+                        Box(
+                            modifier = Modifier.offset { IntOffset(menuPos.x.roundToInt(), menuPos.y.roundToInt()) },
+                        ) {
+                            DropdownMenu(
+                                expanded = true,
+                                onDismissRequest = { showMenu = false },
+                                containerColor = glassSurfaceColor(),
+                                shadowElevation = if (LocalGlassLevel.current >= 1) 0.dp else 8.dp,
+                            ) {
+                                GlassPopupEffect()
+                                // 31 轮：引用——放复制上方，完整内容以引用块插入输入框
+                                // 32 轮：请求失败的空气泡不显示引用
+                                if (onQuote != null && message.text.isNotBlank()) {
+                                    DropdownMenuItem(
+                                        text = { Text(s.quote) },
+                                        onClick = {
+                                            showMenu = false
+                                            onQuote?.invoke()
+                                        },
+                                    )
+                                }
+                                DropdownMenuItem(
+                                    text = { Text(s.copy) },
+                                    onClick = {
+                                        clipboard.setText(AnnotatedString(message.text))
+                                        android.widget.Toast.makeText(context, s.copied, android.widget.Toast.LENGTH_SHORT).show()
+                                        showMenu = false
+                                    },
+                                )
+                                // 27 轮修正：朗读入口在长按菜单
+                                if (showTts) {
+                                    DropdownMenuItem(
+                                        text = { Text(if (ttsBusy == 2) s.ttsMenuStop else s.ttsMenuSpeak) },
+                                        onClick = {
+                                            onToggleTts()
+                                            showMenu = false
+                                        },
+                                    )
+                                }
+                                if (onEdit != null) {
+                                    DropdownMenuItem(
+                                        text = { Text(s.edit) },
+                                        onClick = {
+                                            showMenu = false
+                                            onEdit()
+                                        },
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
