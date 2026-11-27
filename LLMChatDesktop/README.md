@@ -1,8 +1,8 @@
-# LLMChatDesktop（桌面壳已搭建）
+# LLMChatDesktop（共享域核心已接入）
 
 LLMChatMobile 的桌面端子项目。基于 **Kotlin/JVM + Compose Multiplatform（仅 Desktop 目标）**，目标是与 Android 端共享核心代码，一套代码出 Windows / macOS / Linux 桌面安装包。
 
-> 26 轮决策：**独立 Gradle 工程根**，不并入 LLMChatMobile 的 include——避免 KMP/Compose 插件影响 Android 构建。当前为阶段〇（可编译的空窗口壳），共享核心按下面阶段逐步接入。
+> 26 轮决策：**独立 Gradle 工程根**，不并入 LLMChatMobile 的 include——避免 KMP/Compose 插件影响 Android 构建。当前为阶段一（core:domain 已共享，复合构建接入），共享核心按下面阶段逐步接入。
 
 ## 运行
 
@@ -37,7 +37,8 @@ gradlew.bat run        # Windows；macOS / Linux 用 ./gradlew run
 ## 状态
 
 - [x] 阶段〇：独立桌面壳（可编译可运行窗口）
-- [ ] 阶段一：共享 core:domain / core:network
+- [x] 阶段一（34 轮）：core:domain KMP 化（android+desktop 双目标）+ 复合构建接入，窗口已渲染共享域实时数据
+- [ ] 阶段一收尾：core:network（OkHttp SSE，JVM 直接可用）接入桌面端
 - [ ] 阶段二：存储层 KMP 化 + Koin
 - [ ] 阶段三：聊天 UI 复用（首个可用的桌面端）
 - [ ] 打包（jpackage 出安装包）
