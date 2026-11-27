@@ -25,8 +25,9 @@ dependencies {
     // 抛 LibraryLoadException: Cannot find skiko-windows-x64.dll
     implementation(compose.desktop.currentOs)
 
-    // 34 轮：共享域核心——复合构建替换为 Mobile 工程 :core:domain 的 desktop JVM 变体
+    // 34 轮：共享域核心 + 共享网络层——复合构建替换为 Mobile 工程对应模块的 desktop JVM 变体
     implementation("com.bamboomosaic.llmchat:core-domain:0.1.0")
+    implementation("com.bamboomosaic.llmchat:core-network:0.1.0")
 }
 
 application {

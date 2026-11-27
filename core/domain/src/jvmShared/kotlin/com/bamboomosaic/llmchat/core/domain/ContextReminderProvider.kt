@@ -6,6 +6,10 @@ import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
 
+// 34 轮：客户端署名按平台区分——expect 声明在本文件（jvmShared），
+// actual 在 androidMain（LLMChatMobile，保持历史署名不变）/ desktopMain（LLMChatDesktop）
+expect val clientDisplayName: String
+
 /**
  * 环境上下文 Provider：组装「日期-时分,星期,地区,客户端署名,语言」五项字符串。
  * 每次请求实时生成（32 轮起注入当前轮用户消息开头，不再进 system），不落库、不进历史。
@@ -39,6 +43,6 @@ class ContextReminderProviderImpl() : ContextReminderProvider {
             AppLanguage.TRADITIONAL_CHINESE -> "繁體中文"
             AppLanguage.ENGLISH -> "English"
         }
-        return "$dateTime,$weekday,$region,由BambooMosaic制作的LLMChatMobile客户端,$langText"
+        return "$dateTime,$weekday,$region,由BambooMosaic制作的${clientDisplayName}客户端,$langText"
     }
 }
