@@ -23,6 +23,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledIconButton
@@ -217,10 +223,22 @@ fun ChatInputBar(
                                     unfocusedIndicatorColor = Color.Transparent,
                                 ),
                                 // 默认三行文本高度，内容增多时向上扩展（有上限）
+                                // 桌面端快捷键：Ctrl+Enter 发送（Enter 保持换行）
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .heightIn(min = 84.dp, max = 165.dp)
-                                    .padding(end = 52.dp),
+                                    .padding(end = 52.dp)
+                                    .onPreviewKeyEvent { e ->
+                                        val isEnter = e.key == Key.Enter || e.key == Key.NumPadEnter
+                                        if (isEnter && e.type == KeyEventType.KeyDown &&
+                                            e.isCtrlPressed
+                                        ) {
+                                            onSend()
+                                            true
+                                        } else {
+                                            false
+                                        }
+                                    },
                             )
                         }
 
