@@ -15,7 +15,10 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.ui.input.pointer.isSecondaryPressed
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -593,7 +596,13 @@ fun ChatScreen(viewModel: ChatViewModel) {
             }
 
             // 模型切换 + 深度思考已整合进输入栏底栏
+            // 桌面端第 3 轮：输入容器最大 960px、窗口更宽时水平居中（对齐 DeepSeek 网页版）
+            Box(
+                modifier = Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.BottomCenter,
+            ) {
             ChatInputBar(
+                modifier = Modifier.widthIn(max = 960.dp),
                 input = input,
                 onInputChange = {
                     input = it
@@ -638,6 +647,7 @@ fun ChatScreen(viewModel: ChatViewModel) {
                 },
             )
             }
+            }
         }
     }
 
@@ -645,7 +655,21 @@ fun ChatScreen(viewModel: ChatViewModel) {
         // 20 轮：宽屏侧边栏常驻，聊天内容在右侧
         Row(modifier = Modifier.fillMaxSize()) {
             Box(modifier = Modifier.width(300.dp)) { drawerContent(true) }
-            Box(modifier = Modifier.weight(1f)) { chatBody(true) }
+            Box(modifier = Modifier.weight(1f).padding(8.dp)) {
+                // 桌面端第 4 轮（ZCode 风格）：标题+对话+输入整体包一个细描边圆角卡片
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    shape = RoundedCornerShape(14.dp),
+                    // 边框与侧边栏同色（ModalDrawerSheet 默认容器色 surfaceContainerLow）
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        MaterialTheme.colorScheme.surfaceContainerLow,
+                    ),
+                    color = MaterialTheme.colorScheme.surface,
+                ) {
+                    chatBody(true)
+                }
+            }
         }
     } else {
         ModalNavigationDrawer(
@@ -1045,6 +1069,7 @@ private fun MessageBubble(
     // 33 轮：长按位置（气泡内局部坐标）——锚点 Box 放在长按点处，DropdownMenu 作为其
     // 子级弹出：跟随长按点，菜单 provider 自动做屏幕边缘避让（含上下翻转与左右钳制）
     var menuPos by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
+    var downPos by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
     var menuDismissed by remember { mutableStateOf(false) }
     val isUser = message.role == MessageRole.USER
     val containerColor = if (isUser) {
@@ -1072,17 +1097,32 @@ private fun MessageBubble(
                 shape = RoundedCornerShape(BubbleRadius),
                 color = containerColor,
                 contentColor = contentColor,
-                modifier = Modifier.pointerInput(Unit) {
-                    // 33 轮：菜单跟随长按点击位置弹出（锚点 Box 放在长按点，菜单 provider 自动避让屏幕边缘）
-                    detectTapGestures(
-                        onTap = { onToggleReasoning() },
-                        onLongPress = { pos ->
+                modifier = Modifier
+                    // 菜单跟随按点位置弹出：先记录按点（触点/鼠标按下点），长按回调里取用
+                    .pointerInput(Unit) {
+                        awaitEachGesture {
+                            // 每个手势的第一个 down：记录按点位置（菜单位置用）；
+                            // 右键 down（buttons=secondary）= 移动端长按语义，弹同一套菜单
+                            val downEvent = awaitPointerEvent()
+                            val down = downEvent.changes.firstOrNull() ?: return@awaitEachGesture
+                            downPos = down.position
+                            if (downEvent.buttons.isSecondaryPressed) {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                menuPos = down.position
+                                showMenu = true
+                                downEvent.changes.forEach { it.consume() }
+                            }
+                        }
+                    }
+                    .combinedClickable(
+                        // 33 轮：菜单跟随长按位置（移动端长按 / 桌面端左键切换思考）
+                        onClick = { onToggleReasoning() },
+                        onLongClick = {
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            menuPos = pos
+                            menuPos = downPos
                             showMenu = true
                         },
-                    )
-                },
+                    ),
             ) {
                 Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
                     // 联网搜索状态（思考区域上方）：搜索中 → 已搜索 N 个网页

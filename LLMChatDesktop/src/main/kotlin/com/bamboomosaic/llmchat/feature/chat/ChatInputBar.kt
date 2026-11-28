@@ -66,6 +66,7 @@ import kotlinx.coroutines.withContext
 /** DeepSeek 风格底部输入栏：大圆角容器、多行自适应、文件上传、图片输入、深度思考、模型切换、圆形发送。 */
 @Composable
 fun ChatInputBar(
+    modifier: Modifier = Modifier,
     input: String,
     onInputChange: (String) -> Unit,
     thinkingEnabled: Boolean,
@@ -139,7 +140,7 @@ fun ChatInputBar(
         }
     }
 
-    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp)) {
+    Column(modifier = modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp)) {
         // 外层大圆角容器：包裹上层输入框 + 下层功能栏
         Surface(
             shape = RoundedCornerShape(24.dp),

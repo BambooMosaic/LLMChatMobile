@@ -1168,19 +1168,19 @@ private fun AppearancePage(
     )
 
     Spacer(Modifier.height(16.dp))
-    // 25 轮：玻璃材质三档滑块（关 / 半透明 / 毛玻璃）——设备不支持系统模糊时毛玻璃档锁死
-    val blurOk = com.bamboomosaic.llmchat.feature.chat.blurSupported()
-    val maxGlass = if (blurOk) 2 else 1
+    // 桌面端第 4 轮：Windows 无实时毛玻璃支持（Compose Desktop 官方无此 API，
+    // 第三方 DWM 包装库不稳定）——毛玻璃档从 UI 移除，仅保留 关 / 半透明 两档；
+    // 持久化字段 glassLevel 保留（历史值 2 显示时归 1），手机端字段共用不受影响
     Text(s.glassLabel, style = MaterialTheme.typography.bodyLarge)
     Spacer(Modifier.height(8.dp))
     LevelSlider(
-        levels = listOf(s.glassLevelOff, s.glassLevelTranslucent, s.glassLevelFrosted),
-        selectedIndex = glassLevel.coerceIn(0, maxGlass),
-        onSelect = { onSetGlassLevel(it.coerceIn(0, maxGlass)) },
+        levels = listOf(s.glassLevelOff, s.glassLevelTranslucent),
+        selectedIndex = glassLevel.coerceIn(0, 1),
+        onSelect = { onSetGlassLevel(it.coerceIn(0, 1)) },
     )
     Spacer(Modifier.height(4.dp))
     Text(
-        text = s.glassHint,
+        text = "半透明：弹窗与抽屉半透明显示（桌面端 Windows 不支持实时毛玻璃，该档位已移除）",
         style = MaterialTheme.typography.labelSmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )

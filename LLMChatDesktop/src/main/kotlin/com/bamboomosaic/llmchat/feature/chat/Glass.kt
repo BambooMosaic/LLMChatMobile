@@ -70,7 +70,8 @@ fun GlassDialogShell(
         modifier = modifier
             .border(width = 0.7.dp, color = MaterialTheme.colorScheme.outlineVariant, shape = shape),
         shape = shape,
-        color = Color.Transparent,
+        // 桌面端：没有窗口背景 drawable 打底，外壳自己承担半透明底色（修复全透明）
+        color = glassSurfaceColor(),
         contentColor = MaterialTheme.colorScheme.onSurface,
     ) { content() }
 }
@@ -83,9 +84,12 @@ fun glassSurfaceColor(): Color {
     return surface.copy(alpha = 0.85f)
 }
 
-/** 桌面端暂不支持跨窗模糊（TODO Windows DWM）。设置页滑块将保持最低档。 */
+/**
+ * 桌面端允许滑到毛玻璃档：Windows 暂无实时模糊（TODO DWM），毛玻璃档自动降级为
+ * 半透明观感；返回 true 保证滑块可自由拖动（false 会把滑块锁死在半透明档）。
+ */
 @Composable
-fun blurSupported(): Boolean = false
+fun blurSupported(): Boolean = true
 
 /** 小菜单玻璃：桌面端空操作（与手机端降级行为一致）。 */
 @Composable

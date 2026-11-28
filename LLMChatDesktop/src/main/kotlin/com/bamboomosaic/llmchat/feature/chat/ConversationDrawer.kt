@@ -8,6 +8,8 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.input.pointer.isSecondaryPressed
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -17,6 +19,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -88,6 +91,8 @@ fun ConversationDrawer(
     }
 
     ModalDrawerSheet(
+        // 桌面端第 4 轮：侧边栏直角（修复圆角外露白底）
+        drawerShape = androidx.compose.foundation.shape.RoundedCornerShape(0.dp),
         modifier = when {
             // 30 轮：毛玻璃档——完全实色（半透明会透出背景差异形成色差）+ 细边框 + 柔和外阴影。
             // 31 轮：阴影仅浅色预设启用——深色（6 个 dark 预设）下黑色阴影晕在深色背景上
@@ -188,6 +193,16 @@ fun ConversationDrawer(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(vertical = 2.dp)
+                                .pointerInput(Unit) {
+                                    // 桌面端第 3 轮：鼠标右键 = 移动端长按（同一套操作菜单）
+                                    awaitEachGesture {
+                                        val downEvent = awaitPointerEvent()
+                                        if (downEvent.buttons.isSecondaryPressed) {
+                                            downEvent.changes.forEach { it.consume() }
+                                            menuTarget = conversation
+                                        }
+                                    }
+                                }
                                 .combinedClickable(
                                     onClick = { onSelect(conversation.id) },
                                     // 长按弹出操作菜单：重命名 / 归档
