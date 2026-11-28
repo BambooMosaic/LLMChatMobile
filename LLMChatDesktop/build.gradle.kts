@@ -9,7 +9,7 @@ plugins {
 }
 
 group = "com.bamboomosaic.llmchat"
-version = "0.1.0"
+version = "0.0.1"
 
 kotlin {
     // 与 Android 端同款 JDK，避免再下载 toolchain
@@ -54,3 +54,19 @@ application {
 //     }
 // }
 // 说明：当前先用 Gradle application 插件提供 `run`/`installDist`，打包插件待 UI 成型后启用。
+
+// 桌面端第 4 轮：内部测试打包——fat jar（测试者均有 JDK，java -jar 单文件直接跑）。
+// 产物：build/libs/LLMChatDesktop-0.0.1.jar（含 skiko Windows 原生库，无需单独携带）
+tasks.jar {
+    manifest {
+        attributes["Main-Class"] = "com.bamboomosaic.llmchat.desktop.MainKt"
+    }
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    // 复合构建（includeBuild Mobile）依赖必须执行期解析，不能在配置期急切遍历
+    from({
+        configurations.runtimeClasspath.get().map { if (it.isDirectory) it else zipTree(it) }
+    }) {
+        exclude("META-INF/*.SF", "META-INF/*.DSA", "META-INF/*.RSA")
+        exclude("META-INF/versions/**/module-info.class", "META-INF/module-info.class")
+    }
+}

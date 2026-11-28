@@ -41,3 +41,6 @@ screenshots/*.tmp
 k9.sql
 交接文档_*.md
 ui.xml
+
+# 桌面端测试包产物（二进制不入库）
+桌面端安装包/
